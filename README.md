@@ -27,16 +27,29 @@ make breaking-legacy   # wire 冻结门禁：对旧 config-center 仓 WIRE_JSON 
 make test-crossversion # 旧 SDK v0.1.0 → 新服务的跨版本实测（需本机 docker）
 ```
 
-本地起服务（示例）：
+## 本地开发（Mac 直连内网集群）
 
 ```bash
-# config（需本地 Postgres/Redis，参考 scripts/crossversion.sh 的 throwaway 方式）
-CONFIG_FILE=services/config/tests/oldsdk/harness-config.yaml go run ./services/config/cmd/server
-
-# gateway（file 模式，本地/测试专用）
-CONFIG_SOURCE=file CONFIG_DIR=<五工件目录> JWT_ISSUER=https://casdoor.apikv.com \
-  JWT_AUDIENCES=<client-id> go run ./services/gateway/cmd/server
+scripts/dev-local.sh config     # config 服务：PG 端口转发 + Dragonfly/Consul LAN 直连
+scripts/dev-local.sh gateway    # 网关：file 模式（见下）
+scripts/dev-local.sh print      # 只渲染配置看结构（口令脱敏）
 ```
+
+凭据运行时从集群 Secret 取、渲染进临时文件（0600）、退出即删——不进仓库也不进日志。三条依赖通路各不相同：
+
+| 依赖 | 通路 | 原因 |
+|---|---|---|
+| PostgreSQL | `kubectl port-forward svc/pg-main-rw`（脚本自动起） | 集群里只有 ClusterIP，LAN 不可达 |
+| Dragonfly（Redis） | LAN 直连 `192.168.3.122:6380`（TLS，skip verify） | Cilium Gateway 已暴露；按 IP 访问证书不匹配 |
+| Consul | LAN 直连 `192.168.3.120:8500` + ACL token | `consul-expose-servers` LoadBalancer；**无 token 会静默返回 `{}`** 而不是报错 |
+
+本地跑 config 服务时 `CONSUL_ENABLED=false` 是硬要求：本机实例注册进集群目录后，集群内客户端可能把流量解析到你的 Mac。
+
+**网关本地跑的限制**：Consul 里注册的是 Pod IP（`10.244.x.x`），Mac 路由不到，`discovery:///` 在本机无效。脚本的 `gateway` 子命令用 file 模式（自动从集群拉 public.pem/policies/model），把 `routes.yaml` 的 target 改成 `direct://127.0.0.1:<端口>` 并自行 `kubectl port-forward` 对应后端即可。
+
+完全离线（不碰集群）：`make test-crossversion` 那套 throwaway Postgres/Redis，或手写 `CONFIG_FILE` 指向 `services/config/tests/oldsdk/harness-config.yaml`。
+
+web 控制台：`cd web && pnpm install && pnpm dev`（端口 3005，已在上面渲染配置的 CORS 白名单里）。
 
 ## 发布
 
