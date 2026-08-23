@@ -103,9 +103,13 @@ describe("Machine token management", () => {
       setInput(input("Service name"), "order");
       setInput(input("Environment"), "dev");
     });
-    await act(async () => clickButton("Issue"));
+    await act(async () => {
+      input("Environment").form?.requestSubmit();
+    });
 
-    expect(document.querySelector('[data-testid="issued-token"]')?.textContent).toContain("ct_once_only_plaintext");
+    await vi.waitFor(() => {
+      expect(document.querySelector('[data-testid="issued-token"]')?.textContent).toContain("ct_once_only_plaintext");
+    });
     expect(document.body.textContent).toContain("This is the only time the plaintext token will be shown");
 
     await act(async () => clickButton("I have copied it"));
