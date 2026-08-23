@@ -82,6 +82,22 @@ func New(res resolver.Resolver, ew *gwerrors.Writer, log *zap.Logger, inner http
 			}
 		},
 		Transport: &pickingTransport{res: res, inner: inner},
+		// 网关是唯一 CORS 权威：剥除上游自带的 CORS 头。
+		// 实测坑：后端服务为「dev 直连」场景各自带 CORS，经网关转发后
+		// Access-Control-Allow-Origin 出现两份，浏览器整单拒收（预检不转发所以只有实际请求炸）。
+		ModifyResponse: func(resp *http.Response) error {
+			for _, h := range []string{
+				"Access-Control-Allow-Origin",
+				"Access-Control-Allow-Credentials",
+				"Access-Control-Allow-Methods",
+				"Access-Control-Allow-Headers",
+				"Access-Control-Expose-Headers",
+				"Access-Control-Max-Age",
+			} {
+				resp.Header.Del(h)
+			}
+			return nil
+		},
 		ErrorHandler: func(w http.ResponseWriter, r *http.Request, err error) {
 			p.writeError(w, r, err, log)
 		},

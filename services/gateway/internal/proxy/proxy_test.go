@@ -196,6 +196,32 @@ func TestProxyBadTarget(t *testing.T) {
 	}
 }
 
+// 上游自带 CORS 头必须被剥除（双 Access-Control-Allow-Origin 会被浏览器整单拒收——集群实测坑）。
+func TestUpstreamCORSHeadersStripped(t *testing.T) {
+	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Access-Control-Allow-Origin", "http://localhost:3000")
+		w.Header().Set("Access-Control-Allow-Credentials", "true")
+		w.Header().Set("X-Keep", "yes")
+		w.WriteHeader(200)
+	}))
+	defer backend.Close()
+
+	res := &fakeResolver{addr: strings.TrimPrefix(backend.URL, "http://")}
+	rec := serve(t, res, router.Route{Package: "user", Target: "discovery:///user-identity", Timeout: time.Second}, false, nil)
+	if rec.Code != 200 {
+		t.Fatalf("status=%d", rec.Code)
+	}
+	if got := rec.Header().Values("Access-Control-Allow-Origin"); len(got) != 0 {
+		t.Fatalf("upstream ACAO must be stripped, got %v", got)
+	}
+	if rec.Header().Get("Access-Control-Allow-Credentials") != "" {
+		t.Fatal("upstream ACAC must be stripped")
+	}
+	if rec.Header().Get("X-Keep") != "yes" {
+		t.Fatal("non-CORS headers must pass through")
+	}
+}
+
 func TestUpstreamAddrRecorded(t *testing.T) {
 	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	defer backend.Close()
