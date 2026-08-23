@@ -55,13 +55,20 @@ function parseNamespaces(value: string): string[] {
   return [...new Set(value.split(/[\n,]/).map((item) => item.trim()).filter(Boolean))];
 }
 
-export function TokensPage({ api = configApi }: { api?: typeof configApi } = {}) {
+interface TokensPageProps {
+  api?: typeof configApi;
+  initialIssueOpen?: boolean;
+  initialIssueForm?: Partial<IssueForm>;
+  initialFilters?: { serviceName?: string; environment?: string };
+}
+
+export function TokensPage({ api = configApi, initialIssueOpen = false, initialIssueForm, initialFilters }: TokensPageProps = {}) {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
-  const [serviceName, setServiceName] = useState("");
-  const [environment, setEnvironment] = useState("");
-  const [issueOpen, setIssueOpen] = useState(false);
-  const [issueForm, setIssueForm] = useState<IssueForm>(EMPTY_ISSUE_FORM);
+  const [serviceName, setServiceName] = useState(initialFilters?.serviceName ?? "");
+  const [environment, setEnvironment] = useState(initialFilters?.environment ?? "");
+  const [issueOpen, setIssueOpen] = useState(initialIssueOpen);
+  const [issueForm, setIssueForm] = useState<IssueForm>({ ...EMPTY_ISSUE_FORM, ...initialIssueForm });
   const [issuedToken, setIssuedToken] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [revokeTarget, setRevokeTarget] = useState<MachineTokenMeta | null>(null);

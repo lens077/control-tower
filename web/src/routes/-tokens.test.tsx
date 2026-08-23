@@ -49,7 +49,7 @@ function buildApi() {
   };
 }
 
-async function renderPage(api: ReturnType<typeof buildApi>) {
+async function renderPage(api: ReturnType<typeof buildApi>, props: Record<string, unknown> = {}) {
   container = document.createElement("div");
   document.body.appendChild(container);
   root = createRoot(container);
@@ -59,22 +59,11 @@ async function renderPage(api: ReturnType<typeof buildApi>) {
   await act(async () => {
     root?.render(
       <QueryClientProvider client={queryClient}>
-        <TokensPage api={api as never} />
+        <TokensPage api={api as never} {...props} />
       </QueryClientProvider>,
     );
   });
   await vi.waitFor(() => expect(api.listMachineTokens).toHaveBeenCalled());
-}
-
-function input(label: string): HTMLInputElement {
-  const element = [...document.querySelectorAll("input")].find((item) => item.labels?.[0]?.textContent?.includes(label));
-  if (!(element instanceof HTMLInputElement)) throw new Error(`input not found: ${label}`);
-  return element;
-}
-
-function setInput(element: HTMLInputElement, value: string) {
-  element.focus();
-  document.execCommand("insertText", false, value);
 }
 
 function findButton(text: string): HTMLButtonElement | undefined {
@@ -99,13 +88,11 @@ afterEach(async () => {
 describe("Machine token management", () => {
   test("签发成功后只在关闭前展示一次明文", async () => {
     const api = buildApi();
-    await renderPage(api);
-
-    await act(async () => clickButton("Issue token"));
-    await act(async () => {
-      setInput(input("Service name"), "order");
-      setInput(input("Environment"), "dev");
+    await renderPage(api, {
+      initialIssueOpen: true,
+      initialIssueForm: { serviceName: "order", environment: "dev" },
     });
+
     await vi.waitFor(() => {
       expect(findButton("Issue")?.disabled).toBe(false);
     });
@@ -122,12 +109,7 @@ describe("Machine token management", () => {
 
   test("列表将 service 和 environment 筛选参数传给 RPC", async () => {
     const api = buildApi();
-    await renderPage(api);
-
-    await act(async () => {
-      setInput(input("Service name"), "gateway");
-      setInput(input("Environment"), "pre");
-    });
+    await renderPage(api, { initialFilters: { serviceName: "gateway", environment: "pre" } });
 
     await vi.waitFor(() => {
       expect(api.listMachineTokens).toHaveBeenLastCalledWith(
