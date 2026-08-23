@@ -45,7 +45,8 @@ func Setup(ctx context.Context, cfg Config) (func(context.Context) error, error)
 		semconv.SchemaURL,
 		semconv.ServiceName(cfg.ServiceName),
 		semconv.ServiceVersion(cfg.ServiceVersion),
-		semconv.DeploymentEnvironmentName(cfg.Environment),
+		// v1.43.0 没有 DeploymentEnvironmentName 便捷函数,用 Key 直构。
+		semconv.DeploymentEnvironmentNameKey.String(cfg.Environment),
 	))
 	if err != nil {
 		return nil, err
