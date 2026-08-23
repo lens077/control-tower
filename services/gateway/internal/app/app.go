@@ -4,6 +4,7 @@ package app
 import (
 	"net/http"
 
+	"github.com/lens077/control-tower/services/gateway/internal/authn"
 	"github.com/lens077/control-tower/services/gateway/internal/gwerrors"
 	"github.com/lens077/control-tower/services/gateway/internal/httpmw"
 	"github.com/lens077/control-tower/services/gateway/internal/loader"
@@ -19,7 +20,9 @@ type Deps struct {
 	State      *loader.State
 	Cors       *httpmw.CorsSwapper
 	Introspect httpmw.Introspector
-	Resolver   resolver.Resolver
+	// Roles 角色回退源（claims 无 roles 时启用；nil=关闭）。
+	Roles    authn.RoleSource
+	Resolver resolver.Resolver
 	Errors     *gwerrors.Writer
 	Log        *zap.Logger
 	// Transport 出站 RoundTripper；nil=生产 h2c（经 otelhttp 包装）。
@@ -50,6 +53,7 @@ func BuildHandler(d Deps) http.Handler {
 			Verifier:   d.State.Verifier(),
 			Enforcer:   d.State.Enforcer(),
 			Introspect: d.Introspect,
+			Roles:      d.Roles,
 			Errors:     d.Errors,
 		}),
 	)

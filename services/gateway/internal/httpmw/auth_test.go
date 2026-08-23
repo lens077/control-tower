@@ -295,6 +295,47 @@ func TestUnknownRoute(t *testing.T) {
 	}
 }
 
+// 回退分支：claims 无 roles 时经 RoleSource 补齐（P3 真 token 实测本部署 JWT 不嵌角色）。
+func TestRoleSourceFallback(t *testing.T) {
+	f := newFixture(t)
+	f.deps.Roles = roleSourceFunc(func(_ context.Context, owner, name string) ([]string, error) {
+		if owner != "lens" || name != "alice" {
+			t.Errorf("unexpected identity %s/%s", owner, name)
+		}
+		return []string{"consumer"}, nil
+	})
+	// token 不带任何角色。
+	tok := f.token(t, func(c *authn.Claims) { c.Roles = nil })
+	rec := f.do(t, "/user.v1.UserService/GetProfile", tok)
+	if rec.Code != 200 {
+		t.Fatalf("status=%d reason=%s", rec.Code, reason(rec))
+	}
+	// 回填进 claims：下游身份头与授权口径一致。
+	c := gwctx.Claims(f.captured.Context())
+	if len(c.RoleNames()) != 1 || c.RoleNames()[0] != "consumer" {
+		t.Fatalf("claims roles=%v", c.RoleNames())
+	}
+}
+
+// 回退源失败 → 无角色 → RBAC 拒绝（收窄不放大）。
+func TestRoleSourceErrorDenies(t *testing.T) {
+	f := newFixture(t)
+	f.deps.Roles = roleSourceFunc(func(context.Context, string, string) ([]string, error) {
+		return nil, errors.New("casdoor down")
+	})
+	tok := f.token(t, func(c *authn.Claims) { c.Roles = nil })
+	rec := f.do(t, "/user.v1.UserService/GetProfile", tok)
+	if rec.Code != 403 || reason(rec) != "RBAC_DENIED" {
+		t.Fatalf("status=%d reason=%s", rec.Code, reason(rec))
+	}
+}
+
+type roleSourceFunc func(context.Context, string, string) ([]string, error)
+
+func (fn roleSourceFunc) Roles(ctx context.Context, owner, name string) ([]string, error) {
+	return fn(ctx, owner, name)
+}
+
 func TestAuthzNotReady(t *testing.T) {
 	f := newFixture(t)
 	f.deps.Enforcer = authz.New() // 未加载策略

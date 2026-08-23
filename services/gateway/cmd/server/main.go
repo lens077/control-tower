@@ -122,6 +122,12 @@ func run(lc fx.Lifecycle, log *zap.Logger) error {
 		}
 	}
 
+	// 角色回退源（P3 真 token 实测：本部署 Casdoor JWT 不嵌 roles，见 docs/design/auth.md 回退分支）。
+	var roleSource authn.RoleSource
+	if cu := strings.TrimSuffix(envOr("CASDOOR_URL", issuer), "/"); cu != "" {
+		roleSource = authn.NewCasdoorRoleSource(cu, 5*time.Minute)
+	}
+
 	// ── 动态配置：生产走 selector+SDK；CONFIG_SOURCE=file 是显式本地/测试模式（非生产回退）。
 	loaderCtx, cancelLoader := context.WithCancel(context.Background())
 	switch envOr("CONFIG_SOURCE", "config_center") {
@@ -179,6 +185,7 @@ func run(lc fx.Lifecycle, log *zap.Logger) error {
 		State:      state,
 		Cors:       corsSwap,
 		Introspect: introspect,
+		Roles:      roleSource,
 		Resolver:   res,
 		Errors:     gwerrors.NewWriter(),
 		Log:        log,

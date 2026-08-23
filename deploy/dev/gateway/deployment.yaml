@@ -35,7 +35,7 @@ spec:
       containers:
         - name: gateway
           # 禁 latest；部署引用不可变 sha tag/digest，由 CI 产出后回填。
-          image: ccr.ccs.tencentyun.com/sumery/control-tower-gateway:sha-3f2e307
+          image: ccr.ccs.tencentyun.com/sumery/control-tower-gateway:sha-abcff38
           imagePullPolicy: IfNotPresent
           ports:
             - name: http
@@ -137,4 +137,4 @@ data:
   # 逗号分隔的 Casdoor client id 白名单：consumer/merchant/admin/desktop。
   # 占位值，P5 切流前以实际 client id 填充（非机密）。
   JWT_AUDIENCES: "a36e6718e392099b7915"
-  OTEL_EXPORTER_OTLP_ENDPOINT: "otel-collector.observability.svc:4318"
+  OTEL_EXPORTER_OTLP_ENDPOINT: "jaeger.observability.svc:4318"

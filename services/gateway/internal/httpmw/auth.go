@@ -27,6 +27,8 @@ type AuthDeps struct {
 	Enforcer *authz.Enforcer
 	// Introspect 做高危路由在线校验（fail-close）。
 	Introspect Introspector
+	// Roles 是角色回退源（claims 无 roles 时启用；nil=关闭）。
+	Roles authn.RoleSource
 	// Errors 写统一错误响应。
 	Errors *gwerrors.Writer
 	// Now 便于测试注入时钟；nil 用 time.Now。
@@ -81,6 +83,16 @@ func Auth(d AuthDeps) func(http.Handler) http.Handler {
 						// fail-close：在线校验任何错误都拒绝（只收窄授权）。
 						d.Errors.Write(w, r, connect.CodePermissionDenied, "ONLINE_CHECK_FAILED", "online verification failed")
 						return
+					}
+				}
+				// 回退分支（P3 真 token 实测：本部署 Casdoor JWT 不嵌 roles）：
+				// claims 无角色且配置了 RoleSource 时按需补齐；失败按无角色处理（Casbin 自然拒绝）。
+				// 回填进 claims，让下游身份头注入与授权口径一致。
+				if len(claims.RoleNames()) == 0 && d.Roles != nil {
+					if names, rerr := d.Roles.Roles(ctx, claims.Owner, claims.Name); rerr == nil {
+						for _, n := range names {
+							claims.Roles = append(claims.Roles, authn.Role{Owner: claims.Owner, Name: n})
+						}
 					}
 				}
 				allowed, err := d.Enforcer.Allowed(claims.RoleNames(), path, r.Method)
