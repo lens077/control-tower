@@ -73,13 +73,16 @@ function input(label: string): HTMLInputElement {
 }
 
 function setInput(element: HTMLInputElement, value: string) {
-  const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
-  setter?.call(element, value);
-  element.dispatchEvent(new Event("input", { bubbles: true }));
+  element.focus();
+  document.execCommand("insertText", false, value);
+}
+
+function findButton(text: string): HTMLButtonElement | undefined {
+  return [...document.querySelectorAll("button")].find((item) => item.textContent?.trim() === text);
 }
 
 function clickButton(text: string) {
-  const button = [...document.querySelectorAll("button")].find((item) => item.textContent?.includes(text));
+  const button = findButton(text);
   if (!(button instanceof HTMLButtonElement)) throw new Error(`button not found: ${text}`);
   button.click();
 }
@@ -103,9 +106,10 @@ describe("Machine token management", () => {
       setInput(input("Service name"), "order");
       setInput(input("Environment"), "dev");
     });
-    await act(async () => {
-      input("Environment").form?.requestSubmit();
+    await vi.waitFor(() => {
+      expect(findButton("Issue")?.disabled).toBe(false);
     });
+    await act(async () => clickButton("Issue"));
 
     await vi.waitFor(() => {
       expect(document.querySelector('[data-testid="issued-token"]')?.textContent).toContain("ct_once_only_plaintext");

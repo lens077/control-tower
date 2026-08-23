@@ -104,7 +104,21 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      # TCR 凭据未配置时自动降级为只推 GHCR（不阻塞发布 tag）。
+      - name: Detect TCR credentials
+        id: tcr
+        env:
+          TCR_USERNAME: ${{ secrets.TCR_USERNAME }}
+        run: |
+          if [ -n "$TCR_USERNAME" ]; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::TCR_USERNAME/TCR_PASSWORD 未配置，仅推送 GHCR"
+          fi
+
       - name: Login to TCR
+        if: steps.tcr.outputs.enabled == 'true'
         uses: docker/login-action@v3
         with:
           registry: ${{ env.TCR_REGISTRY }}
@@ -116,6 +130,18 @@ jobs:
         run: |
           echo "sha=sha-${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
           echo "release=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+          {
+            echo "tags<<EOF"
+            echo "${GHCR_NAMESPACE}/${{ matrix.name }}:sha-${GITHUB_SHA::7}"
+            echo "${GHCR_NAMESPACE}/${{ matrix.name }}:${GITHUB_REF_NAME}"
+            echo "${GHCR_NAMESPACE}/${{ matrix.name }}:dev"
+            if [ "${{ steps.tcr.outputs.enabled }}" = "true" ]; then
+              echo "${TCR_REGISTRY}/${TCR_NAMESPACE}/${{ matrix.name }}:sha-${GITHUB_SHA::7}"
+              echo "${TCR_REGISTRY}/${TCR_NAMESPACE}/${{ matrix.name }}:${GITHUB_REF_NAME}"
+              echo "${TCR_REGISTRY}/${TCR_NAMESPACE}/${{ matrix.name }}:dev"
+            fi
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Build and push
         uses: docker/build-push-action@v6
@@ -129,10 +155,4 @@ jobs:
           build-args: |
             VERSION=${{ steps.meta.outputs.release }}
             GOPROXY=https://proxy.golang.org,direct
-          tags: |
-            ${{ env.GHCR_NAMESPACE }}/${{ matrix.name }}:${{ steps.meta.outputs.sha }}
-            ${{ env.GHCR_NAMESPACE }}/${{ matrix.name }}:${{ steps.meta.outputs.release }}
-            ${{ env.GHCR_NAMESPACE }}/${{ matrix.name }}:dev
-            ${{ env.TCR_REGISTRY }}/${{ env.TCR_NAMESPACE }}/${{ matrix.name }}:${{ steps.meta.outputs.sha }}
-            ${{ env.TCR_REGISTRY }}/${{ env.TCR_NAMESPACE }}/${{ matrix.name }}:${{ steps.meta.outputs.release }}
-            ${{ env.TCR_REGISTRY }}/${{ env.TCR_NAMESPACE }}/${{ matrix.name }}:dev
+          tags: ${{ steps.meta.outputs.tags }}

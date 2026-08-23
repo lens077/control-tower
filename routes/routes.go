@@ -11,6 +11,9 @@ package routes
 import (
 	"embed"
 	"fmt"
+	"strings"
+
+	"gopkg.in/yaml.v3"
 )
 
 //go:embed dev.yaml pre.yaml
@@ -28,4 +31,41 @@ func Env(env string) ([]byte, error) {
 // Envs 返回内嵌的环境清单。
 func Envs() []string {
 	return []string{"dev", "pre"}
+}
+
+// Entry 是路由模板的一条解析结果（供 ecommerce structcheck 这类消费方做拓扑核对）。
+type Entry struct {
+	// Package 是一级 proto 包名。
+	Package string `yaml:"package"`
+	// Target 形如 discovery:///<consul 注册名>。
+	Target string `yaml:"target"`
+}
+
+// Parsed 是路由模板的机器可读视图。
+type Parsed struct {
+	Routes    []Entry  `yaml:"routes"`
+	Anonymous []string `yaml:"anonymous"`
+}
+
+// Parse 解析指定环境的路由模板。
+// 只做形状解析，不做业务校验——完整校验（protovalidate）在网关 loader 内执行。
+func Parse(env string) (Parsed, error) {
+	raw, err := Env(env)
+	if err != nil {
+		return Parsed{}, err
+	}
+	var p Parsed
+	if err := yaml.Unmarshal(raw, &p); err != nil {
+		return Parsed{}, fmt.Errorf("routes: parse %s: %w", env, err)
+	}
+	return p, nil
+}
+
+// DiscoveryTarget 返回 Entry 的 Consul 注册名；非 discovery 目标返回空串。
+func (e Entry) DiscoveryTarget() string {
+	const prefix = "discovery:///"
+	if strings.HasPrefix(e.Target, prefix) {
+		return e.Target[len(prefix):]
+	}
+	return ""
 }
