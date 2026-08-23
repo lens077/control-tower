@@ -87,6 +87,9 @@ jobs:
           - name: control-tower-config
             context: .
             dockerfile: services/config/Dockerfile
+          - name: control-tower-config-web
+            context: web
+            dockerfile: web/Dockerfile
     steps:
       - name: Checkout
         uses: actions/checkout@v5

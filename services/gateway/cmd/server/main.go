@@ -54,7 +54,22 @@ func main() {
 		fx.StopTimeout(10*time.Second),
 		fx.NopLogger,
 	)
-	app.Run()
+	// 不用 app.Run()：NopLogger 下它会把启动错误吞成静默 exit 1（实测踩过——
+	// CrashLoopBackOff 且 kubectl logs 全空）。显式 Start 并把错误打到 stderr。
+	startCtx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	if err := app.Start(startCtx); err != nil {
+		cancel()
+		fmt.Fprintln(os.Stderr, "gateway start failed:", err)
+		os.Exit(1)
+	}
+	cancel()
+	<-app.Done()
+	stopCtx, stopCancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer stopCancel()
+	if err := app.Stop(stopCtx); err != nil {
+		fmt.Fprintln(os.Stderr, "gateway stop failed:", err)
+		os.Exit(1)
+	}
 }
 
 func newLogger() (*zap.Logger, error) {

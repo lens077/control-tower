@@ -24,6 +24,8 @@ spec:
       labels:
         app: control-tower-gateway
     spec:
+      imagePullSecrets:
+        - name: tcr-pull
       securityContext:
         runAsNonRoot: true
         runAsUser: 1000
@@ -33,7 +35,7 @@ spec:
       containers:
         - name: gateway
           # 禁 latest；部署引用不可变 sha tag/digest，由 CI 产出后回填。
-          image: ccr.ccs.tencentyun.com/sumery/control-tower-gateway:dev
+          image: ccr.ccs.tencentyun.com/sumery/control-tower-gateway:sha-a27f90a
           imagePullPolicy: IfNotPresent
           ports:
             - name: http

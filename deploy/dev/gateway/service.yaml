@@ -1,0 +1,18 @@
+# 网关对外 Service（dev）。集群重建后旧 ecommerce-gateway-service 不存在，
+# 属绿地创建：selector 直指新网关。若将来旧网关回归并行，切流语义见 cutover.md §3。
+apiVersion: v1
+kind: Service
+metadata:
+  name: ecommerce-gateway-service
+  namespace: ecommerce
+  labels:
+    app: control-tower-gateway
+spec:
+  type: LoadBalancer
+  selector:
+    app: control-tower-gateway
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+      protocol: TCP

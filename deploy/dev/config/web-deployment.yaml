@@ -18,9 +18,11 @@ spec:
       labels:
         app: config-center-web
     spec:
+      imagePullSecrets:
+        - name: tcr-pull
       containers:
         - name: config-center-web
-          image: ghcr.io/lens077/control-tower-config-web:dev
+          image: ccr.ccs.tencentyun.com/sumery/control-tower-config-web:sha-a27f90a
           imagePullPolicy: Always
           ports:
             - name: http

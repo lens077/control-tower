@@ -24,6 +24,8 @@ spec:
       labels:
         app: control-tower-gateway
     spec:
+      imagePullSecrets:
+        - name: tcr-pull
       securityContext:
         runAsNonRoot: true
         runAsUser: 1000

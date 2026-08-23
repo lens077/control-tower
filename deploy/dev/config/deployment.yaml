@@ -16,9 +16,11 @@ spec:
       labels:
         app: config-center
     spec:
+      imagePullSecrets:
+        - name: tcr-pull
       containers:
         - name: config-center
-          image: ghcr.io/lens077/control-tower-config:dev
+          image: ccr.ccs.tencentyun.com/sumery/control-tower-config:sha-a27f90a
           imagePullPolicy: Always
           env:
             # 关闭应用内的 Log 导出器，只保留 Trace 和 Metric。
