@@ -18,7 +18,9 @@ import (
 	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
 	"go.opentelemetry.io/otel/sdk/resource"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
-	semconv "go.opentelemetry.io/otel/semconv/v1.34.0"
+	// 必须与当前 otel SDK 的 resource.Default() schema 同版，否则 resource.Merge
+	// 直接报 conflicting Schema URL（实测在集群里炸过：1.34 vs 1.43）。
+	semconv "go.opentelemetry.io/otel/semconv/v1.43.0"
 )
 
 // Config 是 OTel 装配参数。
