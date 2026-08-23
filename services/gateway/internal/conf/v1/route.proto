@@ -1,0 +1,106 @@
+syntax = "proto3";
+
+// 网关动态路由配置（RouteConfig）。
+// 载体：Config Center 键 gateway/<env>/routes.yaml（YAML → JSON → protojson 解码后经 protovalidate 校验）。
+// 可审查模板：仓库根 routes/{dev,pre}.yaml。设计依据：docs/design/architecture.md「配置与自举」。
+// 本文件是网关私有契约（非 api/ 公共面），不受 wire 冻结约束；字段校验规则遵循
+// ecommerce context/team/proto-design.md：字符串必有上限、repeated 必有 max_items、时长约束范围。
+package gateway.conf.v1;
+
+import "google/protobuf/duration.proto";
+import "third_party/validate/validate.proto";
+
+option go_package = "github.com/lens077/control-tower/services/gateway/internal/conf/v1;confv1";
+
+// RouteConfig 是 routes.yaml 的整体形状。热更新按整份原子替换（last-known-good 语义）。
+message RouteConfig {
+  // 配置格式版本，当前固定 v2（v1 是旧 kratos 网关的 config.yaml，两者不共键）。
+  string version = 1 [(buf.validate.field).string = {in: ["v2"]}];
+
+  // 路由表：一级 proto 包名 → 后端目标。至少一条；上限防手滑粘贴整站配置。
+  repeated Route routes = 2 [(buf.validate.field).repeated = {
+    min_items: 1,
+    max_items: 64
+  }];
+
+  // 匿名清单：authn 跳过 + authz 跳过共用的单一真相源。
+  // 条目是完整 Connect procedure 路径，如 /user.v1.UserService/SignIn。
+  repeated string anonymous = 3 [(buf.validate.field).repeated = {
+    max_items: 128,
+    items: {
+      string: {min_len: 3, max_len: 256, prefix: "/"}
+    }
+  }];
+
+  Auth auth = 4;
+
+  // CORS 必填：网关是浏览器流量入口，漏配 CORS 等于对前端不可用。
+  Cors cors = 5 [(buf.validate.field).required = true];
+}
+
+// Route 把一个一级 proto 包名映射到一个后端目标。
+message Route {
+  // 一级 proto 包名（/user.v1.UserService/Method 的 user 段）。
+  // 匹配语义：路径首段取第一个「.」之前的子串精确比对，大小写敏感。
+  string package = 1 [(buf.validate.field).string = {
+    min_len: 1,
+    max_len: 64,
+    pattern: "^[a-z][a-z0-9_]*$"
+  }];
+
+  // 后端目标：discovery:///<consul 注册名> 或 direct://<host:port>（本地调试）。
+  string target = 2 [(buf.validate.field).string = {
+    min_len: 12,
+    max_len: 256,
+    pattern: "^(discovery:///|direct://)[a-zA-Z0-9._:-]+$"
+  }];
+
+  // 路由级总超时（含选点与转发全程）。上限防误配成「永不超时」。
+  google.protobuf.Duration timeout = 3 [
+    (buf.validate.field).required = true,
+    (buf.validate.field).duration = {
+      gte: {nanos: 100000000},
+      lte: {seconds: 120}
+    }
+  ];
+}
+
+// Auth 承载鉴权面的路由级开关。
+message Auth {
+  // 高危路由：本地校验通过后仍实时调 Casdoor 在线校验（fail-close）。
+  // 条目是完整 Connect procedure 路径。
+  repeated string online_check_procedures = 1 [(buf.validate.field).repeated = {
+    max_items: 64,
+    items: {
+      string: {min_len: 3, max_len: 256, prefix: "/"}
+    }
+  }];
+}
+
+// Cors 逐字承载旧网关的跨域策略。
+message Cors {
+  // allow_credentials=true 时 allow_origins 禁止通配符（校验在加载器里做，CEL 不易表达跨字段含通配语义）。
+  bool allow_credentials = 1;
+
+  repeated string allow_origins = 2 [(buf.validate.field).repeated = {
+    min_items: 1,
+    max_items: 32,
+    items: {
+      string: {min_len: 7, max_len: 256}
+    }
+  }];
+
+  repeated string allow_headers = 3 [(buf.validate.field).repeated = {
+    max_items: 64,
+    items: {
+      string: {min_len: 1, max_len: 128}
+    }
+  }];
+
+  repeated string allow_methods = 4 [(buf.validate.field).repeated = {
+    max_items: 16,
+    items: {
+      string: {min_len: 3, max_len: 16}
+    }
+  }];
+}
