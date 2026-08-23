@@ -40,6 +40,8 @@
 
 ## 运行细节约定（防回退）
 
-- 网关与 config 服务的 `http.Server` 不设 `WriteTimeout`：它会掐断 `WatchKeys` 长流（config-center 历史事故）。超时统一走路由级 context。
+- 网关与 config 服务的 `http.Server` 不设 `WriteTimeout`：它会掐断 `WatchKeys` 长流（config-center 历史事故）。慢客户端防护若将来需要，用 per-handler `ResponseController` 定向加写截止，不加全局开关。
 - P2C 负载均衡保留 Consul 实例 `weight` 元数据语义。
 - 出现 streaming 路由时豁免路由级总超时（当前后端 API 实测零 streaming RPC）。
+- resolver 的 Consul Watch 集合取自**启动时**路由表：热更新中新增的 discovery 后端需要滚动重启网关才被监听（新增后端服务本就伴随发布窗口，代价可接受）。
+- 迁移 SQL 内禁止 `SET search_path`：goose 版本表在 public，改会话 search_path 会让版本表写入解析失败（跨版本实测踩到）。全部对象显式 schema 限定。

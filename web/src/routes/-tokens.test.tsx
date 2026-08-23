@@ -9,7 +9,7 @@ import {
   ListMachineTokensResponseSchema,
   RevokeMachineTokenResponseSchema,
 } from "@/gen/api";
-import { initI18n } from "@/i18n";
+import { i18next, initI18n } from "@/i18n";
 import configEn from "@/locales/en/config.json";
 import configZh from "@/locales/zh-CN/config.json";
 
@@ -33,6 +33,7 @@ beforeAll(async () => {
     resources: { "zh-CN": configZh, en: configEn },
     titleKey: "app.title",
   });
+  await i18next.changeLanguage("en");
 });
 
 let root: Root | undefined;
@@ -62,10 +63,11 @@ async function renderPage(api: ReturnType<typeof buildApi>) {
       </QueryClientProvider>,
     );
   });
+  await vi.waitFor(() => expect(api.listMachineTokens).toHaveBeenCalled());
 }
 
 function input(label: string): HTMLInputElement {
-  const element = document.querySelector(`input[aria-label="${label}"]`);
+  const element = [...document.querySelectorAll("input")].find((item) => item.labels?.[0]?.textContent?.includes(label));
   if (!(element instanceof HTMLInputElement)) throw new Error(`input not found: ${label}`);
   return element;
 }
