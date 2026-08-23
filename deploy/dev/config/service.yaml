@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: config-center
+  namespace: config-center
+spec:
+  selector:
+    app: config-center
+  ports:
+    # 端口必须命名:HTTPRoute 的 backendRefs 与 Gateway 都按名字找
+    - name: http
+      protocol: TCP
+      port: 30010
+      targetPort: http
+  type: ClusterIP

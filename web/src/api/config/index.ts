@@ -29,6 +29,18 @@ export interface PutKeyInput {
   description?: string;
 }
 
+export interface MachineTokenFilter {
+  serviceName?: string;
+  environment?: string;
+}
+
+export interface IssueMachineTokenInput {
+  serviceName: string;
+  environment: string;
+  allowedNamespaces: string[];
+  note: string;
+}
+
 export const configApi = {
   // Use the raw transport for this one endpoint because the server advertises
   // its observation scope in a CORS-exposed response header, not in config data.
@@ -45,6 +57,21 @@ export const configApi = {
       presenceMode: presenceMode(response.header.get("x-config-center-presence-mode")),
     };
   },
+
+  listMachineTokens: (filter: MachineTokenFilter = {}, signal?: AbortSignal) =>
+    client.listMachineTokens(
+      {
+        serviceName: filter.serviceName?.trim() ?? "",
+        environment: filter.environment?.trim() ?? "",
+      },
+      { signal },
+    ),
+
+  issueMachineToken: (input: IssueMachineTokenInput, signal?: AbortSignal) =>
+    client.issueMachineToken(input, { signal }),
+
+  revokeMachineToken: (id: string, signal?: AbortSignal) =>
+    client.revokeMachineToken({ id }, { signal }),
 
   listNamespaces: (signal?: AbortSignal) => client.listNamespaces({}, { signal }),
 

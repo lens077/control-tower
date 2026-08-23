@@ -14,6 +14,7 @@ import { Route as ConnectionsRouteImport } from './routes/connections'
 import { Route as EditRouteImport } from './routes/edit'
 import { Route as HistoryRouteImport } from './routes/history'
 import { Route as SystemRouteImport } from './routes/system'
+import { Route as TokensRouteImport } from './routes/tokens'
 import { Route as CallbackIndexRouteImport } from './routes/callback/index'
 
 const IndexRoute = IndexRouteImport.update({
@@ -41,6 +42,11 @@ const SystemRoute = SystemRouteImport.update({
   path: '/system',
   getParentRoute: () => rootRouteImport,
 } as any)
+const TokensRoute = TokensRouteImport.update({
+  id: '/tokens',
+  path: '/tokens',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const CallbackIndexRoute = CallbackIndexRouteImport.update({
   id: '/callback/',
   path: '/callback/',
@@ -53,6 +59,7 @@ export interface FileRoutesByFullPath {
   '/edit': typeof EditRoute
   '/history': typeof HistoryRoute
   '/system': typeof SystemRoute
+  '/tokens': typeof TokensRoute
   '/callback/': typeof CallbackIndexRoute
 }
 export interface FileRoutesByTo {
@@ -61,6 +68,7 @@ export interface FileRoutesByTo {
   '/edit': typeof EditRoute
   '/history': typeof HistoryRoute
   '/system': typeof SystemRoute
+  '/tokens': typeof TokensRoute
   '/callback': typeof CallbackIndexRoute
 }
 export interface FileRoutesById {
@@ -70,14 +78,28 @@ export interface FileRoutesById {
   '/edit': typeof EditRoute
   '/history': typeof HistoryRoute
   '/system': typeof SystemRoute
+  '/tokens': typeof TokensRoute
   '/callback/': typeof CallbackIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
-    '/' | '/connections' | '/edit' | '/history' | '/system' | '/callback/'
+    | '/'
+    | '/connections'
+    | '/edit'
+    | '/history'
+    | '/system'
+    | '/tokens'
+    | '/callback/'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/connections' | '/edit' | '/history' | '/system' | '/callback'
+  to:
+    | '/'
+    | '/connections'
+    | '/edit'
+    | '/history'
+    | '/system'
+    | '/tokens'
+    | '/callback'
   id:
     | '__root__'
     | '/'
@@ -85,6 +107,7 @@ export interface FileRouteTypes {
     | '/edit'
     | '/history'
     | '/system'
+    | '/tokens'
     | '/callback/'
   fileRoutesById: FileRoutesById
 }
@@ -94,6 +117,7 @@ export interface RootRouteChildren {
   EditRoute: typeof EditRoute
   HistoryRoute: typeof HistoryRoute
   SystemRoute: typeof SystemRoute
+  TokensRoute: typeof TokensRoute
   CallbackIndexRoute: typeof CallbackIndexRoute
 }
 
@@ -134,6 +158,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SystemRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/tokens': {
+      id: '/tokens'
+      path: '/tokens'
+      fullPath: '/tokens'
+      preLoaderRoute: typeof TokensRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/callback/': {
       id: '/callback/'
       path: '/callback'
@@ -150,6 +181,7 @@ const rootRouteChildren: RootRouteChildren = {
   EditRoute: EditRoute,
   HistoryRoute: HistoryRoute,
   SystemRoute: SystemRoute,
+  TokensRoute: TokensRoute,
   CallbackIndexRoute: CallbackIndexRoute,
 }
 export const routeTree = rootRouteImport

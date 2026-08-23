@@ -1,0 +1,67 @@
+# Web 控制台:Caddy 伺服构建产物,与后端分开发版
+# (前端改一行不必重建 Go 二进制,这也是没选 embed.FS 的原因)。
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: config-center-web
+  namespace: config-center
+  labels:
+    app: config-center-web
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: config-center-web
+  template:
+    metadata:
+      name: config-center-web
+      labels:
+        app: config-center-web
+    spec:
+      containers:
+        - name: config-center-web
+          image: ghcr.io/lens077/control-tower-config-web:dev
+          imagePullPolicy: Always
+          ports:
+            - name: http
+              containerPort: 80
+              protocol: TCP
+          # Caddy 里为 /healthz 单独开了一条 respond,不会落进 SPA fallback
+          # (落进去的话返回的是 index.html + 200,探针永远认为健康)。
+          # 静态伺服没有下游依赖,所以就绪与存活可以共用一个端点 ——
+          # 这与后端不同,后端的 /healthz 探 DB/缓存,不能拿来做存活。
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 3
+            periodSeconds: 10
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 20
+            failureThreshold: 3
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
+          volumeMounts:
+            # 覆盖镜像里那份构建期的 config.json,实现运行时注入 ——
+            # 换网关地址/Casdoor 只改 ConfigMap 重启 Pod,不必重建镜像。
+            # subPath 是必须的:不加会把整个 /usr/share/caddy 目录换成 ConfigMap,
+            # 前端所有静态资源当场消失(这个错的表现是白屏且 404,很难一眼看出)。
+            - name: runtime-config
+              mountPath: /usr/share/caddy/config.json
+              subPath: config.json
+              readOnly: true
+      restartPolicy: Always
+      volumes:
+        - name: runtime-config
+          configMap:
+            name: config-center-web-config

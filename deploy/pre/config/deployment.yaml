@@ -1,0 +1,94 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: config-center
+  namespace: config-center
+  labels:
+    app: config-center
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: config-center
+  template:
+    metadata:
+      name: config-center
+      labels:
+        app: config-center
+    spec:
+      containers:
+        - name: config-center
+          image: ghcr.io/lens077/control-tower-config:dev
+          imagePullPolicy: Always
+          env:
+            # 关闭应用内的 Log 导出器，只保留 Trace 和 Metric。
+            # 日志输出到 stdout，由部署在 k8s 的 Fluent Bit 统一采集
+            - name: OTEL_LOGS_EXPORTER
+              value: "none"
+            # SERVICE_NAME 就是注册进 Consul 的服务名,必须与网关
+            # gateway/configs/config.yaml 里的 discovery:///config-service 完全一致
+            - name: SERVICE_NAME
+              value: "config-service"
+            - name: SERVICE_VERSION
+              value: "v1"
+            - name: DEPLOYMENT_MODE
+              value: "dev"
+            # The service itself always boots from this mounted local file.
+            - name: CONFIG_FILE
+              value: "/etc/config-center/config.yaml"
+            - name: CASDOOR_CERTIFICATE_FILE
+              value: "/etc/config-center/casdoor.pem"
+            - name: CASDOOR_ISSUER
+              value: "https://casdoor.apikv.com"
+            - name: CASDOOR_AUDIENCE
+              value: "a36e6718e392099b7915"
+            - name: CONFIG_CENTER_SERVICE_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: config-center-iam
+                  key: service-token
+            # Consul is discovery only, never this service's configuration source.
+            - name: CONSUL_ENABLED
+              value: "true"
+            - name: CONSUL_ADDR
+              value: "consul-server.consul.svc:8501"
+            - name: CONSUL_SCHEME
+              value: "https"
+            - name: CONSUL_INSECURE_SKIP_VERIFY
+              value: "true"
+          ports:
+            # 命名端口:Service 与 HTTPRoute 用名字引用,改端口号时不必三处同步
+            - name: http
+              containerPort: 30010
+              protocol: TCP
+          # /healthz 在 DB/缓存不通时返回 503。就绪探针据此摘流量;
+          # 存活探针只探端口 —— 用 /healthz 做存活会让一次数据库抖动把所有 Pod 连环重启。
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 30010
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            failureThreshold: 3
+          livenessProbe:
+            tcpSocket:
+              port: 30010
+            initialDelaySeconds: 20
+            periodSeconds: 20
+            failureThreshold: 3
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: "1"
+              memory: 512Mi
+          volumeMounts:
+            - name: bootstrap
+              mountPath: /etc/config-center
+              readOnly: true
+      restartPolicy: Always
+      volumes:
+        - name: bootstrap
+          secret:
+            secretName: config-center-bootstrap

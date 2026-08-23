@@ -1,0 +1,9 @@
+# config-center 是基础设施而不是电商业务,所以独占一个 namespace ——
+# 与 loki / observability 各自一个 ns 同构,也让它的生命周期与 ecommerce 解耦。
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: config-center
+  labels:
+    app.kubernetes.io/name: config-center
+    app.kubernetes.io/part-of: platform

@@ -1,0 +1,28 @@
+# 运行时注入的前端配置。
+#
+# web 启动时 fetch("config.json", {cache:"no-store"}) 读它(见 web/src/runtime-config.ts),
+# 所以改完重启 Pod 即可生效,不必重建镜像 —— 这正是没把 apiUrl 做成
+# 构建期 env 的原因:同一个镜像能在 dev/pre/prod 用不同后端地址跑。
+#
+# ⚠️ apiUrl 变了要同步改两处,否则浏览器会被 CORS 拦掉:
+#   1. 这里
+#   2. config-center 自己的 server.cors.allowed_origins(在 bootstrap 配置里),
+#      必须包含 Web 控制台的来源 https://config.app.com
+# 因为 Web 与 API 是两个 hostname,跨源,CORS 是必经之路。
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: config-center-web-config
+  namespace: config-center
+data:
+  config.json: |
+    {
+      "apiUrl": "https://config-api.app.com",
+      "casdoor": {
+        "serverUrl": "https://casdoor.apikv.com",
+        "clientId": "a36e6718e392099b7915",
+        "organizationName": "lens",
+        "appName": "ecommerce",
+        "redirectPath": "/callback"
+      }
+    }

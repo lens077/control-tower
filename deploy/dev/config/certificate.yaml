@@ -1,0 +1,36 @@
+# 由集群级 CA 直接签发,与 loki/jaeger/vm/casdoor 同一种简化写法
+# (opentelemetry 那套「ns 级 root-ca → ns 级 Issuer → 业务证书」是给多域名
+#  共用一个 ns CA 的场景准备的,这里只有两个域名,多一层没有收益)。
+#
+# Secret 必须与 Gateway 在同一个 namespace 才能被 certificateRefs 引用 ——
+# 但我们挂的是 default 里的共享 cilium-gateway,它已经有泛域名证书
+# global-default-tls(CN=app.com, SAN=*.app.com),config.app.com 与
+# config-api.app.com 都在覆盖范围内,所以**这份证书当前不是入口必需的**。
+#
+# 留着它是为了两件事:一是 server.tls 开启时(不经 Gateway 直连/mTLS)
+# 需要一张自己的证书;二是将来若改走 TLSRoute Passthrough,直接就有。
+# 用不到时它只是一个躺着的 Secret,不会影响任何流量。
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: config-center-tls
+  namespace: config-center
+spec:
+  secretName: config-center-tls-secret
+  issuerRef:
+    name: global-ca-issuer
+    kind: ClusterIssuer
+  commonName: config.app.com
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+  usages:
+    - server auth
+    - digital signature
+    - key encipherment
+  dnsNames:
+    - "config.app.com"
+    - "config-api.app.com"
+    # 集群内直连用的 Service DNS —— server.tls 开启后,SDK 校验证书时用得上
+    - "config-center.config-center.svc"
+    - "config-center.config-center.svc.cluster.local"

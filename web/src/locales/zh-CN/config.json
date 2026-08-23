@@ -70,6 +70,52 @@
       "redis_ttl_degraded": "已启用 Redis 聚合但当前不可用；页面暂时只显示当前进程视图。"
     }
   },
+  "tokens": {
+    "nav": "Machine Token",
+    "title": "Machine Token 管理",
+    "subtitle": "签发、筛选和吊销服务访问配置中心所用的 Machine Token。",
+    "refresh": "刷新",
+    "issue": "签发 Token",
+    "service": "服务名",
+    "environment": "环境",
+    "namespaces": "允许的命名空间",
+    "note": "备注",
+    "noNote": "无备注",
+    "createdAt": "创建时间",
+    "revokedAt": "吊销时间",
+    "lastUsedAt": "最近使用时间",
+    "empty": "尚未签发 Machine Token。",
+    "emptyFiltered": "没有符合当前筛选条件的 Machine Token。",
+    "loadFailed": "加载 Machine Token 失败: {{message}}",
+    "cancel": "取消",
+    "status": {
+      "active": "有效",
+      "revoked": "已吊销"
+    },
+    "issueDialog": {
+      "title": "签发 Machine Token",
+      "namespacesHelp": "可输入多个值，用逗号或换行分隔；留空时仅允许访问服务自身的命名空间。",
+      "submit": "签发",
+      "issuing": "签发中…",
+      "failed": "签发失败: {{message}}"
+    },
+    "issued": {
+      "title": "Machine Token 已签发",
+      "warning": "仅此一次，请立即复制。关闭后不可再查看此 Token 明文。",
+      "copy": "复制 Token",
+      "copied": "已复制",
+      "close": "我已复制，关闭"
+    },
+    "revoke": {
+      "action": "吊销",
+      "title": "吊销 Machine Token",
+      "body": "确认吊销 {{service}} / {{environment}} 的这枚 Token？此操作不可撤销。",
+      "watchWarning": "已建立的 Watch 流将在心跳周期内断开。",
+      "submit": "确认吊销",
+      "revoking": "吊销中…",
+      "failed": "吊销失败: {{message}}"
+    }
+  },
   "newKey": {
     "title": "新建配置 Key",
     "keyLabel": "Key(层级路径,如 gateway/config.yaml)",

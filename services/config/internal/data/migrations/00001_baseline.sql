@@ -1,6 +1,8 @@
 -- +goose Up
+-- 注意：迁移内禁止 SET search_path —— goose 的版本表在 public，
+-- 改会话 search_path 会让同连接后续的版本表写入解析失败（实测踩过）。
+-- 本文件所有对象均显式 schema 限定。
 CREATE SCHEMA IF NOT EXISTS config;
-SET search_path TO config;
 
 -- config.entry 配置项(键 + 当前值 + 元数据),键值粒度
 CREATE TABLE IF NOT EXISTS config.entry (

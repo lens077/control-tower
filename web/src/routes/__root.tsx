@@ -49,6 +49,9 @@ function RootLayout() {
               <Button component={Link} to="/connections" color="inherit">
                 {t("connections.nav")}
               </Button>
+              <Button component={Link} to="/tokens" color="inherit">
+                {t("tokens.nav")}
+              </Button>
               <Button component={Link} to="/system" color="inherit">
                 {t("system.nav")}
               </Button>

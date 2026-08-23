@@ -1,0 +1,69 @@
+# 跨版本实测专用 Bootstrap（本地 throwaway Postgres/Redis，禁 TLS、禁注册发现、禁遥测）。
+# 凭据为一次性测试值，不含任何真实机密。
+server:
+  addr: "0.0.0.0:18095"
+  http:
+    read_timeout: 5s
+    write_timeout: 5s
+    idle_timeout: 60s
+  cors:
+    allowed_origins:
+      - http://localhost:3005
+  tls:
+    enable: false
+    cert_pem: ""
+    key_pem: ""
+    client_ca_pem: ""
+    require_client_cert: false
+
+data:
+  database:
+    postgres:
+      host: 127.0.0.1
+      port: 15432
+      user: postgres
+      password: postgres
+      db_name: postgres
+      tls:
+        enable: false
+        ssl_mode: "disable"
+        ca_pem: ""
+      timezone: "UTC"
+      pool:
+        max_conns: 5
+        min_conns: 1
+        max_conn_lifetime: 1h
+        max_conn_idle_time: 5m
+        ping_timeout: 5s
+  cache:
+    redis:
+      presence:
+        enabled: false
+        key_prefix: "config-center:presence"
+        ttl: 90s
+      host: 127.0.0.1
+      port: 16379
+      tls:
+        enable: false
+        insecure_skip_verify: true
+        ca_pem: ""
+      username: ""
+      password: ""
+      db: 0
+      dial_timeout: 5s
+      read_timeout: 3s
+      write_timeout: 3s
+      pool_size: 5
+      min_idle_conns: 1
+
+log:
+  framework:
+    format: console
+    log_level: info
+    error_level: error
+  application:
+    format: console
+    level: info
+
+observability:
+  enable: false

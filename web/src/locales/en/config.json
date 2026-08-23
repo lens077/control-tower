@@ -70,6 +70,52 @@
       "redis_ttl_degraded": "Redis aggregation is enabled but unavailable. The page is temporarily showing only the current process view."
     }
   },
+  "tokens": {
+    "nav": "Machine tokens",
+    "title": "Machine tokens",
+    "subtitle": "Issue, filter, and revoke credentials used by services to access Config Center.",
+    "refresh": "Refresh",
+    "issue": "Issue token",
+    "service": "Service name",
+    "environment": "Environment",
+    "namespaces": "Allowed namespaces",
+    "note": "Note",
+    "noNote": "No note",
+    "createdAt": "Created",
+    "revokedAt": "Revoked",
+    "lastUsedAt": "Last used",
+    "empty": "No machine tokens have been issued yet.",
+    "emptyFiltered": "No machine tokens match these filters.",
+    "loadFailed": "Failed to load machine tokens: {{message}}",
+    "cancel": "Cancel",
+    "status": {
+      "active": "Active",
+      "revoked": "Revoked"
+    },
+    "issueDialog": {
+      "title": "Issue machine token",
+      "namespacesHelp": "Enter multiple values separated by commas or new lines. Leave empty to allow only the service's own namespace.",
+      "submit": "Issue",
+      "issuing": "Issuing…",
+      "failed": "Failed to issue token: {{message}}"
+    },
+    "issued": {
+      "title": "Machine token issued",
+      "warning": "This is the only time the plaintext token will be shown. Copy it now; it cannot be viewed again after closing.",
+      "copy": "Copy token",
+      "copied": "Copied",
+      "close": "I have copied it"
+    },
+    "revoke": {
+      "action": "Revoke",
+      "title": "Revoke machine token",
+      "body": "Revoke this token for {{service}} / {{environment}}? This action cannot be undone.",
+      "watchWarning": "Established Watch streams will disconnect within one heartbeat interval.",
+      "submit": "Revoke token",
+      "revoking": "Revoking…",
+      "failed": "Failed to revoke token: {{message}}"
+    }
+  },
   "newKey": {
     "title": "New config key",
     "keyLabel": "Key (hierarchical path, e.g. gateway/config.yaml)",

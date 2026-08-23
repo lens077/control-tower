@@ -1,0 +1,18 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: config-center-web
+  namespace: config-center
+spec:
+  selector:
+    app: config-center-web
+  ports:
+    # 端口必须命名:HTTPRoute 的 backendRefs 按名字解析 targetPort
+    - name: http
+      protocol: TCP
+      port: 80
+      targetPort: http
+  # ClusterIP 即可 —— 外部入口由 HTTPRoute + 共享 cilium-gateway 负责。
+  # 不用 LoadBalancer(ecommerce 那些业务服务的做法):那会给每个服务
+  # 占一个外部 IP,而这里走的是 Gateway 统一入口。
+  type: ClusterIP

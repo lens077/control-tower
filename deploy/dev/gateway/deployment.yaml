@@ -1,0 +1,138 @@
+# control-tower 网关（dev）。与旧网关并行部署在同一 namespace，
+# 切流 = 把 ecommerce-gateway-service 的 selector 从 app: ecommerce-gateway
+# 改为 app: control-tower-gateway；回滚 = 改回（手顺：docs/design/cutover.md）。
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: control-tower-gateway
+  namespace: ecommerce
+  labels:
+    app: control-tower-gateway
+spec:
+  # 无状态网关滚更/金丝雀语义成立的底线：双副本 + RollingUpdate + PDB（DEVOPS 纪律）。
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  selector:
+    matchLabels:
+      app: control-tower-gateway
+  template:
+    metadata:
+      labels:
+        app: control-tower-gateway
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        fsGroupChangePolicy: OnRootMismatch
+      containers:
+        - name: gateway
+          # 禁 latest；部署引用不可变 sha tag/digest，由 CI 产出后回填。
+          image: ccr.ccs.tencentyun.com/sumery/control-tower-gateway:dev
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+          env:
+            - name: SERVICE_NAME
+              value: control-tower-gateway
+            - name: DEPLOYMENT_MODE
+              value: dev
+            - name: HTTP_PORT
+              value: ":8080"
+            # 自举：selector（type=config_center，key=routes.yaml）经 Secret 挂载。
+            - name: CONFIG_SOURCE_FILE
+              value: /etc/control-tower/config-source/gateway.yaml
+            # Consul 只做发现。ACL 开启后缺 token 的症状是 200 空列表而不是报错；
+            # 变量名必须是 CONSUL_HTTP_TOKEN（hashicorp client 的兜底读取）。
+            - name: CONSUL_HTTP_ADDR
+              value: consul-server.consul.svc.cluster.local:8500
+            - name: CONSUL_HTTP_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: consul-ecommerce-token
+                  key: CONSUL_HTTP_TOKEN
+            # JWT 信任域绑定（docs/design/auth.md）。audiences=各前端 Casdoor client id（CSV，非机密）。
+            - name: JWT_ISSUER
+              value: https://casdoor.apikv.com
+            - name: JWT_AUDIENCES
+              valueFrom:
+                configMapKeyRef:
+                  name: control-tower-gateway-config
+                  key: JWT_AUDIENCES
+            # 高危路由在线校验凭据（可选；未配置时 online_check 路由 fail-close）。
+            - name: CASDOOR_URL
+              value: https://casdoor.apikv.com
+            # 可观测：推 OTLP；采样跟随父，根按比例。
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              valueFrom:
+                configMapKeyRef:
+                  name: control-tower-gateway-config
+                  key: OTEL_EXPORTER_OTLP_ENDPOINT
+                  optional: true
+            - name: OTEL_TRACES_SAMPLER_RATIO
+              value: "0.2"
+            - name: LOG_LEVEL
+              value: info
+          volumeMounts:
+            - name: config-source
+              mountPath: /etc/control-tower/config-source
+              readOnly: true
+          startupProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            failureThreshold: 30
+            periodSeconds: 2
+          readinessProbe:
+            # 就绪 = 路由表 + JWT 公钥 + Casbin 全部加载 + resolver 有快照。
+            httpGet:
+              path: /readyz
+              port: http
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 150m
+              memory: 256Mi
+            limits:
+              cpu: 300m
+              memory: 512Mi
+      volumes:
+        - name: config-source
+          secret:
+            secretName: control-tower-config-source-dev
+            defaultMode: 0400
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: control-tower-gateway
+  namespace: ecommerce
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: control-tower-gateway
+---
+# 非机密运行参数（audiences、OTLP 端点按环境填写）。
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: control-tower-gateway-config
+  namespace: ecommerce
+data:
+  # 逗号分隔的 Casdoor client id 白名单：consumer/merchant/admin/desktop。
+  # 占位值，P5 切流前以实际 client id 填充（非机密）。
+  JWT_AUDIENCES: "REPLACE_ME_CLIENT_IDS"
+  OTEL_EXPORTER_OTLP_ENDPOINT: "otel-collector.observability.svc:4318"

@@ -1,0 +1,53 @@
+# VPA 需要 controller 装好并打开 InPlace feature gate
+# (见 cloud-native-deploy/vpa/install.sh 里对 admission-controller 与 updater 的 patch)。
+# InPlace 原地调整资源不重启 Pod —— 对 config-center 尤其重要:
+# WatchKeys 是长连接流,重启会把所有订阅者踢掉,它们要退避重连再重收一遍快照。
+---
+apiVersion: autoscaling.k8s.io/v1
+kind: VerticalPodAutoscaler
+metadata:
+  name: config-center-vpa
+  namespace: config-center
+spec:
+  targetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    # 必须与 deployment.yaml 的 metadata.name 逐字一致 —— 写错 VPA 会静默不生效,
+    # 不报错也不告警(ecommerce 仓根那份 application-vpa.yml 就踩了这个:
+    # 它写的是裸服务名而实际 Deployment 叫 ecommerce-xxx-deploy)
+    name: config-center
+  updatePolicy:
+    updateMode: "InPlace"
+  resourcePolicy:
+    containerPolicies:
+      - containerName: '*'
+        minAllowed:
+          cpu: "50m"
+          memory: "128Mi"
+        maxAllowed:
+          # 上限对齐 deployment 里的 limits,VPA 不该把它推到超出集群预算
+          cpu: "500m"
+          memory: "512Mi"
+---
+apiVersion: autoscaling.k8s.io/v1
+kind: VerticalPodAutoscaler
+metadata:
+  name: config-center-web-vpa
+  namespace: config-center
+spec:
+  targetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: config-center-web
+  updatePolicy:
+    updateMode: "InPlace"
+  resourcePolicy:
+    containerPolicies:
+      - containerName: '*'
+        # 静态文件伺服,要不了多少 —— 给得比后端低一档
+        minAllowed:
+          cpu: "10m"
+          memory: "32Mi"
+        maxAllowed:
+          cpu: "200m"
+          memory: "128Mi"
