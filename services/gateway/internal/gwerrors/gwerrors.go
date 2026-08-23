@@ -95,13 +95,14 @@ func writeFallbackJSON(rw http.ResponseWriter, code connect.Code, message string
 func httpStatus(code connect.Code) int {
 	switch code {
 	case connect.CodeCanceled:
-		return 408
+		return 499
 	case connect.CodeUnknown:
 		return 500
 	case connect.CodeInvalidArgument:
 		return 400
 	case connect.CodeDeadlineExceeded:
-		return 408
+		// 与 connect-go ErrorWriter 的实际映射一致（实测 504，非旧 spec 记忆中的 408）。
+		return 504
 	case connect.CodeNotFound:
 		return 404
 	case connect.CodeAlreadyExists:

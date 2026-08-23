@@ -77,7 +77,7 @@ func TestHTTPStatusMapping(t *testing.T) {
 		connect.CodeUnauthenticated:  401,
 		connect.CodePermissionDenied: 403,
 		connect.CodeUnavailable:      503,
-		connect.CodeDeadlineExceeded: 408,
+		connect.CodeDeadlineExceeded: 504,
 		connect.CodeResourceExhausted: 429,
 	}
 	for code, want := range cases {

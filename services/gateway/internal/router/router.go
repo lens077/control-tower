@@ -89,6 +89,19 @@ func (t *Table) NeedsOnlineCheck(procedure string) bool {
 	return ok
 }
 
+// DiscoveryTargets 返回全部 discovery:/// 目标的注册名（含重复；调用方自行去重），
+// 供装配层建立 Consul Watch。
+func (t *Table) DiscoveryTargets() []string {
+	const prefix = "discovery:///"
+	var out []string
+	for _, r := range t.byPackage {
+		if strings.HasPrefix(r.Target, prefix) {
+			out = append(out, r.Target[len(prefix):])
+		}
+	}
+	return out
+}
+
 // packageOf 提取路径首段第一个「.」之前的包名。
 func packageOf(path string) (string, bool) {
 	if len(path) < 2 || len(path) > MaxPathLen || path[0] != '/' {
