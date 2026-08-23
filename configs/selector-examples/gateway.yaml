@@ -1,0 +1,12 @@
+# 网关 selector 模板（挂进 Secret control-tower-config-source-{env} 的 gateway.yaml 键）。
+# ⚠️ service_token 为占位值：真值用 config 管理台 /tokens 给 service_name=gateway 签发
+#    （allowed_namespaces 留空即默认 gateway 自身），随 Secret 注入，不进任何仓库。
+type: config_center
+config_center:
+  # 集群内走 Service DNS；本机调试改 config-api 域名。
+  address: http://config-center.config-center.svc:30010
+  namespace: gateway
+  environment: dev # 按环境改：dev / pre
+  key: routes.yaml # 主键固定为 routes.yaml（loader 校验，其余四键同 namespace 派生）
+  service_token: REPLACE_WITH_ISSUED_TOKEN
+  client_name: control-tower-gateway
