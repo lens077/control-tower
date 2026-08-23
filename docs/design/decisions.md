@@ -21,6 +21,8 @@
 | 路由级重试 | 默认关闭 | Connect RPC 全部是 POST，旧网关两层重试相乘导致非幂等写重放（历史事故） | 幂等键（requestId）落地后按路由显式开启 |
 | Redis 角色缓存 + Casdoor get-user 回源 | 删除 | 角色进 JWT claims + 撤销名单（见 auth.md），撤权时效从 5 分钟缓存窗降到秒级推送 | 若 Casdoor 无法可靠嵌入角色 claims，按 auth.md 回退分支恢复 get-user+缓存 |
 | `/config*` 网关路由 | 删除 | config web/api 走独立域名直连（决策 Q14a）；经网关转发会产生双重鉴权，且 config 服务刻意不信任网关转发的身份头 | 出现统一入口需求并完成信任转发设计 |
+| Authorization 头透传后端 | 剥离 | 实测后端 10 服务零消费该头（P3 逐服务 grep 确认）；剥离后凭据不进内网 | 某服务需要消费原始 JWT 做纵深校验时恢复透传并记录消费方 |
+| 支付宝 form 回调转码 | 不做 | 实测 payment 服务只挂 Connect handler，notify/return URL 注入是注释态：真实链路为支付宝 redirect→前端页→前端普通 Connect POST；网关保持 method 透明即可 | 启用支付宝服务端直连 notify 时，在 payment 服务侧加 HTTP 适配端点（不在网关做） |
 | Kratos 框架 | 不迁 | 技术栈整体替换为 connect-go + fx | 无 |
 
 ## 鉴权侧

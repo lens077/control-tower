@@ -85,7 +85,9 @@ func TestProxyForwardsAndInjectsIdentity(t *testing.T) {
 
 	addr := strings.TrimPrefix(backend.URL, "http://")
 	res := &fakeResolver{addr: addr}
-	rec := serve(t, res, router.Route{Package: "user", Target: "discovery:///user-identity", Timeout: 2 * time.Second}, true, nil)
+	rec := serve(t, res, router.Route{Package: "user", Target: "discovery:///user-identity", Timeout: 2 * time.Second}, true, func(r *http.Request) {
+		r.Header.Set("Authorization", "Bearer should-not-leak")
+	})
 
 	if rec.Code != 200 || rec.Header().Get("X-Backend") != "ok" {
 		t.Fatalf("status=%d headers=%v", rec.Code, rec.Header())
@@ -95,6 +97,10 @@ func TestProxyForwardsAndInjectsIdentity(t *testing.T) {
 	}
 	if got.Get("X-Forwarded-For") == "" || got.Get("X-Forwarded-Proto") == "" {
 		t.Fatalf("SetXForwarded not applied: %v", got)
+	}
+	// Authorization 剥离：后端零消费（P3 确认），凭据不进内网。
+	if got.Get("Authorization") != "" {
+		t.Fatal("Authorization must be stripped before forwarding")
 	}
 }
 

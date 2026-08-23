@@ -68,6 +68,9 @@ func New(res resolver.Resolver, ew *gwerrors.Writer, log *zap.Logger, inner http
 		Rewrite: func(pr *httputil.ProxyRequest) {
 			// XFF：追加边缘链路（仅信任 RemoteAddr 语义由 SetXForwarded 保证）。
 			pr.SetXForwarded()
+			// Authorization 不透传：实测后端 10 服务零消费（P3 逐服务确认），
+			// 凭据不进内网；将来有服务要消费原始 JWT 时再按 decisions.md 触发条款恢复。
+			pr.Out.Header.Del("Authorization")
 			// 可信身份注入（入站 x-md-* 已在链路早段剥离）。
 			if c := gwctx.Claims(pr.In.Context()); c != nil {
 				identity.Inject(pr.Out.Header, c)
