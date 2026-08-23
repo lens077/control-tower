@@ -1,0 +1,10 @@
+allowBuilds:
+  '@bufbuild/buf': false
+# web 是自带 lock 的独立包,这个文件只为一件事存在:声明允许执行安装脚本的依赖。
+# pnpm 10+ 把该设置从 package.json 的 pnpm 字段挪到了这里,写在 package.json 里不生效
+# —— 不声明的话 pnpm install 会以 ERR_PNPM_IGNORED_BUILDS 直接失败(容器构建里尤其明显)。
+# 清单与 ecommerce 的 frontend/pnpm-workspace.yaml 保持一致。
+onlyBuiltDependencies:
+  - "@bufbuild/buf"
+  - "@swc/core"
+  - esbuild

@@ -1,0 +1,128 @@
+server:
+  addr: "0.0.0.0:30010"
+  http:
+    read_timeout: 5s
+    write_timeout: 5s
+    idle_timeout: 60s
+  cors:
+    # 部署配置还必须允许对应 Web 的精确 origin，例如 https://config.app.com。
+    # Bearer 请求依赖浏览器预检，因此不要使用模糊的 origin。
+    allowed_origins:
+      - http://localhost:3005
+  # 服务端 TLS。默认关闭 —— 集群里 TLS 由共享 Gateway 的 https listener
+  # 终止(mode: Terminate),Pod 侧收到明文,与 otel/grafana/loki 等组件一致。
+  # 只在「不经 Gateway 直连」或「将来上 mTLS」时才打开。
+  # PEM 内联而非文件路径,与下面 data/discovery 的 ca_pem 写法一致。
+  tls:
+    enable: false
+    cert_pem: ""
+    key_pem: ""
+    # 填了 client_ca_pem 才可能做 mTLS;require_client_cert 打开即强制校验。
+    # 当前机器身份用的是全局共享的 service token(见 IAM),mTLS 是它的替代路径。
+    client_ca_pem: ""
+    require_client_cert: false
+
+data:
+  database:
+    postgres:
+      host: localhost
+      port: 5432
+      user: config_center
+      password: ""
+      db_name: ecommerce
+      tls:
+        enable: true
+        ssl_mode: "verify-ca"
+        ca_pem: ""
+      timezone: "Asia/Shanghai"
+      pool:
+        max_conns: 20
+        min_conns: 5
+        max_conn_lifetime: 1h
+        max_conn_idle_time: 5m
+        ping_timeout: 5s
+  cache:
+    redis:
+      # Optional cross-replica SDK connection view. Redis still serves the
+      # normal cache path when this is disabled.
+      presence:
+        enabled: false
+        key_prefix: "config-center:presence"
+        ttl: 90s
+      host: localhost
+      port: 443
+      tls:
+        enable: true
+        insecure_skip_verify: true
+        ca_pem: ""
+      username: username
+      password: ""
+      db: 0
+      dial_timeout: 5s
+      read_timeout: 3s
+      write_timeout: 3s
+      pool_size: 10
+      min_idle_conns: 5
+log:
+  framework:
+    format: console
+    log_level: debug
+    error_level: error
+  application:
+    format: console
+    level: debug
+
+observability:
+  enable: false
+  trace:
+    endpoint: localhost:4318
+    tls:
+      enable: false
+      insecure_skip_verify: true
+      ca_pem: ""
+  metric:
+    endpoint: localhost:4318
+    tls:
+      enable: false
+      insecure_skip_verify: true
+      ca_pem: ""
+  log:
+    endpoint: localhost:4318
+    tls:
+      enable: false
+      insecure_skip_verify: true
+      ca_pem: ""
+  # 指标查询端。上面三项是「往哪推」,这项是「从哪读」——
+  # 控制台的系统信息页要画历史曲线,得反过来查 VictoriaMetrics。
+  #
+  # 注意它与 metric.endpoint 不是同一个地址:推送经 otel collector 中转
+  # (OTLP,4318),查询直连 VM 的 PromQL HTTP API(8428)。
+  #
+  # 留空 = 不启用历史曲线,页面只显示进程自采样的即时值并说明原因。
+  # 集群内填 Service DNS:
+  #   http://vm-single-victoria-metrics-single-server.victoriametrics.svc:8428
+  # 本机开发填经网关暴露的地址(注意 VM 目前只有 http 入口):
+  #   http://vm.app.com
+  metric_query:
+    endpoint: ""
+    timeout: 5s
+    tls:
+      enable: false
+      insecure_skip_verify: true
+      ca_pem: ""
+
+discovery:
+  consul:
+    addr: localhost:8500
+    health_check: true
+    scheme: http
+    check:
+      ttl:
+        duration: "30s"
+        ping_interval: 10s
+    tls:
+      enable: false
+      insecure_skip_verify: true
+      ca_pem: ""
+# Inject real passwords, the Casdoor public-certificate file path, and the
+# machine token with the deployment secret. This example must stay credential-free.

@@ -19,6 +19,9 @@ lint:
   ignore:
     # 上游 vendored 定义保留其 import root，不在本仓治理范围。
     - third_party
+    # 服务私有配置契约不受公共 API lint 约束（比照 config-center 对 internal/conf 的处理）。
+    - services/config/internal/conf
+    - services/gateway/internal/conf
 breaking:
   use:
     - FILE

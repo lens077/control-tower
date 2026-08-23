@@ -1,0 +1,205 @@
+syntax = "proto3";
+
+package conf.v1;
+
+import "third_party/validate/validate.proto";
+import "google/protobuf/duration.proto";
+
+option go_package = "github.com/lens077/control-tower/services/config/internal/conf/v1;confv1";
+
+message Bootstrap {
+  Server server = 1 [(buf.validate.field).required = true];
+  Data data = 2 [(buf.validate.field).required = true];
+  Observability observability = 3 [(buf.validate.field).required = false];
+  Discovery discovery = 4 [(buf.validate.field).required = false];
+  Log log = 5 [(buf.validate.field).required = true];
+}
+
+message Log {
+  message Framework {
+    string format = 1 [(buf.validate.field).string = {in: ["console", "json"]}];
+    string log_level = 2 [(buf.validate.field).string = {in: ["debug", "info", "warn", "error", "dpanic", "panic", "fatal"]}];
+    string error_level = 3 [(buf.validate.field).string = {in: ["debug", "info", "warn", "error", "dpanic", "panic", "fatal"]}];
+  }
+  message Application {
+    string format = 1 [(buf.validate.field).string = {in: ["console", "json"]}];
+    string level = 2 [(buf.validate.field).string = {in: ["debug", "info", "warn", "error", "dpanic", "panic", "fatal"]}];
+  }
+  Framework framework = 1;
+  Application application = 2;
+}
+
+message Server {
+  string addr = 1 [
+    (buf.validate.field).string.address = true,
+    (buf.validate.field).string.example = "0.0.0.0"
+  ];
+  HTTP http = 2;
+  Cors cors = 3;
+  Tls tls = 4;
+
+  // Tls 服务端 TLS。**默认关闭**,因为集群里 TLS 由共享 Gateway 的 https
+  // listener 终止(mode: Terminate),Pod 侧收到的是明文 —— 与 otel/grafana/
+  // loki/jaeger 等所有既有组件一致。
+  //
+  // 留着这个开关是为了两种场景:一是不经 Gateway 直连(本地调试、跨集群),
+  // 二是将来上 mTLS —— 那时把 client_ca_pem 填上、require_client_cert 打开,
+  // 调用方身份就能从证书 CN 里取,不必再依赖那个全局共享的 service token。
+  //
+  // ⚠️ 开启后 h2c 会被关掉:h2c 是「明文 HTTP/2」,与 TLS 互斥。走 TLS 时
+  // HTTP/2 由 ALPN 协商(Go 的 ListenAndServeTLS 自带),客户端不用改。
+  //
+  // PEM 一律内联字符串而不是文件路径 —— 与本仓 Postgres/Redis/Consul/OTel
+  // 的 ca_pem 保持同一种写法,配置整份来自同一个源,不必再挂一堆文件。
+  message Tls {
+    bool enable = 1;
+    // 服务端证书与私钥(PEM)。enable=true 时二者必填,否则启动失败 ——
+    // 与「不做失败自动降级」一致:宁可起不来,也不要以为加密了其实没有
+    string cert_pem = 2;
+    string key_pem = 3;
+    // 客户端 CA(PEM)。填了才可能做 mTLS;留空表示只做单向 TLS
+    string client_ca_pem = 4;
+    // 是否强制校验客户端证书(mTLS)。client_ca_pem 为空时打开它会启动失败
+    bool require_client_cert = 5;
+  }
+
+  message HTTP {
+    google.protobuf.Duration read_timeout = 1 [(buf.validate.field).duration.gte = {seconds: 1}];
+    google.protobuf.Duration write_timeout = 2 [(buf.validate.field).duration.gte = {seconds: 1}];
+    google.protobuf.Duration idle_timeout = 3 [(buf.validate.field).duration.gte = {seconds: 1}];
+  }
+  message Cors {
+    repeated string allowed_origins = 1 [
+      (buf.validate.field).string.host_and_port = true,
+      (buf.validate.field).string.example = "http://localhost:3000"
+    ];
+  }
+}
+
+message Data {
+  message Database {
+    Postgres postgres = 1;
+    message Postgres {
+      string host = 1 [(buf.validate.field).string.address = true];
+      uint32 port = 2 [(buf.validate.field).int32.example = 5432];
+      string user = 3 [(buf.validate.field).string.example = "postgres"];
+      string password = 4 [(buf.validate.field).string.example = "postgres"];
+      string db_name = 5 [(buf.validate.field).string.example = "postgres"];
+      string timezone = 7 [(buf.validate.field).string.example = "Asia/Shanghai"];
+      DatabasePool pool = 8;
+      Tls tls = 9;
+
+      message DatabasePool {
+        uint32 max_conns = 1 [(buf.validate.field).int32 = {gte: 1}];
+        uint32 min_conns = 2 [(buf.validate.field).int32 = {gte: 1}];
+        google.protobuf.Duration max_conn_lifetime = 3 [(buf.validate.field).duration.gte = {seconds: 1}];
+        google.protobuf.Duration max_conn_idle_time = 4 [(buf.validate.field).duration.gte = {seconds: 1}];
+        google.protobuf.Duration ping_timeout = 5 [(buf.validate.field).duration.gte = {seconds: 1}];
+      }
+      message Tls {
+        bool enable = 1;
+        string ssl_mode = 6 [(buf.validate.field).string = {in: ["disable", "allow", "prefer", "require", "verify-ca", "verify-full"]}];
+        string ca_pem = 3;
+      }
+    }
+  }
+
+  message Cache {
+    Redis redis = 1;
+    message Redis {
+      string host = 1 [(buf.validate.field).string.address = true];
+      uint32 port = 2 [(buf.validate.field).int32.example = 6379];
+      string username = 3 [(buf.validate.field).string.example = "default"];
+      string password = 4 [(buf.validate.field).string.example = "password"];
+      uint32 db = 5;
+      google.protobuf.Duration dial_timeout = 6 [(buf.validate.field).duration.gte = {seconds: 1}];
+      google.protobuf.Duration read_timeout = 7 [(buf.validate.field).duration.gte = {seconds: 1}];
+      google.protobuf.Duration write_timeout = 8 [(buf.validate.field).duration.gte = {seconds: 1}];
+      uint32 pool_size = 9;
+      uint32 min_idle_conns = 10 [(buf.validate.field).int32 = {gte: 1}];
+      Tls tls = 11;
+
+      message Tls {
+        bool enable = 1;
+        string ca_pem = 2;
+        bool insecure_skip_verify = 3;
+      }
+    }
+  }
+
+  Database database = 1;
+  Cache cache = 2;
+}
+
+message Observability {
+  Trace trace = 1;
+  Metric metric = 2;
+  Logging log = 3;
+  bool enable = 4;
+
+  // 指标查询端。上面三项是「往哪推」,这项是「从哪读」——
+  // 控制台的系统信息页要画历史曲线,得反过来查 VictoriaMetrics。
+  //
+  // 与 metric.endpoint 分开配是因为它们在集群里根本不是同一个地址:
+  // 推送经 otel collector 中转(otlp 协议),查询直连 VM 的 PromQL HTTP API。
+  // 复用一个字段会逼着代码去猜路径,猜错的表现是查询静默返回空。
+  //
+  // 留空 = 不启用历史曲线。此时页面只显示进程自采样的即时值并说明原因,
+  // 而不是画一排空图 —— 空图和「一切正常但流量为零」长得一模一样。
+  MetricQuery metric_query = 5;
+
+  message Trace {
+    string endpoint = 1 [(buf.validate.field).string.host_and_port = true];
+    Tls tls = 2;
+  }
+  message Metric {
+    string endpoint = 1 [(buf.validate.field).string.host_and_port = true];
+    Tls tls = 2;
+  }
+  message Logging {
+    string endpoint = 1 [(buf.validate.field).string.host_and_port = true];
+    Tls tls = 2;
+  }
+  message MetricQuery {
+    // VictoriaMetrics 的基址,例如 http://vm-single-victoria-metrics-single-server.victoriametrics.svc:8428
+    //
+    // 不用 host_and_port 校验:这里要带 scheme(集群内是 http,以后走网关可能是 https),
+    // 而那条规则会把 "http://host:port" 判成非法。
+    string endpoint = 1;
+    // 单条 PromQL 的超时。默认 5s —— 页面上一次要发好几组查询,
+    // 任何一组卡住都会拖着整页转圈。
+    google.protobuf.Duration timeout = 2;
+    Tls tls = 3;
+  }
+
+  message Tls {
+    bool enable = 1;
+    string ca_pem = 2;
+    bool insecure_skip_verify = 3;
+  }
+}
+
+message Discovery {
+  message Consul {
+    string addr = 1 [(buf.validate.field).string.host_and_port = true];
+    string scheme = 2;
+    bool health_check = 3;
+    Tls tls = 4;
+    Check check = 5;
+
+    message Tls {
+      bool enable = 1;
+      bool insecure_skip_verify = 2;
+      string ca_pem = 3;
+    }
+    message Check {
+      TTL ttl = 1;
+      string deregister_critical_service_after = 2;
+      message TTL {
+        string duration = 1;
+        google.protobuf.Duration ping_interval = 2 [(buf.validate.field).duration.gte = {seconds: 5}];
+      }
+    }
+  }
+  Consul consul = 1;
+}

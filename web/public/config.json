@@ -1,0 +1,10 @@
+{
+  "apiUrl": "http://localhost:30010",
+  "casdoor": {
+    "serverUrl": "https://casdoor.apikv.com",
+    "clientId": "a36e6718e392099b7915",
+    "organizationName": "lens",
+    "appName": "ecommerce",
+    "redirectPath": "/callback"
+  }
+}

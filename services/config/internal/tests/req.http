@@ -1,0 +1,84 @@
+### healthz
+POST http://{{host}}:{{port}}/healthz
+Content-Type: application/json
+
+### k8s AddProductToCart example1
+POST http://{{gateway_host}}:{{gateway_port}}/cart.v1.CartService/AddProductToCart
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "spuId": 5,
+  "skuId": 9,
+  "merchantId": "8966c1f2-fcc2-44bc-84f5-9de615ff235f",
+  "quantity": 1,
+  "selected": true,
+  "spuName": "Apple iPhone 15 Pro",
+  "skuName": "Apple iPhone 15 Pro 256GB 原色钛金属",
+  "price": 22.20,
+  "skuAttributes": {
+    "a": "a",
+    "b": 1
+  },
+  "skuThumbnailUrl": "https://cdn.example.com/iphone15pro/main.jpg",
+  "status": "CART_STATUS_CART_STATUS_ACTIVE"
+}
+
+### TODO k8s AddProductToCart example2
+POST http://{{gateway_host}}:{{gateway_port}}/cart.v1.CartService/AddProductToCart
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "spuId": 4,
+  "skuId": 14,
+  "merchantId": "ca8ceec3-3345-48ce-b2db-40afe710eb62",
+  "quantity": 5,
+  "selected": true,
+  "spuName": "德龙 Nespresso 胶囊咖啡机",
+  "skuName": "德龙 Nespresso 胶囊咖啡机 珍珠白",
+  "price": 22.20,
+  "skuAttributes": {
+    "a": "a",
+    "b": 1
+  },
+  "skuThumbnailUrl": "https://cdn.example.com/iphone15pro/main.jpg",
+  "status": "CART_STATUS_ACTIVE"
+}
+
+### gateway RemoveCartItem
+POST http://{{gateway_host}}:{{gateway_port}}/cart.v1.CartService/RemoveCartItem
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "spuId": 5,
+  "skuId": 9,
+  "merchantId": "eb70eac3-3b65-4a0a-a0e1-0d28fca13b82"
+}
+
+### RemoveCartItem
+POST http://{{gateway_host}}:{{gateway_port}}/cart.v1.CartService/RemoveCartItem
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "spuId": [5],
+  "skuId": [9],
+  "merchantId": ["8966c1f2-fcc2-44bc-84f5-9de615ff235f"],
+  "status": ["CART_STATUS_ACTIVE"]
+}
+
+### GetCart
+POST http://{{gateway_host}}:{{gateway_port}}/cart.v1.CartService/GetCart
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{}
+
+### GetCartSummary
+POST http://{{gateway_host}}:{{gateway_port}}/cart.v1.CartService/GetCartSummary
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{}

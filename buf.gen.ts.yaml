@@ -1,0 +1,32 @@
+version: v2
+
+managed:
+  enabled: true
+  disable:
+    - module: buf.build/googleapis/googleapis
+      file_option: go_package_prefix # 禁用对 googleapis 模块的 go_package 重写
+    - file_option: go_package
+      module: buf.build/bufbuild/protovalidate
+#    - file_option: go_package
+#      module: buf.build/grpc-ecosystem/grpc-gateway
+plugins:
+  # 输出到控制台真正 import 的那个目录(web/src/gen,配合 tsconfig 的 @/gen 别名)。
+  #
+  # 这里原本是 out: .,会把 _pb.ts 生成到 proto 文件旁边 —— 而 web/buf.gen.yaml
+  # 又往 web/src/gen 生成了一份。两份并存,前端只 import 后者,于是「改 proto、
+  # 跑 make api、看到 TS 重新生成了、控制台却没变」。实测到 make api 前那两份
+  # config_pb.ts 内容已经不一致。
+  - local: protoc-gen-es
+    out: web/src/gen
+    # Also generate any imported dependencies
+    include_imports: true
+    # Add more plugin options here
+    opt: target=ts
+
+inputs:
+  # 引用当前模块（或工作区根目录）
+  - directory: .
+    # 使用 exclude_paths 排除不需要生成 TS 的目录
+    exclude_paths:
+      - services/config/internal/conf/v1
+      - services/gateway/internal/conf/v1

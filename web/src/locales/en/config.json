@@ -1,0 +1,190 @@
+{
+  "app": {
+    "title": "Config Center",
+    "signIn": "Sign in",
+    "signOut": "Sign out",
+    "switchAccount": "Switch account",
+    "loginRequired": "Sign in to manage configuration.",
+    "accessDenied": "This Casdoor account cannot administer Config Center. Switch account first ends the current single sign-on session."
+  },
+  "format": {
+    "unspecified": "Unspecified"
+  },
+  "validate": {
+    "position": "Line {{line}}, column {{column}}: {{message}}",
+    "json": {
+      "unknown": "JSON syntax error (code {{code}})",
+      "1": "Unrecognized token",
+      "2": "Malformed number",
+      "3": "Property name expected",
+      "4": "Value expected",
+      "5": "Colon expected after property name",
+      "6": "Comma expected",
+      "7": "Closing brace } expected",
+      "8": "Closing bracket ] expected",
+      "9": "End of file expected — there is trailing content",
+      "10": "JSON does not support comments",
+      "11": "Unclosed comment",
+      "12": "Unclosed string",
+      "13": "Unexpected end of number",
+      "14": "Invalid unicode escape",
+      "15": "Invalid escape character",
+      "16": "Invalid character"
+    }
+  },
+  "browser": {
+    "namespace": "Namespace",
+    "environment": "Environment",
+    "prefixFilter": "Filter by key prefix",
+    "newKey": "New key",
+    "loadFailed": "Failed to load: {{message}}",
+    "emptyNoNamespace": "There are no namespaces yet. Enter a namespace and click \"New key\" to create one.",
+    "emptyOtherEnvs": "No entries under {{namespace}} / {{environment}}; this namespace has entries in {{envs}}.",
+    "empty": "No entries yet. Click \"New key\" to create one.",
+    "envJoin": ", "
+  },
+  "connections": {
+    "nav": "Connections",
+    "title": "Client connections",
+    "subtitle": "Active configuration watches and recent reads for gray rollout checks.",
+    "refresh": "Refresh",
+    "empty": "No SDK client has reported activity on this instance yet.",
+    "loadFailed": "Failed to load connections: {{message}}",
+    "watching": "Watching",
+    "disconnected": "Disconnected",
+    "noInstance": "no instance ID",
+    "lastRead": "Last read",
+    "lastWatch": "Last Watch activity",
+    "disconnect": "Last disconnect",
+    "targets": "Configuration targets",
+    "total": "{{count}} known clients",
+    "active": "{{count}} active Watches",
+    "mode": {
+      "local": "Local process view",
+      "redis_ttl": "Redis aggregated",
+      "redis_ttl_degraded": "Redis degraded"
+    },
+    "modeDescription": {
+      "local": "Redis aggregation is disabled. This list only includes clients handled by the current Config Center process.",
+      "redis_ttl": "Redis TTL aggregation is enabled. This list includes active SDK clients across Config Center replicas; stale records expire automatically.",
+      "redis_ttl_degraded": "Redis aggregation is enabled but unavailable. The page is temporarily showing only the current process view."
+    }
+  },
+  "newKey": {
+    "title": "New config key",
+    "keyLabel": "Key (hierarchical path, e.g. gateway/config.yaml)",
+    "format": "Format",
+    "submit": "Create and edit"
+  },
+  "edit": {
+    "loadFailed": "Failed to load: {{message}}",
+    "saveBlocked": "Content is not valid {{format}}; fix it before saving",
+    "formatAction": "Format config",
+    "formatTooltip": "Format (Alt+Shift+F)",
+    "formatUnavailable": "{{format}} has no structure to reformat",
+    "format": "Format",
+    "saving": "Saving…",
+    "formatOk": "Valid {{format}}",
+    "issueTooltip": "{{message}} (click to jump)",
+    "fullscreen": "Fullscreen",
+    "exitFullscreen": "Exit fullscreen (Esc)",
+    "new": "New",
+    "history": "History",
+    "formatLabel": "Format",
+    "description": "Description",
+    "comment": "Change note",
+    "secret": "Secret",
+    "saveFailed": "Failed to save: {{message}}",
+    "secretWarning": "This entry is a secret; its value is masked as {{masked}}. Saving as-is will overwrite the real value."
+  },
+  "history": {
+    "title": "Version history",
+    "count": "Versions: {{total}}",
+    "back": "Back to editor",
+    "currentVersion": "Current v{{version}}",
+    "secret": "Secret",
+    "current": "Current",
+    "initial": "Initial",
+    "unchanged": "No change",
+    "sameAsPrev": "Identical to the previous version",
+    "noComment": "No note",
+    "noRevisions": "This key has no history yet.",
+    "loading": "Loading…",
+    "pickVersion": "Pick a version on the left to see the diff.",
+    "maskedNotice": "This key is marked as a secret, so historical values are masked as {{masked}} and cannot be compared. Version, author, time and notes are still available.",
+    "oldestNotice": "v{{version}} is the initial version — there is nothing earlier to compare against. Switch to \"Against current\" to see how it differs from the live value.",
+    "compareCurrent": "Against current",
+    "comparePrev": "Against previous",
+    "diffLabel": "Left: {{left}}　→　Right: {{right}}",
+    "empty": "(empty)",
+    "loadFailed": "Failed to load history: {{message}}",
+    "readCurrentFailed": "Failed to read the current value: {{message}}",
+    "rollbackFailed": "Rollback failed: {{message}}",
+    "rollbackComment": "Roll back to v{{version}}",
+    "rollbackTo": "Roll back to v{{version}}",
+    "rollbackTooltip": "Write the content of v{{version}} as a new version",
+    "alreadyCurrent": "This is already the current version",
+    "rollbackDialogTitle": "Roll back to v{{version}}?",
+    "rollbackDialogBody": "The content of v{{version}} will be written as a new version v{{next}} (history is kept) and pushed to running services immediately.",
+    "confirmRollback": "Confirm rollback",
+    "relative": {
+      "justNow": "just now",
+      "minutes": "{{value}} min ago",
+      "hours": "{{value}} h ago",
+      "days": "{{value}} d ago"
+    }
+  },
+  "callback": {
+    "responseInvalid": "Unexpected sign-in response",
+    "loginSuccess": "Signed in",
+    "loginFailed": "Sign-in failed, please try again",
+    "successRedirect": "Signed in, redirecting...",
+    "errorRedirect": "Sign-in failed, redirecting to home..."
+  },
+  "system": {
+    "nav": "System",
+    "title": "System",
+    "subtitle": "Config Center resource use, API behaviour, and dependency health",
+    "loadFailed": "Failed to load: {{message}}",
+    "uptime": "up {{value}}",
+    "noData": "No data in the selected window",
+    "noTraffic": "No requests in the selected window",
+    "metricsUnavailable": "No metric query endpoint configured (observability.metric_query.endpoint), so history charts are unavailable. The instant readings above come from in-process sampling and are unaffected.",
+    "hostScopeLimits": "Container resource limits could not be read, so the percentages below are relative to the whole machine. That is expected on a development machine, but these numbers do not describe production behaviour.",
+    "degraded": "Some sub-samples failed this round; the matching cards are dimmed:",
+    "notSampled": "not sampled",
+    "notSampledHint": "This item failed to sample. It shows as — rather than 0 because the two mean different things.",
+    "dependencies": "Dependencies",
+    "healthy": "healthy",
+    "unhealthy": "unhealthy",
+    "card": {
+      "cpu": "CPU",
+      "cpuCaption": "limit {{cores}} cores",
+      "memory": "Memory (RSS)",
+      "disk": "Disk",
+      "network": "Network"
+    },
+    "section": {
+      "process": "This process",
+      "api": "API and database",
+      "apiHint": "Latency is server-side handling time; it excludes the network round trip",
+      "host": "Host node",
+      "hostHint": "Whole-machine scope, not this process — an idle process on a saturated node still gets slow"
+    },
+    "chart": {
+      "processCpu": "Process CPU",
+      "processMemory": "Process memory",
+      "goroutines": "Goroutines",
+      "processNetwork": "Process network rate",
+      "apiLatency": "API latency percentiles",
+      "apiThroughput": "API throughput by method",
+      "apiErrorRate": "API error rate",
+      "dbLatency": "Database latency percentiles",
+      "dbPool": "Database connection pool",
+      "hostCpu": "Node CPU",
+      "hostMemory": "Node memory",
+      "hostDisk": "Node disk (root filesystem)",
+      "hostNetwork": "Node network rate"
+    }
+  }
+}
