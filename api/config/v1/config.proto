@@ -1,0 +1,202 @@
+syntax = "proto3";
+
+import "google/protobuf/timestamp.proto";
+import "third_party/validate/validate.proto";
+
+package config.v1;
+
+option go_package = "github.com/lens077/control-tower/api/config/v1;configv1";
+
+// ConfigService 配置中心服务(键值粒度)。
+// 每个 key 独立存储/独立版本历史;value 携带 format 用于语法高亮与校验。
+// Human traffic carries a Casdoor JWT; service readers use a separate local
+// service token. The server never treats forwarded identity headers as proof.
+service ConfigService {
+	// ListClientConnections returns SDK activity for rollout and impact checks.
+	// The response header x-config-center-presence-mode declares whether the
+	// result is process-local, Redis TTL aggregated, or a local fallback.
+	// It is administrator-only; machine service tokens cannot call it.
+  rpc ListClientConnections(ListClientConnectionsRequest) returns (ListClientConnectionsResponse) {}
+  // 列出配置中心已有的 namespace 及其下已有配置的 environment,供前端下拉选择(免手输)。
+  rpc ListNamespaces(ListNamespacesRequest) returns (ListNamespacesResponse) {}
+  // 列出某 namespace+environment 下(可按前缀过滤)的 key 元数据,不返回大 value。
+  rpc ListKeys(ListKeysRequest) returns (ListKeysResponse) {}
+  // 取单个 key 的当前值。
+  rpc GetKey(GetKeyRequest) returns (GetKeyResponse) {}
+  // 创建或更新 key,产生一条新的版本记录;服务端按 format 校验语法。
+  rpc PutKey(PutKeyRequest) returns (PutKeyResponse) {}
+  // 删除 key(连同其历史)。
+  rpc DeleteKey(DeleteKeyRequest) returns (DeleteKeyResponse) {}
+  // 列出某 key 的版本历史。
+  rpc ListRevisions(ListRevisionsRequest) returns (ListRevisionsResponse) {}
+  // 取某个历史版本的值。
+  rpc GetRevision(GetRevisionRequest) returns (GetRevisionResponse) {}
+  // 回滚:用指定历史版本的值写为新版本。
+  rpc Rollback(RollbackRequest) returns (RollbackResponse) {}
+  // 订阅配置变更(服务端流)。建流时先推一遍当前值(SNAPSHOT),之后推增量。
+  // 断线重连会重新收到 SNAPSHOT —— 断连期间漏掉的变更由此自愈,客户端无需自己补偿。
+  rpc WatchKeys(WatchKeysRequest) returns (stream WatchKeysResponse) {}
+}
+
+// 配置内容格式
+enum ConfigFormat {
+  CONFIG_FORMAT_UNSPECIFIED = 0;
+  CONFIG_FORMAT_YAML = 1;
+  CONFIG_FORMAT_TOML = 2;
+  CONFIG_FORMAT_JSON = 3;
+  CONFIG_FORMAT_PLAINTEXT = 4;
+}
+
+// 配置项(键 + 当前值 + 元数据)
+message ConfigEntry {
+  int64 id = 1;
+  string namespace = 2;
+  string environment = 3;
+  string key = 4;
+  ConfigFormat format = 5;
+  string value = 6;         // ListKeys 中为空(仅元数据);is_secret 时脱敏
+  int32 version = 7;
+  bool is_secret = 8;
+  string description = 9;
+  string updated_by = 10;
+  google.protobuf.Timestamp created_at = 11;
+  google.protobuf.Timestamp updated_at = 12;
+}
+
+// 历史版本记录
+message ConfigRevision {
+  int64 id = 1;
+  int64 entry_id = 2;
+  int32 version = 3;
+  ConfigFormat format = 4;
+  string value = 5;
+  string comment = 6;
+  string author = 7;
+  google.protobuf.Timestamp created_at = 8;
+}
+
+// namespace 概览:该 namespace 下已有配置的环境与 key 总数
+message NamespaceInfo {
+  string namespace = 1;
+  repeated string environments = 2; // 该 namespace 下确实存在配置的环境,按名排序
+  int32 key_count = 3;              // 所有环境合计的 key 数量
+}
+
+message ConfigTarget {
+  string namespace = 1;
+  string environment = 2;
+  string key = 3;
+}
+
+message ClientConnection {
+  string client_name = 1;
+  string client_instance = 2;
+  string client_version = 3;
+  repeated ConfigTarget targets = 4;
+  bool watching = 5;
+  google.protobuf.Timestamp connected_at = 6;
+  google.protobuf.Timestamp last_read_at = 7;
+  google.protobuf.Timestamp last_watch_at = 8;
+  google.protobuf.Timestamp disconnected_at = 9;
+  string last_disconnect_reason = 10;
+}
+
+message ListClientConnectionsRequest {}
+message ListClientConnectionsResponse {
+  repeated ClientConnection connections = 1;
+}
+
+message ListNamespacesRequest {}
+message ListNamespacesResponse {
+  repeated NamespaceInfo namespaces = 1; // 按 namespace 名排序
+}
+
+message ListKeysRequest {
+  string namespace = 1 [(buf.validate.field).required = true];
+  string environment = 2 [(buf.validate.field).required = true];
+  string key_prefix = 3; // 可选:按 key 前缀过滤
+}
+message ListKeysResponse {
+  repeated ConfigEntry entries = 1;
+}
+
+message GetKeyRequest {
+  string namespace = 1 [(buf.validate.field).required = true];
+  string environment = 2 [(buf.validate.field).required = true];
+  string key = 3 [(buf.validate.field).required = true];
+}
+message GetKeyResponse {
+  ConfigEntry entry = 1;
+}
+
+message PutKeyRequest {
+  string namespace = 1 [(buf.validate.field).required = true];
+  string environment = 2 [(buf.validate.field).required = true];
+  string key = 3 [(buf.validate.field).required = true];
+  ConfigFormat format = 4 [(buf.validate.field).enum.defined_only = true];
+  string value = 5;
+  string comment = 6;      // 变更备注
+  bool is_secret = 7;
+  string description = 8;
+}
+message PutKeyResponse {
+  ConfigEntry entry = 1;   // 更新后的条目(含新版本号)
+}
+
+message DeleteKeyRequest {
+  string namespace = 1 [(buf.validate.field).required = true];
+  string environment = 2 [(buf.validate.field).required = true];
+  string key = 3 [(buf.validate.field).required = true];
+}
+message DeleteKeyResponse {
+  bool deleted = 1;
+}
+
+message ListRevisionsRequest {
+  string namespace = 1 [(buf.validate.field).required = true];
+  string environment = 2 [(buf.validate.field).required = true];
+  string key = 3 [(buf.validate.field).required = true];
+}
+message ListRevisionsResponse {
+  repeated ConfigRevision revisions = 1;
+}
+
+message GetRevisionRequest {
+  string namespace = 1 [(buf.validate.field).required = true];
+  string environment = 2 [(buf.validate.field).required = true];
+  string key = 3 [(buf.validate.field).required = true];
+  int32 version = 4 [(buf.validate.field).int32.gte = 1];
+}
+message GetRevisionResponse {
+  ConfigRevision revision = 1;
+}
+
+message RollbackRequest {
+  string namespace = 1 [(buf.validate.field).required = true];
+  string environment = 2 [(buf.validate.field).required = true];
+  string key = 3 [(buf.validate.field).required = true];
+  int32 version = 4 [(buf.validate.field).int32.gte = 1]; // 目标回滚版本
+  string comment = 5;
+}
+message RollbackResponse {
+  ConfigEntry entry = 1;
+}
+
+// 变更事件类型
+enum WatchEventType {
+  WATCH_EVENT_TYPE_UNSPECIFIED = 0;
+  WATCH_EVENT_TYPE_SNAPSHOT = 1;  // 建流时推送的当前值
+  WATCH_EVENT_TYPE_PUT = 2;       // 新增/更新/回滚
+  WATCH_EVENT_TYPE_DELETE = 3;    // 删除,entry 仅含 namespace/environment/key
+  WATCH_EVENT_TYPE_HEARTBEAT = 4; // 保活,entry 为空
+}
+
+message WatchKeysRequest {
+  string namespace = 1 [(buf.validate.field).required = true];
+  string environment = 2 [(buf.validate.field).required = true];
+  repeated string keys = 3; // 可选:留空表示订阅该 namespace+environment 下全部 key
+}
+message WatchKeysResponse {
+  WatchEventType type = 1;
+  ConfigEntry entry = 2; // HEARTBEAT 时为空;脱敏规则与 GetKey 一致
+}

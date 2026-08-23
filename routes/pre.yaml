@@ -1,0 +1,101 @@
+# control-tower 网关动态路由模板（pre）。
+# Config Center 键：namespace=gateway environment=pre key=routes.yaml（新键；旧网关的 config.yaml 冻结不动）。
+# schema 由 services/gateway/internal/conf/v1 的 RouteConfig proto 定义（P3 落地），本文件是其 YAML 形态。
+#
+# 迁移说明（v2 方案 §3.2）：
+# - 路由按「一级 proto 包名」匹配（/user.… 只匹配 user. 前缀段），值逐字迁自旧网关 configs/config.yaml；
+# - /config* 旧路由按 Q14a 删除（config web/api 独立域名直连）；
+# - 重试默认关闭（旧配置的 attempts/conditions 不迁，见 decisions.md「两层重试」）；
+# - anonymous 是 JWT 与 RBAC 共用的单一清单（旧配置两份 router_filter 的并集，10 条程序名逐字迁移）；
+# - 网关对 HTTP method 透明（不按 method 过滤，由后端裁决），故不再保留 methods 维度。
+version: v2
+
+routes:
+  - package: user
+    target: discovery:///user-identity
+    timeout: 4s
+  - package: search
+    target: discovery:///search-product
+    timeout: 4s
+  # 行为埋点是高频旁路：上报异步入队、毫秒级返回，超时短、快速失败。
+  - package: behavior
+    target: discovery:///behavior-service
+    timeout: 2s
+  # 前端性能上报（telemetry.v1）由 behavior 进程顺带实现——域是分开的，
+  # 将来搬去 analytics 服务只改这里的 target。
+  - package: telemetry
+    target: discovery:///behavior-service
+    timeout: 2s
+  - package: product
+    target: discovery:///product-service
+    timeout: 4s
+  - package: cart
+    target: discovery:///cart-service
+    timeout: 4s
+  - package: address
+    target: discovery:///address-service
+    timeout: 4s
+  - package: order
+    target: discovery:///order-service
+    timeout: 4s
+  - package: inventory
+    target: discovery:///inventory-service
+    timeout: 4s
+  - package: merchant
+    target: discovery:///merchant-service
+    timeout: 4s
+  - package: payment
+    target: discovery:///payment-service
+    timeout: 8s
+
+# 匿名清单（authn 跳过 + authz 跳过共用；进入后端前仍会剥离并不注入身份头）。
+anonymous:
+  - /search.v1.SearchService/Search
+  - /product.v1.ProductService/GetProductDetail
+  - /user.v1.UserService/SignIn
+  # 支付宝异步通知/同步回调由支付宝服务端发起，不可能带我们的 JWT；
+  # 可信性靠报文签名验证（payment 侧 DecodeNotification），不走网关认证。
+  - /payment.v1.PaymentService/HandlePaymentNotify
+  - /payment.v1.PaymentService/HandlePaymentCallback
+  # 行为埋点和推荐读取必须对未登录用户开放；身份用请求体里的 anon_id，
+  # 登录后网关注入的 x-md-global-user-id 自动接管。
+  - /behavior.v1.BehaviorService/Track
+  - /behavior.v1.BehaviorService/Recommend
+  - /behavior.v1.BehaviorService/SimilarItems
+  # 性能上报同理：未登录用户的 LCP/卡顿同样要采，且 sendBeacon 带不了 JWT 头。
+  - /telemetry.v1.TelemetryService/CollectWebVitals
+  # 行政区划是公开只读字典：未登录也要能在地址表单选省市区。
+  - /address.v1.RegionService/ListRegions
+
+auth:
+  # 高危路由实时在线校验（fail-close），初始为空；候选见 docs/design/auth.md。
+  online_check_procedures: []
+
+cors:
+  # allowCredentials=true 时禁止通配符，必须逐条列精确来源。
+  allow_credentials: true
+  allow_origins:
+    - http://localhost:3000
+    - http://localhost:3005
+    - http://192.168.3.118:30080
+    # 正式站点（经 Pangolin 暴露）。Casdoor 侧跨域由 Casdoor 管，与此无关。
+    - https://shop.apikv.com
+  allow_headers:
+    - Authorization
+    - Content-Type
+    - X-Requested-With
+    - DNT
+    - Sec-Fetch-Dest
+    - Sec-Fetch-Mode
+    - Sec-Fetch-Site
+    - Connect-Protocol-Version
+    - Connect-Accept-Encoding
+    - Connect-Timeout-Ms
+    - Connect-Codec-Compress-Bin
+  allow_methods:
+    - OPTIONS
+    - GET
+    - POST
+    - PUT
+    - PATCH
+    - DELETE

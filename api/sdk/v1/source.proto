@@ -1,0 +1,49 @@
+syntax = "proto3";
+
+package configcenter.sdk.v1;
+
+import "third_party/validate/validate.proto";
+
+option go_package = "github.com/lens077/control-tower/api/sdk/v1;sdkv1";
+
+// SourceConfig is the local bootstrap configuration used before a service can
+// load its business Bootstrap. It intentionally lives outside the remote
+// configuration document so a source-selection cycle is impossible.
+message SourceConfig {
+  enum Type {
+    TYPE_UNSPECIFIED = 0;
+    TYPE_FILE = 1;
+    TYPE_CONSUL = 2;
+    TYPE_CONFIG_CENTER = 3;
+  }
+
+  Type type = 1 [(buf.validate.field).enum = {defined_only: true, not_in: [0]}];
+  File file = 2;
+  Consul consul = 3;
+  ConfigCenter config_center = 4;
+}
+
+message File {
+  string path = 1 [(buf.validate.field).string.min_len = 1];
+}
+
+message Consul {
+  string address = 1 [(buf.validate.field).string.min_len = 1];
+  string key = 2 [(buf.validate.field).string.min_len = 1];
+  string scheme = 3 [(buf.validate.field).string = {in: ["http", "https"]}];
+  string token = 4;
+  bool insecure_skip_verify = 5;
+}
+
+message ConfigCenter {
+  string address = 1 [(buf.validate.field).string.min_len = 1];
+  string namespace = 2 [(buf.validate.field).string.min_len = 1];
+  string environment = 3 [(buf.validate.field).string.min_len = 1];
+  string key = 4 [(buf.validate.field).string.min_len = 1];
+  // Service credentials belong in a local, ignored source file or secret mount.
+  string service_token = 5;
+  // Client identity is observability metadata. It is not an authorization credential.
+  string client_name = 6;
+  string client_instance = 7;
+  string client_version = 8;
+}

@@ -1,0 +1,138 @@
+# control-tower 的 CI：质量门禁 + 三镜像双注册表发布。
+#
+# 触发策略（与 ecommerce 同一纪律）：
+#   - PR / workflow_dispatch：只跑质量门禁（test job）。
+#   - 裸 semver tag（X.Y.Z）：质量门禁 + 构建并推送镜像。push main 不构建。
+#
+# 镜像（P2 起增加 control-tower-config-web）：
+#   control-tower-gateway   网关          services/gateway/Dockerfile   上下文 .
+#   control-tower-config    配置中心      services/config/Dockerfile    上下文 .
+# 同时推 GHCR 与 TCR：
+#   ghcr.io/lens077/<name>                    （公网拉取）
+#   ccr.ccs.tencentyun.com/sumery/<name>      （集群内拉取，与 ecommerce 同一注册表）
+# tag 策略：sha-<7位提交哈希> 不可变，部署引用它；发布 tag（X.Y.Z）同名镜像 tag 供追溯；
+# dev 是便利 tag，会被后续发布覆盖，不要用于生产。
+name: CI
+
+on:
+  push:
+    tags:
+      - "[0-9]+.[0-9]+.[0-9]+"
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  GHCR_NAMESPACE: ghcr.io/${{ github.repository_owner }}
+  TCR_REGISTRY: ccr.ccs.tencentyun.com
+  TCR_NAMESPACE: sumery
+
+jobs:
+  test:
+    name: test
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: go.sum
+
+      - name: Build
+        run: go build ./...
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Test
+        run: go test -short -race -count=1 ./...
+
+      - name: Set up buf
+        uses: bufbuild/buf-setup-action@v1
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Buf lint
+        run: buf lint
+
+      # 契约门禁：PR 内拦截破坏性变更。wire 冻结期由本门禁 + P2 的
+      # 「一次性 against config-center 旧仓」共同保障（后者在本地执行，见 docs/design/decisions.md）。
+      - name: Buf breaking
+        if: github.event_name == 'pull_request'
+        run: buf breaking --against "https://github.com/${{ github.repository }}.git#branch=${{ github.base_ref }}"
+
+  image:
+    name: image (${{ matrix.name }})
+    # 仅发布 tag 构建镜像。
+    if: startsWith(github.ref, 'refs/tags/')
+    needs: test
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: control-tower-gateway
+            context: .
+            dockerfile: services/gateway/Dockerfile
+          - name: control-tower-config
+            context: .
+            dockerfile: services/config/Dockerfile
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Login to TCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.TCR_REGISTRY }}
+          username: ${{ secrets.TCR_USERNAME }}
+          password: ${{ secrets.TCR_PASSWORD }}
+
+      - name: Compute image tags
+        id: meta
+        run: |
+          echo "sha=sha-${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+          echo "release=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.dockerfile }}
+          platforms: linux/amd64,linux/arm64
+          push: true
+          cache-from: type=gha,scope=${{ matrix.name }}
+          cache-to: type=gha,scope=${{ matrix.name }},mode=max
+          build-args: |
+            VERSION=${{ steps.meta.outputs.release }}
+            GOPROXY=https://proxy.golang.org,direct
+          tags: |
+            ${{ env.GHCR_NAMESPACE }}/${{ matrix.name }}:${{ steps.meta.outputs.sha }}
+            ${{ env.GHCR_NAMESPACE }}/${{ matrix.name }}:${{ steps.meta.outputs.release }}
+            ${{ env.GHCR_NAMESPACE }}/${{ matrix.name }}:dev
+            ${{ env.TCR_REGISTRY }}/${{ env.TCR_NAMESPACE }}/${{ matrix.name }}:${{ steps.meta.outputs.sha }}
+            ${{ env.TCR_REGISTRY }}/${{ env.TCR_NAMESPACE }}/${{ matrix.name }}:${{ steps.meta.outputs.release }}
+            ${{ env.TCR_REGISTRY }}/${{ env.TCR_NAMESPACE }}/${{ matrix.name }}:dev

@@ -1,0 +1,27 @@
+# control-tower 根级 Buf v2 配置（全仓唯一一套）。
+# 结构沿自 config-center；api/ 下的 proto 是对外契约，services/*/internal/conf 是服务私有配置契约。
+version: v2
+modules:
+  - path: .
+    excludes:
+      # Go/TS well-known types 由各自运行时提供；这些上游副本使用不同 import root，不作为构建输入。
+      - third_party/google
+      - third_party/errors
+lint:
+  use:
+    - STANDARD
+  except:
+    - FIELD_NOT_REQUIRED
+    - PACKAGE_NO_IMPORT_CYCLE
+    # API 契约集中在 api/ 命名空间下。
+    - PACKAGE_DIRECTORY_MATCH
+  disallow_comment_ignores: true
+  ignore:
+    # 上游 vendored 定义保留其 import root，不在本仓治理范围。
+    - third_party
+breaking:
+  use:
+    - FILE
+  except:
+    - EXTENSION_NO_DELETE
+    - FIELD_SAME_DEFAULT
