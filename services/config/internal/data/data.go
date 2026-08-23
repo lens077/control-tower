@@ -12,7 +12,9 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/lens077/control-tower/constants"
+	"github.com/lens077/control-tower/services/config/internal/biz"
 	conf "github.com/lens077/control-tower/services/config/internal/conf/v1"
+	"github.com/lens077/control-tower/services/config/internal/iam"
 	"github.com/lens077/control-tower/services/config/internal/pkg/dbutil"
 	"github.com/redis/go-redis/v9"
 	"go.uber.org/fx"
@@ -27,6 +29,10 @@ var Module = fx.Module("data",
 		NewRedisClient,
 		NewConfigRepo,
 		NewWatcher,
+		NewMachineTokenRepo,
+		// 同一 repo 同时喂给 biz（管理面）与 iam（数据面校验）。
+		func(r *MachineTokenRepo) biz.MachineTokenRepo { return r },
+		func(r *MachineTokenRepo) iam.TokenStore { return r },
 	),
 )
 
@@ -225,6 +231,12 @@ func NewPostgresPool(lc fx.Lifecycle, cfg *conf.Bootstrap, logger *zap.Logger) (
 	}
 
 	logger.Info(fmt.Sprintf("database connected successfully to %s", dbCfg.Host))
+
+	// goose 迁移：池就绪后、收流量前执行（00001 对存量库是 no-op，见 migrate.go）。
+	if err := runMigrations(context.Background(), pgConf.ConnConfig, logger); err != nil {
+		pool.Close()
+		return nil, fmt.Errorf("run migrations: %w", err)
+	}
 
 	lc.Append(fx.Hook{
 		OnStop: func(ctx context.Context) error {

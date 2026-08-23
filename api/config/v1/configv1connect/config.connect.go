@@ -57,6 +57,15 @@ const (
 	ConfigServiceRollbackProcedure = "/config.v1.ConfigService/Rollback"
 	// ConfigServiceWatchKeysProcedure is the fully-qualified name of the ConfigService's WatchKeys RPC.
 	ConfigServiceWatchKeysProcedure = "/config.v1.ConfigService/WatchKeys"
+	// ConfigServiceListMachineTokensProcedure is the fully-qualified name of the ConfigService's
+	// ListMachineTokens RPC.
+	ConfigServiceListMachineTokensProcedure = "/config.v1.ConfigService/ListMachineTokens"
+	// ConfigServiceIssueMachineTokenProcedure is the fully-qualified name of the ConfigService's
+	// IssueMachineToken RPC.
+	ConfigServiceIssueMachineTokenProcedure = "/config.v1.ConfigService/IssueMachineToken"
+	// ConfigServiceRevokeMachineTokenProcedure is the fully-qualified name of the ConfigService's
+	// RevokeMachineToken RPC.
+	ConfigServiceRevokeMachineTokenProcedure = "/config.v1.ConfigService/RevokeMachineToken"
 )
 
 // ConfigServiceClient is a client for the config.v1.ConfigService service.
@@ -85,6 +94,12 @@ type ConfigServiceClient interface {
 	// 订阅配置变更(服务端流)。建流时先推一遍当前值(SNAPSHOT),之后推增量。
 	// 断线重连会重新收到 SNAPSHOT —— 断连期间漏掉的变更由此自愈,客户端无需自己补偿。
 	WatchKeys(context.Context, *connect.Request[v1.WatchKeysRequest]) (*connect.ServerStreamForClient[v1.WatchKeysResponse], error)
+	// ── machine token 管理(仅管理员 JWT;machine token 自身不可调用)。
+	// 设计见 docs/design/machine-token.md。签发明文仅在 IssueMachineToken 响应出现一次,
+	// 服务端只存 SHA-256;轮换 = Issue 新 + 换 Secret + Revoke 旧(两代重叠)。
+	ListMachineTokens(context.Context, *connect.Request[v1.ListMachineTokensRequest]) (*connect.Response[v1.ListMachineTokensResponse], error)
+	IssueMachineToken(context.Context, *connect.Request[v1.IssueMachineTokenRequest]) (*connect.Response[v1.IssueMachineTokenResponse], error)
+	RevokeMachineToken(context.Context, *connect.Request[v1.RevokeMachineTokenRequest]) (*connect.Response[v1.RevokeMachineTokenResponse], error)
 }
 
 // NewConfigServiceClient constructs a client for the config.v1.ConfigService service. By default,
@@ -158,6 +173,24 @@ func NewConfigServiceClient(httpClient connect.HTTPClient, baseURL string, opts 
 			connect.WithSchema(configServiceMethods.ByName("WatchKeys")),
 			connect.WithClientOptions(opts...),
 		),
+		listMachineTokens: connect.NewClient[v1.ListMachineTokensRequest, v1.ListMachineTokensResponse](
+			httpClient,
+			baseURL+ConfigServiceListMachineTokensProcedure,
+			connect.WithSchema(configServiceMethods.ByName("ListMachineTokens")),
+			connect.WithClientOptions(opts...),
+		),
+		issueMachineToken: connect.NewClient[v1.IssueMachineTokenRequest, v1.IssueMachineTokenResponse](
+			httpClient,
+			baseURL+ConfigServiceIssueMachineTokenProcedure,
+			connect.WithSchema(configServiceMethods.ByName("IssueMachineToken")),
+			connect.WithClientOptions(opts...),
+		),
+		revokeMachineToken: connect.NewClient[v1.RevokeMachineTokenRequest, v1.RevokeMachineTokenResponse](
+			httpClient,
+			baseURL+ConfigServiceRevokeMachineTokenProcedure,
+			connect.WithSchema(configServiceMethods.ByName("RevokeMachineToken")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -173,6 +206,9 @@ type configServiceClient struct {
 	getRevision           *connect.Client[v1.GetRevisionRequest, v1.GetRevisionResponse]
 	rollback              *connect.Client[v1.RollbackRequest, v1.RollbackResponse]
 	watchKeys             *connect.Client[v1.WatchKeysRequest, v1.WatchKeysResponse]
+	listMachineTokens     *connect.Client[v1.ListMachineTokensRequest, v1.ListMachineTokensResponse]
+	issueMachineToken     *connect.Client[v1.IssueMachineTokenRequest, v1.IssueMachineTokenResponse]
+	revokeMachineToken    *connect.Client[v1.RevokeMachineTokenRequest, v1.RevokeMachineTokenResponse]
 }
 
 // ListClientConnections calls config.v1.ConfigService.ListClientConnections.
@@ -225,6 +261,21 @@ func (c *configServiceClient) WatchKeys(ctx context.Context, req *connect.Reques
 	return c.watchKeys.CallServerStream(ctx, req)
 }
 
+// ListMachineTokens calls config.v1.ConfigService.ListMachineTokens.
+func (c *configServiceClient) ListMachineTokens(ctx context.Context, req *connect.Request[v1.ListMachineTokensRequest]) (*connect.Response[v1.ListMachineTokensResponse], error) {
+	return c.listMachineTokens.CallUnary(ctx, req)
+}
+
+// IssueMachineToken calls config.v1.ConfigService.IssueMachineToken.
+func (c *configServiceClient) IssueMachineToken(ctx context.Context, req *connect.Request[v1.IssueMachineTokenRequest]) (*connect.Response[v1.IssueMachineTokenResponse], error) {
+	return c.issueMachineToken.CallUnary(ctx, req)
+}
+
+// RevokeMachineToken calls config.v1.ConfigService.RevokeMachineToken.
+func (c *configServiceClient) RevokeMachineToken(ctx context.Context, req *connect.Request[v1.RevokeMachineTokenRequest]) (*connect.Response[v1.RevokeMachineTokenResponse], error) {
+	return c.revokeMachineToken.CallUnary(ctx, req)
+}
+
 // ConfigServiceHandler is an implementation of the config.v1.ConfigService service.
 type ConfigServiceHandler interface {
 	// ListClientConnections returns SDK activity for rollout and impact checks.
@@ -251,6 +302,12 @@ type ConfigServiceHandler interface {
 	// 订阅配置变更(服务端流)。建流时先推一遍当前值(SNAPSHOT),之后推增量。
 	// 断线重连会重新收到 SNAPSHOT —— 断连期间漏掉的变更由此自愈,客户端无需自己补偿。
 	WatchKeys(context.Context, *connect.Request[v1.WatchKeysRequest], *connect.ServerStream[v1.WatchKeysResponse]) error
+	// ── machine token 管理(仅管理员 JWT;machine token 自身不可调用)。
+	// 设计见 docs/design/machine-token.md。签发明文仅在 IssueMachineToken 响应出现一次,
+	// 服务端只存 SHA-256;轮换 = Issue 新 + 换 Secret + Revoke 旧(两代重叠)。
+	ListMachineTokens(context.Context, *connect.Request[v1.ListMachineTokensRequest]) (*connect.Response[v1.ListMachineTokensResponse], error)
+	IssueMachineToken(context.Context, *connect.Request[v1.IssueMachineTokenRequest]) (*connect.Response[v1.IssueMachineTokenResponse], error)
+	RevokeMachineToken(context.Context, *connect.Request[v1.RevokeMachineTokenRequest]) (*connect.Response[v1.RevokeMachineTokenResponse], error)
 }
 
 // NewConfigServiceHandler builds an HTTP handler from the service implementation. It returns the
@@ -320,6 +377,24 @@ func NewConfigServiceHandler(svc ConfigServiceHandler, opts ...connect.HandlerOp
 		connect.WithSchema(configServiceMethods.ByName("WatchKeys")),
 		connect.WithHandlerOptions(opts...),
 	)
+	configServiceListMachineTokensHandler := connect.NewUnaryHandler(
+		ConfigServiceListMachineTokensProcedure,
+		svc.ListMachineTokens,
+		connect.WithSchema(configServiceMethods.ByName("ListMachineTokens")),
+		connect.WithHandlerOptions(opts...),
+	)
+	configServiceIssueMachineTokenHandler := connect.NewUnaryHandler(
+		ConfigServiceIssueMachineTokenProcedure,
+		svc.IssueMachineToken,
+		connect.WithSchema(configServiceMethods.ByName("IssueMachineToken")),
+		connect.WithHandlerOptions(opts...),
+	)
+	configServiceRevokeMachineTokenHandler := connect.NewUnaryHandler(
+		ConfigServiceRevokeMachineTokenProcedure,
+		svc.RevokeMachineToken,
+		connect.WithSchema(configServiceMethods.ByName("RevokeMachineToken")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/config.v1.ConfigService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case ConfigServiceListClientConnectionsProcedure:
@@ -342,6 +417,12 @@ func NewConfigServiceHandler(svc ConfigServiceHandler, opts ...connect.HandlerOp
 			configServiceRollbackHandler.ServeHTTP(w, r)
 		case ConfigServiceWatchKeysProcedure:
 			configServiceWatchKeysHandler.ServeHTTP(w, r)
+		case ConfigServiceListMachineTokensProcedure:
+			configServiceListMachineTokensHandler.ServeHTTP(w, r)
+		case ConfigServiceIssueMachineTokenProcedure:
+			configServiceIssueMachineTokenHandler.ServeHTTP(w, r)
+		case ConfigServiceRevokeMachineTokenProcedure:
+			configServiceRevokeMachineTokenHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -389,4 +470,16 @@ func (UnimplementedConfigServiceHandler) Rollback(context.Context, *connect.Requ
 
 func (UnimplementedConfigServiceHandler) WatchKeys(context.Context, *connect.Request[v1.WatchKeysRequest], *connect.ServerStream[v1.WatchKeysResponse]) error {
 	return connect.NewError(connect.CodeUnimplemented, errors.New("config.v1.ConfigService.WatchKeys is not implemented"))
+}
+
+func (UnimplementedConfigServiceHandler) ListMachineTokens(context.Context, *connect.Request[v1.ListMachineTokensRequest]) (*connect.Response[v1.ListMachineTokensResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("config.v1.ConfigService.ListMachineTokens is not implemented"))
+}
+
+func (UnimplementedConfigServiceHandler) IssueMachineToken(context.Context, *connect.Request[v1.IssueMachineTokenRequest]) (*connect.Response[v1.IssueMachineTokenResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("config.v1.ConfigService.IssueMachineToken is not implemented"))
+}
+
+func (UnimplementedConfigServiceHandler) RevokeMachineToken(context.Context, *connect.Request[v1.RevokeMachineTokenRequest]) (*connect.Response[v1.RevokeMachineTokenResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("config.v1.ConfigService.RevokeMachineToken is not implemented"))
 }

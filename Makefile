@@ -22,3 +22,11 @@ tidy:
 
 # 提交前最小验证链。
 verify: build lint test
+
+# wire 冻结门禁：对旧 config-center 仓做 WIRE_JSON 口径的破坏性检查
+# （go_package 更名与服务私有 conf.proto 搬家是预期差异，WIRE_JSON 不涉及）。
+# 解除条件见 docs/design/decisions.md「config proto 大整形」。
+LEGACY_CONFIG_CENTER ?= ../config-center
+breaking-legacy:
+	buf breaking --against $(LEGACY_CONFIG_CENTER) \
+		--config '{"version":"v2","modules":[{"path":".","excludes":["third_party/google","third_party/errors"]}],"breaking":{"use":["WIRE_JSON"]}}'

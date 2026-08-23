@@ -1,3 +1,4 @@
+-- +goose Up
 CREATE SCHEMA IF NOT EXISTS config;
 SET search_path TO config;
 
@@ -34,18 +35,5 @@ CREATE TABLE IF NOT EXISTS config.revision (
 CREATE INDEX IF NOT EXISTS idx_entry_ns_env ON config.entry (namespace, environment);
 CREATE INDEX IF NOT EXISTS idx_revision_entry ON config.revision (entry_id);
 
--- config.machine_token 数据面凭据(per-service × per-environment,设计见 docs/design/machine-token.md)
-CREATE TABLE IF NOT EXISTS config.machine_token (
-    id                 UUID        PRIMARY KEY,
-    service_name       TEXT        NOT NULL,
-    environment        TEXT        NOT NULL,
-    token_hash         BYTEA       NOT NULL UNIQUE,
-    allowed_namespaces TEXT[]      NOT NULL,
-    note               TEXT        NOT NULL DEFAULT '',
-    disabled           BOOLEAN     NOT NULL DEFAULT FALSE,
-    created_at         TIMESTAMPTZ NOT NULL DEFAULT now(),
-    revoked_at         TIMESTAMPTZ,
-    last_used_at       TIMESTAMPTZ
-);
-
-CREATE INDEX IF NOT EXISTS idx_machine_token_svc_env ON config.machine_token (service_name, environment);
+-- +goose Down
+-- baseline 不提供回滚（存量库快照）。

@@ -16,6 +16,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/lens077/control-tower/constants"
@@ -31,6 +32,48 @@ type principalContextKey struct{}
 type Principal struct {
 	Name    string
 	Machine bool
+	// Scope 仅 machine 主体携带；nil 表示非机器主体。
+	Scope *MachineScope
+}
+
+// MachineScope 是 machine token 的授权范围（设计：docs/design/machine-token.md）。
+type MachineScope struct {
+	// Legacy 表示命中了共享 token（双栈过渡期），范围=任意 namespace 只读。
+	Legacy bool
+	// TokenID/Service/Environment/Namespaces 仅 per-service token 填充。
+	TokenID     string
+	Service     string
+	Environment string
+	Namespaces  []string
+}
+
+// AllowsRead 判定该 scope 是否可读 namespace×environment。
+func (s *MachineScope) AllowsRead(namespace, environment string) bool {
+	if s == nil {
+		return false
+	}
+	if s.Legacy {
+		return true
+	}
+	if environment != s.Environment {
+		return false
+	}
+	for _, ns := range s.Namespaces {
+		if ns == namespace {
+			return true
+		}
+	}
+	return false
+}
+
+// TokenStore 是 iam 对 machine token 存储的最小依赖（data 层实现）。
+type TokenStore interface {
+	// LookupActiveByHash 按 SHA-256 查找未吊销 token；miss 返回 ok=false。
+	LookupActiveByHash(ctx context.Context, hash []byte) (MachineScope, bool, error)
+	// IsActive 供长流心跳复验（吊销断流）。
+	IsActive(ctx context.Context, tokenID string) (bool, error)
+	// TouchLastUsed 记录最近认证成功时刻（观测用，尽力而为）。
+	TouchLastUsed(ctx context.Context, tokenID string)
 }
 
 func PrincipalFromContext(ctx context.Context) (Principal, bool) {
@@ -40,11 +83,16 @@ func PrincipalFromContext(ctx context.Context) (Principal, bool) {
 
 type Authorizer struct {
 	serviceToken     []byte
+	tokens           TokenStore
+	legacyHits       atomic.Int64
 	casdoorKey       *rsa.PublicKey
 	expectedIssuer   string
 	expectedAudience string
 	log              *zap.Logger
 }
+
+// LegacyHits 返回共享 token 命中次数（「双栈仍开」告警数据源）。
+func (a *Authorizer) LegacyHits() int64 { return a.legacyHits.Load() }
 
 type authorizationError struct {
 	status int
@@ -63,9 +111,11 @@ func forbidden(reason string) error {
 
 // NewAuthorizer loads Casdoor's public certificate and validation binding from
 // the local process environment; no gateway or user-service call is involved.
-func NewAuthorizer(logger *zap.Logger) (*Authorizer, error) {
+// tokens 提供 per-service machine token 查表（双栈的第二段；nil 仅限测试）。
+func NewAuthorizer(logger *zap.Logger, tokens TokenStore) (*Authorizer, error) {
 	authorizer := &Authorizer{
 		serviceToken: []byte(os.Getenv(constants.EnvConfigCenterServiceToken)),
+		tokens:       tokens,
 		log:          logger.Named("iam"),
 	}
 
@@ -120,13 +170,31 @@ func (a *Authorizer) HTTP(next http.Handler) http.Handler {
 
 func (a *Authorizer) authorize(r *http.Request) (Principal, error) {
 	if candidate := r.Header.Get(constants.ServiceTokenHeader); candidate != "" {
-		if len(a.serviceToken) == 0 || !hmac.Equal([]byte(candidate), a.serviceToken) {
-			return Principal{}, unauthorized("invalid service token")
-		}
 		if !machineReadProcedure(r.URL.Path) {
 			return Principal{}, forbidden("service token cannot mutate configuration")
 		}
-		return Principal{Name: "service", Machine: true}, nil
+		// 双栈第一段：legacy 共享 token（关闭死线前保留，命中即告警计数）。
+		if len(a.serviceToken) > 0 && hmac.Equal([]byte(candidate), a.serviceToken) {
+			a.legacyHits.Add(1)
+			a.log.Warn("legacy shared service token used; rotate to per-service machine token",
+				zap.String("path", r.URL.Path),
+				zap.String("client", r.Header.Get(constants.ClientNameHeader)))
+			return Principal{Name: "service", Machine: true, Scope: &MachineScope{Legacy: true}}, nil
+		}
+		// 双栈第二段：per-service token 查表（SHA-256）。
+		if a.tokens != nil {
+			sum := sha256.Sum256([]byte(candidate))
+			scope, ok, err := a.tokens.LookupActiveByHash(r.Context(), sum[:])
+			if err != nil {
+				a.log.Error("machine token lookup failed", zap.Error(err))
+				return Principal{}, unauthorized("service token verification unavailable")
+			}
+			if ok {
+				a.tokens.TouchLastUsed(r.Context(), scope.TokenID)
+				return Principal{Name: "service:" + scope.Service, Machine: true, Scope: &scope}, nil
+			}
+		}
+		return Principal{}, unauthorized("invalid service token")
 	}
 
 	if a.casdoorKey == nil {

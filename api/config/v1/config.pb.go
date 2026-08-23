@@ -1670,6 +1670,415 @@ func (x *WatchKeysResponse) GetEntry() *ConfigEntry {
 	return nil
 }
 
+// machine token 元数据(绝不携带哈希或明文)。
+type MachineTokenMeta struct {
+	state             protoimpl.MessageState `protogen:"open.v1"`
+	Id                string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	ServiceName       string                 `protobuf:"bytes,2,opt,name=service_name,json=serviceName,proto3" json:"service_name,omitempty"`
+	Environment       string                 `protobuf:"bytes,3,opt,name=environment,proto3" json:"environment,omitempty"`
+	AllowedNamespaces []string               `protobuf:"bytes,4,rep,name=allowed_namespaces,json=allowedNamespaces,proto3" json:"allowed_namespaces,omitempty"`
+	Note              string                 `protobuf:"bytes,5,opt,name=note,proto3" json:"note,omitempty"`
+	Disabled          bool                   `protobuf:"varint,6,opt,name=disabled,proto3" json:"disabled,omitempty"`
+	CreatedAt         *timestamppb.Timestamp `protobuf:"bytes,7,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
+	RevokedAt         *timestamppb.Timestamp `protobuf:"bytes,8,opt,name=revoked_at,json=revokedAt,proto3" json:"revoked_at,omitempty"`
+	LastUsedAt        *timestamppb.Timestamp `protobuf:"bytes,9,opt,name=last_used_at,json=lastUsedAt,proto3" json:"last_used_at,omitempty"`
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
+}
+
+func (x *MachineTokenMeta) Reset() {
+	*x = MachineTokenMeta{}
+	mi := &file_api_config_v1_config_proto_msgTypes[25]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MachineTokenMeta) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MachineTokenMeta) ProtoMessage() {}
+
+func (x *MachineTokenMeta) ProtoReflect() protoreflect.Message {
+	mi := &file_api_config_v1_config_proto_msgTypes[25]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MachineTokenMeta.ProtoReflect.Descriptor instead.
+func (*MachineTokenMeta) Descriptor() ([]byte, []int) {
+	return file_api_config_v1_config_proto_rawDescGZIP(), []int{25}
+}
+
+func (x *MachineTokenMeta) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *MachineTokenMeta) GetServiceName() string {
+	if x != nil {
+		return x.ServiceName
+	}
+	return ""
+}
+
+func (x *MachineTokenMeta) GetEnvironment() string {
+	if x != nil {
+		return x.Environment
+	}
+	return ""
+}
+
+func (x *MachineTokenMeta) GetAllowedNamespaces() []string {
+	if x != nil {
+		return x.AllowedNamespaces
+	}
+	return nil
+}
+
+func (x *MachineTokenMeta) GetNote() string {
+	if x != nil {
+		return x.Note
+	}
+	return ""
+}
+
+func (x *MachineTokenMeta) GetDisabled() bool {
+	if x != nil {
+		return x.Disabled
+	}
+	return false
+}
+
+func (x *MachineTokenMeta) GetCreatedAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.CreatedAt
+	}
+	return nil
+}
+
+func (x *MachineTokenMeta) GetRevokedAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.RevokedAt
+	}
+	return nil
+}
+
+func (x *MachineTokenMeta) GetLastUsedAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.LastUsedAt
+	}
+	return nil
+}
+
+type ListMachineTokensRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// 均为可选过滤条件。
+	ServiceName   string `protobuf:"bytes,1,opt,name=service_name,json=serviceName,proto3" json:"service_name,omitempty"`
+	Environment   string `protobuf:"bytes,2,opt,name=environment,proto3" json:"environment,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListMachineTokensRequest) Reset() {
+	*x = ListMachineTokensRequest{}
+	mi := &file_api_config_v1_config_proto_msgTypes[26]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListMachineTokensRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListMachineTokensRequest) ProtoMessage() {}
+
+func (x *ListMachineTokensRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_api_config_v1_config_proto_msgTypes[26]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListMachineTokensRequest.ProtoReflect.Descriptor instead.
+func (*ListMachineTokensRequest) Descriptor() ([]byte, []int) {
+	return file_api_config_v1_config_proto_rawDescGZIP(), []int{26}
+}
+
+func (x *ListMachineTokensRequest) GetServiceName() string {
+	if x != nil {
+		return x.ServiceName
+	}
+	return ""
+}
+
+func (x *ListMachineTokensRequest) GetEnvironment() string {
+	if x != nil {
+		return x.Environment
+	}
+	return ""
+}
+
+type ListMachineTokensResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// 按 service_name、environment、created_at 排序。
+	Tokens        []*MachineTokenMeta `protobuf:"bytes,1,rep,name=tokens,proto3" json:"tokens,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListMachineTokensResponse) Reset() {
+	*x = ListMachineTokensResponse{}
+	mi := &file_api_config_v1_config_proto_msgTypes[27]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListMachineTokensResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListMachineTokensResponse) ProtoMessage() {}
+
+func (x *ListMachineTokensResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_api_config_v1_config_proto_msgTypes[27]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListMachineTokensResponse.ProtoReflect.Descriptor instead.
+func (*ListMachineTokensResponse) Descriptor() ([]byte, []int) {
+	return file_api_config_v1_config_proto_rawDescGZIP(), []int{27}
+}
+
+func (x *ListMachineTokensResponse) GetTokens() []*MachineTokenMeta {
+	if x != nil {
+		return x.Tokens
+	}
+	return nil
+}
+
+type IssueMachineTokenRequest struct {
+	state       protoimpl.MessageState `protogen:"open.v1"`
+	ServiceName string                 `protobuf:"bytes,1,opt,name=service_name,json=serviceName,proto3" json:"service_name,omitempty"`
+	Environment string                 `protobuf:"bytes,2,opt,name=environment,proto3" json:"environment,omitempty"`
+	// 可读 namespace 白名单;空 = 仅 service_name 自身。
+	AllowedNamespaces []string `protobuf:"bytes,3,rep,name=allowed_namespaces,json=allowedNamespaces,proto3" json:"allowed_namespaces,omitempty"`
+	Note              string   `protobuf:"bytes,4,opt,name=note,proto3" json:"note,omitempty"`
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
+}
+
+func (x *IssueMachineTokenRequest) Reset() {
+	*x = IssueMachineTokenRequest{}
+	mi := &file_api_config_v1_config_proto_msgTypes[28]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *IssueMachineTokenRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*IssueMachineTokenRequest) ProtoMessage() {}
+
+func (x *IssueMachineTokenRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_api_config_v1_config_proto_msgTypes[28]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use IssueMachineTokenRequest.ProtoReflect.Descriptor instead.
+func (*IssueMachineTokenRequest) Descriptor() ([]byte, []int) {
+	return file_api_config_v1_config_proto_rawDescGZIP(), []int{28}
+}
+
+func (x *IssueMachineTokenRequest) GetServiceName() string {
+	if x != nil {
+		return x.ServiceName
+	}
+	return ""
+}
+
+func (x *IssueMachineTokenRequest) GetEnvironment() string {
+	if x != nil {
+		return x.Environment
+	}
+	return ""
+}
+
+func (x *IssueMachineTokenRequest) GetAllowedNamespaces() []string {
+	if x != nil {
+		return x.AllowedNamespaces
+	}
+	return nil
+}
+
+func (x *IssueMachineTokenRequest) GetNote() string {
+	if x != nil {
+		return x.Note
+	}
+	return ""
+}
+
+type IssueMachineTokenResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// token 明文,仅此一次;调用方立即写入目标 Secret,不得落日志。
+	Token         string            `protobuf:"bytes,1,opt,name=token,proto3" json:"token,omitempty"`
+	Meta          *MachineTokenMeta `protobuf:"bytes,2,opt,name=meta,proto3" json:"meta,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *IssueMachineTokenResponse) Reset() {
+	*x = IssueMachineTokenResponse{}
+	mi := &file_api_config_v1_config_proto_msgTypes[29]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *IssueMachineTokenResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*IssueMachineTokenResponse) ProtoMessage() {}
+
+func (x *IssueMachineTokenResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_api_config_v1_config_proto_msgTypes[29]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use IssueMachineTokenResponse.ProtoReflect.Descriptor instead.
+func (*IssueMachineTokenResponse) Descriptor() ([]byte, []int) {
+	return file_api_config_v1_config_proto_rawDescGZIP(), []int{29}
+}
+
+func (x *IssueMachineTokenResponse) GetToken() string {
+	if x != nil {
+		return x.Token
+	}
+	return ""
+}
+
+func (x *IssueMachineTokenResponse) GetMeta() *MachineTokenMeta {
+	if x != nil {
+		return x.Meta
+	}
+	return nil
+}
+
+type RevokeMachineTokenRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RevokeMachineTokenRequest) Reset() {
+	*x = RevokeMachineTokenRequest{}
+	mi := &file_api_config_v1_config_proto_msgTypes[30]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RevokeMachineTokenRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RevokeMachineTokenRequest) ProtoMessage() {}
+
+func (x *RevokeMachineTokenRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_api_config_v1_config_proto_msgTypes[30]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RevokeMachineTokenRequest.ProtoReflect.Descriptor instead.
+func (*RevokeMachineTokenRequest) Descriptor() ([]byte, []int) {
+	return file_api_config_v1_config_proto_rawDescGZIP(), []int{30}
+}
+
+func (x *RevokeMachineTokenRequest) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+type RevokeMachineTokenResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RevokeMachineTokenResponse) Reset() {
+	*x = RevokeMachineTokenResponse{}
+	mi := &file_api_config_v1_config_proto_msgTypes[31]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RevokeMachineTokenResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RevokeMachineTokenResponse) ProtoMessage() {}
+
+func (x *RevokeMachineTokenResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_api_config_v1_config_proto_msgTypes[31]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RevokeMachineTokenResponse.ProtoReflect.Descriptor instead.
+func (*RevokeMachineTokenResponse) Descriptor() ([]byte, []int) {
+	return file_api_config_v1_config_proto_rawDescGZIP(), []int{31}
+}
+
 var File_api_config_v1_config_proto protoreflect.FileDescriptor
 
 const file_api_config_v1_config_proto_rawDesc = "" +
@@ -1789,7 +2198,37 @@ const file_api_config_v1_config_proto_rawDesc = "" +
 	"\x04keys\x18\x03 \x03(\tR\x04keys\"p\n" +
 	"\x11WatchKeysResponse\x12-\n" +
 	"\x04type\x18\x01 \x01(\x0e2\x19.config.v1.WatchEventTypeR\x04type\x12,\n" +
-	"\x05entry\x18\x02 \x01(\v2\x16.config.v1.ConfigEntryR\x05entry*\x92\x01\n" +
+	"\x05entry\x18\x02 \x01(\v2\x16.config.v1.ConfigEntryR\x05entry\"\xfa\x02\n" +
+	"\x10MachineTokenMeta\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12!\n" +
+	"\fservice_name\x18\x02 \x01(\tR\vserviceName\x12 \n" +
+	"\venvironment\x18\x03 \x01(\tR\venvironment\x12-\n" +
+	"\x12allowed_namespaces\x18\x04 \x03(\tR\x11allowedNamespaces\x12\x12\n" +
+	"\x04note\x18\x05 \x01(\tR\x04note\x12\x1a\n" +
+	"\bdisabled\x18\x06 \x01(\bR\bdisabled\x129\n" +
+	"\n" +
+	"created_at\x18\a \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\x129\n" +
+	"\n" +
+	"revoked_at\x18\b \x01(\v2\x1a.google.protobuf.TimestampR\trevokedAt\x12<\n" +
+	"\flast_used_at\x18\t \x01(\v2\x1a.google.protobuf.TimestampR\n" +
+	"lastUsedAt\"q\n" +
+	"\x18ListMachineTokensRequest\x12*\n" +
+	"\fservice_name\x18\x01 \x01(\tB\a\xbaH\x04r\x02\x18@R\vserviceName\x12)\n" +
+	"\venvironment\x18\x02 \x01(\tB\a\xbaH\x04r\x02\x18 R\venvironment\"P\n" +
+	"\x19ListMachineTokensResponse\x123\n" +
+	"\x06tokens\x18\x01 \x03(\v2\x1b.config.v1.MachineTokenMetaR\x06tokens\"\xfa\x01\n" +
+	"\x18IssueMachineTokenRequest\x12?\n" +
+	"\fservice_name\x18\x01 \x01(\tB\x1c\xbaH\x19r\x17\x10\x01\x18@2\x11^[a-z][a-z0-9-]*$R\vserviceName\x12>\n" +
+	"\venvironment\x18\x02 \x01(\tB\x1c\xbaH\x19r\x17\x10\x01\x18 2\x11^[a-z][a-z0-9-]*$R\venvironment\x12?\n" +
+	"\x12allowed_namespaces\x18\x03 \x03(\tB\x10\xbaH\r\x92\x01\n" +
+	"\x10\x10\"\x06r\x04\x10\x01\x18@R\x11allowedNamespaces\x12\x1c\n" +
+	"\x04note\x18\x04 \x01(\tB\b\xbaH\x05r\x03\x18\x80\x02R\x04note\"b\n" +
+	"\x19IssueMachineTokenResponse\x12\x14\n" +
+	"\x05token\x18\x01 \x01(\tR\x05token\x12/\n" +
+	"\x04meta\x18\x02 \x01(\v2\x1b.config.v1.MachineTokenMetaR\x04meta\"5\n" +
+	"\x19RevokeMachineTokenRequest\x12\x18\n" +
+	"\x02id\x18\x01 \x01(\tB\b\xbaH\x05r\x03\xb0\x01\x01R\x02id\"\x1c\n" +
+	"\x1aRevokeMachineTokenResponse*\x92\x01\n" +
 	"\fConfigFormat\x12\x1d\n" +
 	"\x19CONFIG_FORMAT_UNSPECIFIED\x10\x00\x12\x16\n" +
 	"\x12CONFIG_FORMAT_YAML\x10\x01\x12\x16\n" +
@@ -1801,7 +2240,7 @@ const file_api_config_v1_config_proto_rawDesc = "" +
 	"\x19WATCH_EVENT_TYPE_SNAPSHOT\x10\x01\x12\x18\n" +
 	"\x14WATCH_EVENT_TYPE_PUT\x10\x02\x12\x1b\n" +
 	"\x17WATCH_EVENT_TYPE_DELETE\x10\x03\x12\x1e\n" +
-	"\x1aWATCH_EVENT_TYPE_HEARTBEAT\x10\x042\xa2\x06\n" +
+	"\x1aWATCH_EVENT_TYPE_HEARTBEAT\x10\x042\xcb\b\n" +
 	"\rConfigService\x12l\n" +
 	"\x15ListClientConnections\x12'.config.v1.ListClientConnectionsRequest\x1a(.config.v1.ListClientConnectionsResponse\"\x00\x12W\n" +
 	"\x0eListNamespaces\x12 .config.v1.ListNamespacesRequest\x1a!.config.v1.ListNamespacesResponse\"\x00\x12E\n" +
@@ -1812,7 +2251,10 @@ const file_api_config_v1_config_proto_rawDesc = "" +
 	"\rListRevisions\x12\x1f.config.v1.ListRevisionsRequest\x1a .config.v1.ListRevisionsResponse\"\x00\x12N\n" +
 	"\vGetRevision\x12\x1d.config.v1.GetRevisionRequest\x1a\x1e.config.v1.GetRevisionResponse\"\x00\x12E\n" +
 	"\bRollback\x12\x1a.config.v1.RollbackRequest\x1a\x1b.config.v1.RollbackResponse\"\x00\x12J\n" +
-	"\tWatchKeys\x12\x1b.config.v1.WatchKeysRequest\x1a\x1c.config.v1.WatchKeysResponse\"\x000\x01B\x9a\x01\n" +
+	"\tWatchKeys\x12\x1b.config.v1.WatchKeysRequest\x1a\x1c.config.v1.WatchKeysResponse\"\x000\x01\x12`\n" +
+	"\x11ListMachineTokens\x12#.config.v1.ListMachineTokensRequest\x1a$.config.v1.ListMachineTokensResponse\"\x00\x12`\n" +
+	"\x11IssueMachineToken\x12#.config.v1.IssueMachineTokenRequest\x1a$.config.v1.IssueMachineTokenResponse\"\x00\x12c\n" +
+	"\x12RevokeMachineToken\x12$.config.v1.RevokeMachineTokenRequest\x1a%.config.v1.RevokeMachineTokenResponse\"\x00B\x9a\x01\n" +
 	"\rcom.config.v1B\vConfigProtoP\x01Z7github.com/lens077/control-tower/api/config/v1;configv1\xa2\x02\x03CXX\xaa\x02\tConfig.V1\xca\x02\tConfig\\V1\xe2\x02\x15Config\\V1\\GPBMetadata\xea\x02\n" +
 	"Config::V1b\x06proto3"
 
@@ -1829,7 +2271,7 @@ func file_api_config_v1_config_proto_rawDescGZIP() []byte {
 }
 
 var file_api_config_v1_config_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
-var file_api_config_v1_config_proto_msgTypes = make([]protoimpl.MessageInfo, 25)
+var file_api_config_v1_config_proto_msgTypes = make([]protoimpl.MessageInfo, 32)
 var file_api_config_v1_config_proto_goTypes = []any{
 	(ConfigFormat)(0),                     // 0: config.v1.ConfigFormat
 	(WatchEventType)(0),                   // 1: config.v1.WatchEventType
@@ -1858,19 +2300,26 @@ var file_api_config_v1_config_proto_goTypes = []any{
 	(*RollbackResponse)(nil),              // 24: config.v1.RollbackResponse
 	(*WatchKeysRequest)(nil),              // 25: config.v1.WatchKeysRequest
 	(*WatchKeysResponse)(nil),             // 26: config.v1.WatchKeysResponse
-	(*timestamppb.Timestamp)(nil),         // 27: google.protobuf.Timestamp
+	(*MachineTokenMeta)(nil),              // 27: config.v1.MachineTokenMeta
+	(*ListMachineTokensRequest)(nil),      // 28: config.v1.ListMachineTokensRequest
+	(*ListMachineTokensResponse)(nil),     // 29: config.v1.ListMachineTokensResponse
+	(*IssueMachineTokenRequest)(nil),      // 30: config.v1.IssueMachineTokenRequest
+	(*IssueMachineTokenResponse)(nil),     // 31: config.v1.IssueMachineTokenResponse
+	(*RevokeMachineTokenRequest)(nil),     // 32: config.v1.RevokeMachineTokenRequest
+	(*RevokeMachineTokenResponse)(nil),    // 33: config.v1.RevokeMachineTokenResponse
+	(*timestamppb.Timestamp)(nil),         // 34: google.protobuf.Timestamp
 }
 var file_api_config_v1_config_proto_depIdxs = []int32{
 	0,  // 0: config.v1.ConfigEntry.format:type_name -> config.v1.ConfigFormat
-	27, // 1: config.v1.ConfigEntry.created_at:type_name -> google.protobuf.Timestamp
-	27, // 2: config.v1.ConfigEntry.updated_at:type_name -> google.protobuf.Timestamp
+	34, // 1: config.v1.ConfigEntry.created_at:type_name -> google.protobuf.Timestamp
+	34, // 2: config.v1.ConfigEntry.updated_at:type_name -> google.protobuf.Timestamp
 	0,  // 3: config.v1.ConfigRevision.format:type_name -> config.v1.ConfigFormat
-	27, // 4: config.v1.ConfigRevision.created_at:type_name -> google.protobuf.Timestamp
+	34, // 4: config.v1.ConfigRevision.created_at:type_name -> google.protobuf.Timestamp
 	5,  // 5: config.v1.ClientConnection.targets:type_name -> config.v1.ConfigTarget
-	27, // 6: config.v1.ClientConnection.connected_at:type_name -> google.protobuf.Timestamp
-	27, // 7: config.v1.ClientConnection.last_read_at:type_name -> google.protobuf.Timestamp
-	27, // 8: config.v1.ClientConnection.last_watch_at:type_name -> google.protobuf.Timestamp
-	27, // 9: config.v1.ClientConnection.disconnected_at:type_name -> google.protobuf.Timestamp
+	34, // 6: config.v1.ClientConnection.connected_at:type_name -> google.protobuf.Timestamp
+	34, // 7: config.v1.ClientConnection.last_read_at:type_name -> google.protobuf.Timestamp
+	34, // 8: config.v1.ClientConnection.last_watch_at:type_name -> google.protobuf.Timestamp
+	34, // 9: config.v1.ClientConnection.disconnected_at:type_name -> google.protobuf.Timestamp
 	6,  // 10: config.v1.ListClientConnectionsResponse.connections:type_name -> config.v1.ClientConnection
 	4,  // 11: config.v1.ListNamespacesResponse.namespaces:type_name -> config.v1.NamespaceInfo
 	2,  // 12: config.v1.ListKeysResponse.entries:type_name -> config.v1.ConfigEntry
@@ -1882,31 +2331,42 @@ var file_api_config_v1_config_proto_depIdxs = []int32{
 	2,  // 18: config.v1.RollbackResponse.entry:type_name -> config.v1.ConfigEntry
 	1,  // 19: config.v1.WatchKeysResponse.type:type_name -> config.v1.WatchEventType
 	2,  // 20: config.v1.WatchKeysResponse.entry:type_name -> config.v1.ConfigEntry
-	7,  // 21: config.v1.ConfigService.ListClientConnections:input_type -> config.v1.ListClientConnectionsRequest
-	9,  // 22: config.v1.ConfigService.ListNamespaces:input_type -> config.v1.ListNamespacesRequest
-	11, // 23: config.v1.ConfigService.ListKeys:input_type -> config.v1.ListKeysRequest
-	13, // 24: config.v1.ConfigService.GetKey:input_type -> config.v1.GetKeyRequest
-	15, // 25: config.v1.ConfigService.PutKey:input_type -> config.v1.PutKeyRequest
-	17, // 26: config.v1.ConfigService.DeleteKey:input_type -> config.v1.DeleteKeyRequest
-	19, // 27: config.v1.ConfigService.ListRevisions:input_type -> config.v1.ListRevisionsRequest
-	21, // 28: config.v1.ConfigService.GetRevision:input_type -> config.v1.GetRevisionRequest
-	23, // 29: config.v1.ConfigService.Rollback:input_type -> config.v1.RollbackRequest
-	25, // 30: config.v1.ConfigService.WatchKeys:input_type -> config.v1.WatchKeysRequest
-	8,  // 31: config.v1.ConfigService.ListClientConnections:output_type -> config.v1.ListClientConnectionsResponse
-	10, // 32: config.v1.ConfigService.ListNamespaces:output_type -> config.v1.ListNamespacesResponse
-	12, // 33: config.v1.ConfigService.ListKeys:output_type -> config.v1.ListKeysResponse
-	14, // 34: config.v1.ConfigService.GetKey:output_type -> config.v1.GetKeyResponse
-	16, // 35: config.v1.ConfigService.PutKey:output_type -> config.v1.PutKeyResponse
-	18, // 36: config.v1.ConfigService.DeleteKey:output_type -> config.v1.DeleteKeyResponse
-	20, // 37: config.v1.ConfigService.ListRevisions:output_type -> config.v1.ListRevisionsResponse
-	22, // 38: config.v1.ConfigService.GetRevision:output_type -> config.v1.GetRevisionResponse
-	24, // 39: config.v1.ConfigService.Rollback:output_type -> config.v1.RollbackResponse
-	26, // 40: config.v1.ConfigService.WatchKeys:output_type -> config.v1.WatchKeysResponse
-	31, // [31:41] is the sub-list for method output_type
-	21, // [21:31] is the sub-list for method input_type
-	21, // [21:21] is the sub-list for extension type_name
-	21, // [21:21] is the sub-list for extension extendee
-	0,  // [0:21] is the sub-list for field type_name
+	34, // 21: config.v1.MachineTokenMeta.created_at:type_name -> google.protobuf.Timestamp
+	34, // 22: config.v1.MachineTokenMeta.revoked_at:type_name -> google.protobuf.Timestamp
+	34, // 23: config.v1.MachineTokenMeta.last_used_at:type_name -> google.protobuf.Timestamp
+	27, // 24: config.v1.ListMachineTokensResponse.tokens:type_name -> config.v1.MachineTokenMeta
+	27, // 25: config.v1.IssueMachineTokenResponse.meta:type_name -> config.v1.MachineTokenMeta
+	7,  // 26: config.v1.ConfigService.ListClientConnections:input_type -> config.v1.ListClientConnectionsRequest
+	9,  // 27: config.v1.ConfigService.ListNamespaces:input_type -> config.v1.ListNamespacesRequest
+	11, // 28: config.v1.ConfigService.ListKeys:input_type -> config.v1.ListKeysRequest
+	13, // 29: config.v1.ConfigService.GetKey:input_type -> config.v1.GetKeyRequest
+	15, // 30: config.v1.ConfigService.PutKey:input_type -> config.v1.PutKeyRequest
+	17, // 31: config.v1.ConfigService.DeleteKey:input_type -> config.v1.DeleteKeyRequest
+	19, // 32: config.v1.ConfigService.ListRevisions:input_type -> config.v1.ListRevisionsRequest
+	21, // 33: config.v1.ConfigService.GetRevision:input_type -> config.v1.GetRevisionRequest
+	23, // 34: config.v1.ConfigService.Rollback:input_type -> config.v1.RollbackRequest
+	25, // 35: config.v1.ConfigService.WatchKeys:input_type -> config.v1.WatchKeysRequest
+	28, // 36: config.v1.ConfigService.ListMachineTokens:input_type -> config.v1.ListMachineTokensRequest
+	30, // 37: config.v1.ConfigService.IssueMachineToken:input_type -> config.v1.IssueMachineTokenRequest
+	32, // 38: config.v1.ConfigService.RevokeMachineToken:input_type -> config.v1.RevokeMachineTokenRequest
+	8,  // 39: config.v1.ConfigService.ListClientConnections:output_type -> config.v1.ListClientConnectionsResponse
+	10, // 40: config.v1.ConfigService.ListNamespaces:output_type -> config.v1.ListNamespacesResponse
+	12, // 41: config.v1.ConfigService.ListKeys:output_type -> config.v1.ListKeysResponse
+	14, // 42: config.v1.ConfigService.GetKey:output_type -> config.v1.GetKeyResponse
+	16, // 43: config.v1.ConfigService.PutKey:output_type -> config.v1.PutKeyResponse
+	18, // 44: config.v1.ConfigService.DeleteKey:output_type -> config.v1.DeleteKeyResponse
+	20, // 45: config.v1.ConfigService.ListRevisions:output_type -> config.v1.ListRevisionsResponse
+	22, // 46: config.v1.ConfigService.GetRevision:output_type -> config.v1.GetRevisionResponse
+	24, // 47: config.v1.ConfigService.Rollback:output_type -> config.v1.RollbackResponse
+	26, // 48: config.v1.ConfigService.WatchKeys:output_type -> config.v1.WatchKeysResponse
+	29, // 49: config.v1.ConfigService.ListMachineTokens:output_type -> config.v1.ListMachineTokensResponse
+	31, // 50: config.v1.ConfigService.IssueMachineToken:output_type -> config.v1.IssueMachineTokenResponse
+	33, // 51: config.v1.ConfigService.RevokeMachineToken:output_type -> config.v1.RevokeMachineTokenResponse
+	39, // [39:52] is the sub-list for method output_type
+	26, // [26:39] is the sub-list for method input_type
+	26, // [26:26] is the sub-list for extension type_name
+	26, // [26:26] is the sub-list for extension extendee
+	0,  // [0:26] is the sub-list for field type_name
 }
 
 func init() { file_api_config_v1_config_proto_init() }
@@ -1920,7 +2380,7 @@ func file_api_config_v1_config_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_api_config_v1_config_proto_rawDesc), len(file_api_config_v1_config_proto_rawDesc)),
 			NumEnums:      2,
-			NumMessages:   25,
+			NumMessages:   32,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

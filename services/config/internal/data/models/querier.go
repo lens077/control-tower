@@ -6,6 +6,8 @@ package models
 
 import (
 	"context"
+
+	"github.com/google/uuid"
 )
 
 type Querier interface {
@@ -16,6 +18,11 @@ type Querier interface {
 	//    AND environment = $2
 	//    AND key = $3
 	DeleteEntry(ctx context.Context, arg DeleteEntryParams) (int64, error)
+	//GetActiveMachineTokenByHash
+	//
+	//  SELECT id, service_name, environment, token_hash, allowed_namespaces, note, disabled, created_at, revoked_at, last_used_at FROM config.machine_token
+	//  WHERE token_hash = $1 AND NOT disabled
+	GetActiveMachineTokenByHash(ctx context.Context, tokenHash []byte) (ConfigMachineToken, error)
 	//GetEntry
 	//
 	//  SELECT id, namespace, environment, key, format, value, version, is_secret, description, updated_by, created_at, updated_at
@@ -46,12 +53,24 @@ type Querier interface {
 	//  VALUES ($1, $2, $3, $4, $5, 1, $6, $7, $8)
 	//  RETURNING id, namespace, environment, key, format, value, version, is_secret, description, updated_by, created_at, updated_at
 	InsertEntry(ctx context.Context, arg InsertEntryParams) (ConfigEntry, error)
+	//InsertMachineToken
+	//
+	//  INSERT INTO config.machine_token (id, service_name, environment, token_hash, allowed_namespaces, note)
+	//  VALUES ($1, $2, $3, $4, $5, $6)
+	//  RETURNING id, service_name, environment, token_hash, allowed_namespaces, note, disabled, created_at, revoked_at, last_used_at
+	InsertMachineToken(ctx context.Context, arg InsertMachineTokenParams) (ConfigMachineToken, error)
 	//InsertRevision
 	//
 	//  INSERT INTO config.revision (entry_id, version, format, value, comment, author)
 	//  VALUES ($1, $2, $3, $4, $5, $6)
 	//  RETURNING id, entry_id, version, format, value, comment, author, created_at
 	InsertRevision(ctx context.Context, arg InsertRevisionParams) (ConfigRevision, error)
+	//IsMachineTokenActive
+	//
+	//  SELECT EXISTS (
+	//    SELECT 1 FROM config.machine_token WHERE id = $1 AND NOT disabled
+	//  ) AS active
+	IsMachineTokenActive(ctx context.Context, id uuid.UUID) (bool, error)
 	//ListEntries
 	//
 	//  SELECT id, namespace, environment, key, format, version, is_secret, description, updated_by, created_at, updated_at
@@ -61,6 +80,13 @@ type Querier interface {
 	//    AND key LIKE $3 || '%'
 	//  ORDER BY key
 	ListEntries(ctx context.Context, arg ListEntriesParams) ([]ListEntriesRow, error)
+	//ListMachineTokens
+	//
+	//  SELECT id, service_name, environment, token_hash, allowed_namespaces, note, disabled, created_at, revoked_at, last_used_at FROM config.machine_token
+	//  WHERE ($1::text IS NULL OR service_name = $1)
+	//    AND ($2::text IS NULL OR environment = $2)
+	//  ORDER BY service_name, environment, created_at
+	ListMachineTokens(ctx context.Context, arg ListMachineTokensParams) ([]ConfigMachineToken, error)
 	// 走 idx_entry_ns_env 索引扫描,返回 (namespace, environment) 维度的 key 数量。
 	//
 	//  SELECT namespace, environment, COUNT(*)::int AS key_count
@@ -75,6 +101,17 @@ type Querier interface {
 	//  WHERE entry_id = $1
 	//  ORDER BY version DESC
 	ListRevisions(ctx context.Context, entryID int64) ([]ConfigRevision, error)
+	//RevokeMachineToken
+	//
+	//  UPDATE config.machine_token
+	//  SET disabled = TRUE, revoked_at = now()
+	//  WHERE id = $1 AND NOT disabled
+	//  RETURNING id, service_name, environment, token_hash, allowed_namespaces, note, disabled, created_at, revoked_at, last_used_at
+	RevokeMachineToken(ctx context.Context, id uuid.UUID) (ConfigMachineToken, error)
+	//TouchMachineTokenLastUsed
+	//
+	//  UPDATE config.machine_token SET last_used_at = now() WHERE id = $1
+	TouchMachineTokenLastUsed(ctx context.Context, id uuid.UUID) error
 	//UpdateEntry
 	//
 	//  UPDATE config.entry

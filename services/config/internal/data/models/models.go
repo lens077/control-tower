@@ -6,6 +6,9 @@ package models
 
 import (
 	"time"
+
+	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 type ConfigEntry struct {
@@ -21,6 +24,19 @@ type ConfigEntry struct {
 	UpdatedBy   string
 	CreatedAt   time.Time
 	UpdatedAt   time.Time
+}
+
+type ConfigMachineToken struct {
+	ID                uuid.UUID
+	ServiceName       string
+	Environment       string
+	TokenHash         []byte
+	AllowedNamespaces []string
+	Note              string
+	Disabled          bool
+	CreatedAt         time.Time
+	RevokedAt         pgtype.Timestamptz
+	LastUsedAt        pgtype.Timestamptz
 }
 
 type ConfigRevision struct {

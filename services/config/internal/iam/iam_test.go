@@ -28,7 +28,7 @@ func TestNewAuthorizer_RequiresIssuerAndAudienceWithCertificate(t *testing.T) {
 	t.Setenv(constants.EnvCasdoorIssuer, "")
 	t.Setenv(constants.EnvCasdoorAudience, "")
 
-	_, err := NewAuthorizer(zap.NewNop())
+	_, err := NewAuthorizer(zap.NewNop(), nil)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), constants.EnvCasdoorIssuer)
 	assert.Contains(t, err.Error(), constants.EnvCasdoorAudience)

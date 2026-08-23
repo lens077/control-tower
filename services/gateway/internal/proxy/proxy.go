@@ -31,6 +31,7 @@ import (
 	"golang.org/x/net/http2"
 )
 
+// 目标 scheme 前缀。
 const (
 	discoveryPrefix = "discovery:///"
 	directPrefix    = "direct://"

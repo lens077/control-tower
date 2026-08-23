@@ -22,13 +22,21 @@ var _ configv1connect.ConfigServiceHandler = (*ConfigService)(nil)
 const maskedValue = "******"
 
 type ConfigService struct {
-	uc       *biz.ConfigUseCase
-	log      *zap.Logger
-	presence *presence.Registry
+	uc            *biz.ConfigUseCase
+	machineTokens *biz.MachineTokenUseCase
+	tokens        iam.TokenStore
+	log           *zap.Logger
+	presence      *presence.Registry
 }
 
-func NewConfigService(uc *biz.ConfigUseCase, registry *presence.Registry, logger *zap.Logger) configv1connect.ConfigServiceHandler {
-	return &ConfigService{uc: uc, presence: registry, log: logger.Named("ConfigService")}
+func NewConfigService(uc *biz.ConfigUseCase, machineTokens *biz.MachineTokenUseCase, tokens iam.TokenStore, registry *presence.Registry, logger *zap.Logger) configv1connect.ConfigServiceHandler {
+	return &ConfigService{
+		uc:            uc,
+		machineTokens: machineTokens,
+		tokens:        tokens,
+		presence:      registry,
+		log:           logger.Named("ConfigService"),
+	}
 }
 
 func actor(ctx context.Context) string {
@@ -117,6 +125,10 @@ func (s *ConfigService) ListKeys(ctx context.Context, c *connect.Request[v1.List
 }
 
 func (s *ConfigService) GetKey(ctx context.Context, c *connect.Request[v1.GetKeyRequest]) (*connect.Response[v1.GetKeyResponse], error) {
+	// machine 主体的 namespace×environment 范围校验（设计：docs/design/machine-token.md）。
+	if err := machineScopeGuard(ctx, c.Msg.Namespace, c.Msg.Environment); err != nil {
+		return nil, err
+	}
 	e, err := s.uc.GetKey(ctx, c.Msg.Namespace, c.Msg.Environment, c.Msg.Key)
 	if err != nil {
 		return nil, s.toErr(err)
@@ -192,6 +204,10 @@ func (s *ConfigService) WatchKeys(
 	stream *connect.ServerStream[v1.WatchKeysResponse],
 ) error {
 	ns, env, keys := req.Msg.GetNamespace(), req.Msg.GetEnvironment(), req.Msg.GetKeys()
+	// machine 主体的范围校验（建流一次 + 心跳复验，见下）。
+	if err := machineScopeGuard(ctx, ns, env); err != nil {
+		return err
+	}
 	identity := clientIdentity(req)
 	targets := watchTargets(ns, env, keys)
 	disconnectReason := "client_closed"
@@ -232,6 +248,18 @@ func (s *ConfigService) WatchKeys(
 			s.presence.TouchWatch(identity)
 
 		case <-ticker.C:
+			// 吊销断流：per-service token 在每个心跳周期复验一次。
+			// 只有「确定已吊销」才断流；查询错误（如 DB 抖动）不掐流（收窄不放大）。
+			if p, ok := iam.PrincipalFromContext(ctx); ok && p.Machine && p.Scope != nil && !p.Scope.Legacy {
+				active, err := s.tokens.IsActive(ctx, p.Scope.TokenID)
+				if err != nil {
+					s.log.Warn("machine token recheck failed; keeping stream", zap.Error(err))
+				} else if !active {
+					disconnectReason = "token_revoked"
+					return connect.NewError(connect.CodePermissionDenied,
+						errors.New("machine token revoked; stream terminated"))
+				}
+			}
 			if err := stream.Send(&v1.WatchKeysResponse{
 				Type: v1.WatchEventType_WATCH_EVENT_TYPE_HEARTBEAT,
 			}); err != nil {

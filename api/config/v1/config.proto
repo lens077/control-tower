@@ -36,6 +36,13 @@ service ConfigService {
   // 订阅配置变更(服务端流)。建流时先推一遍当前值(SNAPSHOT),之后推增量。
   // 断线重连会重新收到 SNAPSHOT —— 断连期间漏掉的变更由此自愈,客户端无需自己补偿。
   rpc WatchKeys(WatchKeysRequest) returns (stream WatchKeysResponse) {}
+
+  // ── machine token 管理(仅管理员 JWT;machine token 自身不可调用)。
+  // 设计见 docs/design/machine-token.md。签发明文仅在 IssueMachineToken 响应出现一次,
+  // 服务端只存 SHA-256;轮换 = Issue 新 + 换 Secret + Revoke 旧(两代重叠)。
+  rpc ListMachineTokens(ListMachineTokensRequest) returns (ListMachineTokensResponse) {}
+  rpc IssueMachineToken(IssueMachineTokenRequest) returns (IssueMachineTokenResponse) {}
+  rpc RevokeMachineToken(RevokeMachineTokenRequest) returns (RevokeMachineTokenResponse) {}
 }
 
 // 配置内容格式
@@ -200,3 +207,52 @@ message WatchKeysResponse {
   WatchEventType type = 1;
   ConfigEntry entry = 2; // HEARTBEAT 时为空;脱敏规则与 GetKey 一致
 }
+
+// ── machine token(数据面凭据)管理相关消息。
+
+// machine token 元数据(绝不携带哈希或明文)。
+message MachineTokenMeta {
+  string id = 1;
+  string service_name = 2;
+  string environment = 3;
+  repeated string allowed_namespaces = 4;
+  string note = 5;
+  bool disabled = 6;
+  google.protobuf.Timestamp created_at = 7;
+  google.protobuf.Timestamp revoked_at = 8;
+  google.protobuf.Timestamp last_used_at = 9;
+}
+
+message ListMachineTokensRequest {
+  // 均为可选过滤条件。
+  string service_name = 1 [(buf.validate.field).string = {max_len: 64}];
+  string environment = 2 [(buf.validate.field).string = {max_len: 32}];
+}
+
+message ListMachineTokensResponse {
+  // 按 service_name、environment、created_at 排序。
+  repeated MachineTokenMeta tokens = 1;
+}
+
+message IssueMachineTokenRequest {
+  string service_name = 1 [(buf.validate.field).string = {min_len: 1, max_len: 64, pattern: "^[a-z][a-z0-9-]*$"}];
+  string environment = 2 [(buf.validate.field).string = {min_len: 1, max_len: 32, pattern: "^[a-z][a-z0-9-]*$"}];
+  // 可读 namespace 白名单;空 = 仅 service_name 自身。
+  repeated string allowed_namespaces = 3 [(buf.validate.field).repeated = {
+    max_items: 16,
+    items: {string: {min_len: 1, max_len: 64}}
+  }];
+  string note = 4 [(buf.validate.field).string = {max_len: 256}];
+}
+
+message IssueMachineTokenResponse {
+  // token 明文,仅此一次;调用方立即写入目标 Secret,不得落日志。
+  string token = 1;
+  MachineTokenMeta meta = 2;
+}
+
+message RevokeMachineTokenRequest {
+  string id = 1 [(buf.validate.field).string.uuid = true];
+}
+
+message RevokeMachineTokenResponse {}
