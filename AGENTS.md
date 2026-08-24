@@ -2,6 +2,18 @@
 
 网关与配置中心合一的平台仓：单 module、两服务（`services/gateway`、`services/config`）。由 ecommerce 旧网关（go-kratos/gateway fork）与 config-center 合并重写而来。
 
+**两个服务都已切流上线**（2026-08-24 逐 Pod 核对）：
+
+| 服务 | 集群位置 | 镜像 |
+|---|---|---|
+| gateway | `ecommerce/control-tower-gateway`，LB `192.168.3.131:8080` | `control-tower-gateway:sha-143ef5f` |
+| config | `config-center/config-center` | `control-tower-config:sha-a27f90a` |
+| config web | `config-center/config-center-web` | `control-tower-config-web:sha-a27f90a` |
+
+⚠️ **`config-center` 这个 ns 与 Deployment 名是没改的遗留标签**，不代表旧 config-center 仓还在跑——里面的镜像就是本仓的 config 服务。看到这个名字不要以为迁移没完成。
+
+上游 ecommerce 仓的旧 `gateway/` 目录已于 2026-08-24 删除（历史在其 tag `backup/pre-control-tower-20260823`），旧 config-center 仓同样退役。本仓是这两块的唯一真相源。
+
 ## 必读
 
 | 文档 | 内容 |
@@ -9,7 +21,9 @@
 | `docs/design/architecture.md` | 两服务架构、网关请求链路、不变式 |
 | `docs/design/auth.md` | JWT 信任域、混合撤权三场景操作手册 |
 | `docs/design/decisions.md` | 砍掉/不做清单及原因——**改动前先查这里，别把砍掉的东西加回来** |
-| `docs/design/adr-0001-token-model.md` | 为什么 bearer JWT 而非 cookie session：权衡、翻案触发条件、迁移代价 |
+| `docs/design/adr-0002-bff-session.md` | **现行鉴权决策**：BFF + 服务端 session（取代 ADR-0001） |
+| `docs/design/bff-migration.md` | BFF 化实施手顺：三轨并存、四阶段、按阶段回滚 |
+| `docs/design/adr-0001-token-model.md` | 已被 ADR-0002 取代，留作追溯（含一处已标注的事实错误） |
 
 ## 硬约束
 
@@ -28,6 +42,8 @@ make api           # proto 变更后重新生成（buf generate + lint）
 
 CI 由裸 semver tag（`X.Y.Z`）触发发布；PR 只跑质量门禁；push main 不构建。
 
-## 迁移背景
+## 迁移背景（迁移已完成，本节留作索引）
 
-迁移期决策与对抗评审档案在工作区 `.migration-scratch/`（不入本仓）：06 决策日志、11 终裁书、12 实施方案 v2。迁移完成后此节移除。
+迁移期决策与对抗评审档案在工作区 `.migration-scratch/`（不入本仓）：06 决策日志、11 终裁书、12 实施方案 v2。
+
+两个服务均已切流，烘烤期结束、上游旧目录已删。**本节保留的唯一理由**是那批档案记着「哪些东西是被刻意砍掉的、为什么」——与 `docs/design/decisions.md` 配合使用，避免有人把砍掉的东西当成遗漏加回来。等 `decisions.md` 把这些理由全部吸收之后，本节连同档案一并归档。

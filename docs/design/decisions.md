@@ -28,6 +28,11 @@
 
 ## 鉴权侧
 
+> token 载体选型见 [ADR-0002](adr-0002-bff-session.md)（BFF + 服务端 session），它取代了 [ADR-0001](adr-0001-token-model.md)。
+>
+> ⚠️ **本节下列条目处于翻案过渡期**：ADR-0002 已拍板但尚未实施（手顺见 [bff-migration.md](bff-migration.md)）。
+> 在 P4 拆除阶段完成前，撤销名单机制与 `CasdoorRoleSource` 仍服务于 legacy bearer 轨，**不得提前删除**。
+
 | 能力 | 处置 | 原因 | 重新引入触发条件 |
 |---|---|---|---|
 | Casdoor webhook 自动写撤销名单 | 延后 | 人工写名单的延迟已被短 TTL 封顶；先验证人工流程 | 撤权操作频率上升，或出现人为遗漏事故 |

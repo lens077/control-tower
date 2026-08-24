@@ -9,6 +9,10 @@
 
 由 ecommerce 旧网关（go-kratos/gateway fork）与 config-center 合并重写而来。前端与后端 10 服务经网关的调用路径、错误契约保持不变；迁移决策与对抗评审档案见工作区 `.migration-scratch/`。
 
+**两个服务都已切流上线**：gateway 在 `ecommerce` 命名空间（`control-tower-gateway`，LB `192.168.3.131:8080`），config 与 config-web 在 `config-center` 命名空间。
+
+> ⚠️ `config-center` 这个命名空间与 Deployment 名只是**没改的遗留标签**，里面跑的镜像是本仓的 `control-tower-config` / `control-tower-config-web`。看到这个名字不要以为旧 config-center 仓还在跑——它已退役。
+
 ## 文档
 
 - `docs/design/architecture.md` — 架构、请求链路、不变式

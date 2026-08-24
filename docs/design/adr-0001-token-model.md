@@ -1,9 +1,13 @@
 ---
-status: accepted
+status: superseded by ADR-0002
 date: 2026-08-24
 ---
 
 # ADR-0001：用 bearer JWT + 撤销名单，而不是 cookie session
+
+> ⚠️ **本 ADR 已于同日被 [ADR-0002](adr-0002-bff-session.md) 取代**（改用 BFF + 服务端 session）。
+> 保留原文供追溯，其中「三个源不同 → 撞三方 cookie 淘汰」一句**是错的**（prod 三个域同属 `apikv.com`，属 same-site），
+> 这处错误正是当初压低 cookie 方案评分的原因，也是翻案理由之一。下文其余分析仍然有效。
 
 浏览器与桌面端持 Casdoor 签发的短 TTL access token（bearer 头，只存内存），网关本地验签后查一份经配置中心秒级推送的撤销名单；**不采用** httpOnly cookie + 服务端 session。原因是这套拓扑里 session 的两个前提都不成立——前端与网关不同源（三方 cookie）、客户端不止浏览器（Tauri 桌面端），而 session 唯一的决定性优势「即时撤权」已被撤销名单以另一种方式拿到。
 
