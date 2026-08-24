@@ -333,3 +333,47 @@ func TestNativeRejectsNonLoopbackRedirect(t *testing.T) {
 		t.Fatalf("status=%d（非回环必须拒绝）", rec.Code)
 	}
 }
+
+// 原生流程：**不带 state cookie** 也能完成回调（state 存服务端）。
+// 这是 2026-08-24 真机实测「missing oauth state」的回归——Tauri 登录子窗口
+// 是独立 WebView，回写的 cookie 在回调时拿不到。
+func TestNativeCallbackWorksWithoutStateCookie(t *testing.T) {
+	var hs *harness
+	hs = newHarness(t, func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprintf(w, `{"access_token":%q,"refresh_token":"rt","expires_in":900}`, hs.mintToken(t))
+	})
+	hs.h.Roles = roleSourceFunc(func(string, string) []string { return []string{"consumer"} })
+
+	loopback := "http://127.0.0.1:54321/oauth/callback"
+	loginRec := httptest.NewRecorder()
+	hs.mux.ServeHTTP(loginRec, httptest.NewRequest(http.MethodGet,
+		"/auth/login?mode=native&redirect="+url.QueryEscape(loopback), nil))
+
+	// 从跳转地址里取出 state（模拟 Casdoor 原样回传），**刻意不带任何 cookie**。
+	authURL, _ := url.Parse(loginRec.Header().Get("Location"))
+	state := authURL.Query().Get("state")
+	if state == "" {
+		t.Fatal("no state in authorize url")
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/auth/callback?code=abc&state="+url.QueryEscape(state), nil)
+	rec := httptest.NewRecorder()
+	hs.mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusFound {
+		t.Fatalf("status=%d body=%s（无 cookie 的原生回调必须成功）", rec.Code, rec.Body.String())
+	}
+	loc, _ := url.Parse(rec.Header().Get("Location"))
+	if loc.Query().Get("code") == "" {
+		t.Fatalf("回调未交回 session id: %s", loc)
+	}
+
+	// state 单次使用：重放必须失败。
+	replay := httptest.NewRequest(http.MethodGet, "/auth/callback?code=abc&state="+url.QueryEscape(state), nil)
+	rec2 := httptest.NewRecorder()
+	hs.mux.ServeHTTP(rec2, replay)
+	if rec2.Code == http.StatusFound {
+		t.Fatal("state 必须单次使用，重放不能成功")
+	}
+}

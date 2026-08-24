@@ -96,8 +96,11 @@ spec:
             # 且 IP 主机名不能设 Domain。pre/prod 必须去掉这条并设 .apikv.com。
             - name: SESSION_COOKIE_INSECURE
               value: "true"
+            # dev 前端经 vite proxy 把 /auth 代到本网关，故回调基地址是**前端源**——
+            # 这样会话 cookie 落在 localhost:3000，前端请求才带得上（SameSite=Lax 不跨站）。
+            # Casdoor 需白名单 http://localhost:3000/auth/callback。
             - name: BFF_PUBLIC_BASE_URL
-              value: http://192.168.3.131:8080
+              value: http://localhost:3000
             - name: BFF_ALLOWED_REDIRECTS
               value: http://localhost:3000
             - name: CASDOOR_CLIENT_ID

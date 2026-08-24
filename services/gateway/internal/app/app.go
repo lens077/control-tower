@@ -95,8 +95,18 @@ func BuildHandler(d Deps) http.Handler {
 		_, _ = w.Write([]byte("loading"))
 	})
 	// BFF 端点与 healthz/readyz 同列本地路由，先于包路由注册，永不被代理。
+	//
+	// 必须套 Recover/AccessLog/Cors，但**不能套 Auth**（登录入口本就该匿名可达）：
+	//   - AccessLog：这些是安全关键端点，不进日志等于排障时两眼一抹黑
+	//     （实测踩过：桌面端登录失败，网关侧查不到任何记录）；
+	//   - Cors：生产上前端在 shop.apikv.com、网关在 gateway.apikv.com，
+	//     跨源调 /auth/me 若无 CORS 头会被浏览器直接挡掉。
 	if d.BFF != nil {
-		d.BFF.Register(mux)
+		mux.Handle("/auth/", httpmw.Chain(d.BFF.Handler(),
+			httpmw.Recover(d.Log, d.Errors),
+			httpmw.AccessLog(d.Log),
+			d.Cors.Middleware(),
+		))
 	}
 	mux.Handle("/", chain)
 	return mux

@@ -9,15 +9,21 @@ import (
 // MemoryStore 是进程内会话存储：供单测与「无 Dragonfly 的本地开发」使用。
 // 生产禁用——网关多副本时各副本会话互不可见。
 type MemoryStore struct {
-	mu   sync.RWMutex
-	ttl  TTL
-	now  func() time.Time
-	data map[string]*entry
+	mu     sync.RWMutex
+	ttl    TTL
+	now    func() time.Time
+	data   map[string]*entry
+	states map[string]stateEntry
 }
 
 type entry struct {
 	sess      Session
 	idleUntil time.Time
+}
+
+type stateEntry struct {
+	payload []byte
+	exp     time.Time
 }
 
 // NewMemoryStore 构造内存存储。
@@ -98,3 +104,27 @@ func (m *MemoryStore) DeleteByUser(_ context.Context, sub string) (int, error) {
 }
 
 func (m *MemoryStore) Ping(context.Context) error { return nil }
+
+func (m *MemoryStore) PutState(_ context.Context, state string, payload []byte, ttl time.Duration) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.states == nil {
+		m.states = map[string]stateEntry{}
+	}
+	m.states[state] = stateEntry{payload: append([]byte(nil), payload...), exp: m.now().Add(ttl)}
+	return nil
+}
+
+func (m *MemoryStore) TakeState(_ context.Context, state string) ([]byte, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	e, ok := m.states[state]
+	if !ok {
+		return nil, ErrNotFound
+	}
+	delete(m.states, state) // 单次使用，防重放
+	if m.now().After(e.exp) {
+		return nil, ErrNotFound
+	}
+	return e.payload, nil
+}

@@ -70,6 +70,14 @@ type Store interface {
 	DeleteByUser(ctx context.Context, sub string) (int, error)
 	// Ping 供 readyz 判定存储可达；不可达即摘流量（fail-closed，见 ADR-0002）。
 	Ping(ctx context.Context) error
+
+	// PutState 暂存 OAuth state（短 TTL）。
+	// 浏览器流程把 state 放 httpOnly cookie 即可；**原生客户端流程必须存服务端**——
+	// Tauri 的登录子窗口是独立 WebView，cookie 存储行为不由我们掌控，
+	// 依赖它会得到「missing oauth state」（2026-08-24 真机实测踩过）。
+	PutState(ctx context.Context, state string, payload []byte, ttl time.Duration) error
+	// TakeState 取出并**立即删除** state（单次使用，防重放）。不存在返回 ErrNotFound。
+	TakeState(ctx context.Context, state string) ([]byte, error)
 }
 
 // NewID 生成 32 字节随机 session id。

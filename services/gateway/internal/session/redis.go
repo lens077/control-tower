@@ -124,3 +124,21 @@ func (r *RedisStore) DeleteByUser(ctx context.Context, sub string) (int, error) 
 }
 
 func (r *RedisStore) Ping(ctx context.Context) error { return r.rdb.Ping(ctx).Err() }
+
+func stateKey(s string) string { return "oauthstate:" + s }
+
+func (r *RedisStore) PutState(ctx context.Context, state string, payload []byte, ttl time.Duration) error {
+	return r.rdb.Set(ctx, stateKey(state), payload, ttl).Err()
+}
+
+func (r *RedisStore) TakeState(ctx context.Context, state string) ([]byte, error) {
+	// GETDEL 保证单次使用：并发重放拿不到第二次。
+	b, err := r.rdb.GetDel(ctx, stateKey(state)).Bytes()
+	if errors.Is(err, redis.Nil) {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, fmt.Errorf("session: take state: %w", err)
+	}
+	return b, nil
+}

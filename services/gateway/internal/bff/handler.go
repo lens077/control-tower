@@ -71,6 +71,13 @@ func (h *Handler) redirectURI() string {
 	return strings.TrimSuffix(h.PublicBaseURL, "/") + "/auth/callback"
 }
 
+// Handler 返回 BFF 端点处理器，供 app 层套中间件后整体挂载。
+func (h *Handler) Handler() http.Handler {
+	mux := http.NewServeMux()
+	h.Register(mux)
+	return mux
+}
+
 // Register 把 BFF 端点挂到 mux；调用方需保证它们先于包路由注册（永不被代理）。
 func (h *Handler) Register(mux *http.ServeMux) {
 	mux.HandleFunc("/auth/login", h.login)
@@ -123,6 +130,17 @@ func (h *Handler) login(w http.ResponseWriter, r *http.Request) {
 	}
 
 	payload, _ := json.Marshal(statePayload{State: state, Redirect: redirect, Native: native})
+	if native {
+		// 原生客户端：state 必须存服务端，不能依赖登录子窗口的 cookie——
+		// Tauri 子窗口是独立 WebView，回写的 cookie 在回调时拿不到
+		// （2026-08-24 真机实测：missing oauth state）。
+		// 安全性由「state 不可猜 + 单次使用 + 回调必须回环」共同保证。
+		if err := h.Store.PutState(r.Context(), state, payload, stateTTL); err != nil {
+			h.Log.Error("put oauth state failed", zap.Error(err))
+			http.Error(w, "internal error", http.StatusInternalServerError)
+			return
+		}
+	}
 	http.SetCookie(w, &http.Cookie{
 		Name:     stateCookieName,
 		Value:    base64.RawURLEncoding.EncodeToString(payload),
@@ -138,23 +156,32 @@ func (h *Handler) login(w http.ResponseWriter, r *http.Request) {
 
 // callback 校验 state → 换令牌 → 取角色 → 建会话 → 下发 cookie → 跳回前端。
 func (h *Handler) callback(w http.ResponseWriter, r *http.Request) {
-	c, err := r.Cookie(stateCookieName)
-	if err != nil {
+	queryState := r.URL.Query().Get("state")
+	var sp statePayload
+	if c, cerr := r.Cookie(stateCookieName); cerr == nil {
+		// 浏览器流程：state 在 httpOnly cookie 里，天然与本浏览器绑定。
+		rawPayload, derr := base64.RawURLEncoding.DecodeString(c.Value)
+		if derr != nil || json.Unmarshal(rawPayload, &sp) != nil {
+			http.Error(w, "bad oauth state", http.StatusBadRequest)
+			return
+		}
+	} else if queryState != "" {
+		// 原生流程：回落到服务端 state（取出即删，单次使用）。
+		raw, serr := h.Store.TakeState(r.Context(), queryState)
+		if serr != nil {
+			http.Error(w, "missing oauth state", http.StatusBadRequest)
+			return
+		}
+		if json.Unmarshal(raw, &sp) != nil {
+			http.Error(w, "bad oauth state", http.StatusBadRequest)
+			return
+		}
+	} else {
 		http.Error(w, "missing oauth state", http.StatusBadRequest)
 		return
 	}
-	rawPayload, err := base64.RawURLEncoding.DecodeString(c.Value)
-	if err != nil {
-		http.Error(w, "bad oauth state", http.StatusBadRequest)
-		return
-	}
-	var sp statePayload
-	if err := json.Unmarshal(rawPayload, &sp); err != nil {
-		http.Error(w, "bad oauth state", http.StatusBadRequest)
-		return
-	}
 	// 恒时比较，避免 state 被逐字符试探。
-	if subtle.ConstantTimeCompare([]byte(sp.State), []byte(r.URL.Query().Get("state"))) != 1 {
+	if subtle.ConstantTimeCompare([]byte(sp.State), []byte(queryState)) != 1 {
 		http.Error(w, "oauth state mismatch", http.StatusBadRequest)
 		return
 	}
