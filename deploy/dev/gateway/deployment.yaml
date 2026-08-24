@@ -71,6 +71,47 @@ spec:
             # 高危路由在线校验凭据（可选；未配置时 online_check 路由 fail-close）。
             - name: CASDOOR_URL
               value: https://casdoor.apikv.com
+            # ── BFF 会话轨（ADR-0002）。四项配置齐备才启用；
+            # CASDOOR_CLIENT_* 标记 optional，secret 不存在时 env 缺失 →
+            # 会话轨自动保持关闭、纯 legacy bearer 运行（P1 零影响就靠这个）。
+            - name: SESSION_REDIS_ADDR
+              value: dragonfly.dragonfly.svc:6379
+            - name: SESSION_REDIS_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: dragonfly-session
+                  key: username
+            - name: SESSION_REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: dragonfly-session
+                  key: password
+            # Dragonfly 以 --tls 启动，明文连不上；证书 SAN 含 dragonfly.dragonfly.svc，
+            # 故正常验 CA，不用 InsecureSkipVerify。
+            - name: SESSION_REDIS_TLS
+              value: "true"
+            - name: SESSION_REDIS_CA_FILE
+              value: /etc/control-tower/session-tls/ca.crt
+            # dev 经 LoadBalancer IP 走明文 HTTP：Secure cookie 在此不成立，
+            # 且 IP 主机名不能设 Domain。pre/prod 必须去掉这条并设 .apikv.com。
+            - name: SESSION_COOKIE_INSECURE
+              value: "true"
+            - name: BFF_PUBLIC_BASE_URL
+              value: http://192.168.3.131:8080
+            - name: BFF_ALLOWED_REDIRECTS
+              value: http://localhost:3000
+            - name: CASDOOR_CLIENT_ID
+              valueFrom:
+                secretKeyRef:
+                  name: casdoor-bff
+                  key: client-id
+                  optional: true
+            - name: CASDOOR_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: casdoor-bff
+                  key: client-secret
+                  optional: true
             # 可观测：推 OTLP；采样跟随父，根按比例。
             - name: OTEL_EXPORTER_OTLP_ENDPOINT
               valueFrom:
@@ -85,6 +126,9 @@ spec:
           volumeMounts:
             - name: config-source
               mountPath: /etc/control-tower/config-source
+              readOnly: true
+            - name: session-tls
+              mountPath: /etc/control-tower/session-tls
               readOnly: true
           startupProbe:
             httpGet:
@@ -111,6 +155,13 @@ spec:
               cpu: 300m
               memory: 512Mi
       volumes:
+        - name: session-tls
+          secret:
+            secretName: dragonfly-session
+            items:
+              - key: ca.crt
+                path: ca.crt
+            defaultMode: 0444
         - name: config-source
           secret:
             secretName: control-tower-config-source-dev

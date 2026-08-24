@@ -4,6 +4,8 @@ package main
 
 import (
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"errors"
 	"flag"
 	"fmt"
@@ -150,10 +152,29 @@ func run(lc fx.Lifecycle, log *zap.Logger) error {
 			zap.Bool("has_casdoor_client", casdoorID != "" && casdoorSecret != ""),
 			zap.Bool("has_public_base_url", publicBase != ""))
 	default:
-		rdb := redis.NewClient(&redis.Options{
+		redisOpts := &redis.Options{
 			Addr:     sessionAddr,
+			Username: os.Getenv("SESSION_REDIS_USERNAME"),
 			Password: os.Getenv("SESSION_REDIS_PASSWORD"),
-		})
+		}
+		// 集群里的 Dragonfly 以 --tls 启动，明文连不上。
+		// 其证书 SAN 含 dragonfly.dragonfly.svc，因此正常验 CA 即可，无需跳过校验。
+		if envOr("SESSION_REDIS_TLS", "false") == "true" {
+			tlsCfg, terr := buildRedisTLS()
+			if terr != nil {
+				return fmt.Errorf("会话存储 TLS 配置: %w", terr)
+			}
+			redisOpts.TLSConfig = tlsCfg
+		}
+		rdb := redis.NewClient(redisOpts)
+		// 快速失败：启动时就确认存储可达且凭据正确——会话存储是鉴权单点，
+		// 与其等第一个用户登录才炸，不如起不来。
+		pingCtx, pingCancel := context.WithTimeout(context.Background(), 5*time.Second)
+		perr := rdb.Ping(pingCtx).Err()
+		pingCancel()
+		if perr != nil {
+			return fmt.Errorf("会话存储不可达（%s）: %w", sessionAddr, perr)
+		}
 		ttl := session.DefaultTTL()
 		if v, err := time.ParseDuration(os.Getenv("SESSION_IDLE_TTL")); err == nil && v > 0 {
 			ttl.Idle = v
@@ -363,4 +384,34 @@ func bffCookieName(h *bff.Handler) string {
 		return ""
 	}
 	return h.Cookie.Name
+}
+
+// buildRedisTLS 构造会话存储的 TLS 配置。
+//
+// 默认严格校验：CA 取自 SESSION_REDIS_CA_FILE（K8s 里从 dragonfly-tls 的 ca.crt 挂进来）。
+// SESSION_REDIS_TLS_SERVER_NAME 供证书 SAN 与连接地址不一致时覆盖；
+// SESSION_REDIS_TLS_INSECURE 仅限本地排障，生产开启等于放弃中间人防护。
+func buildRedisTLS() (*tls.Config, error) {
+	cfg := &tls.Config{
+		MinVersion: tls.VersionTLS12,
+		ServerName: os.Getenv("SESSION_REDIS_TLS_SERVER_NAME"),
+	}
+	if envOr("SESSION_REDIS_TLS_INSECURE", "false") == "true" {
+		cfg.InsecureSkipVerify = true
+		return cfg, nil
+	}
+	caFile := os.Getenv("SESSION_REDIS_CA_FILE")
+	if caFile == "" {
+		return cfg, nil // 用系统根证书
+	}
+	pemBytes, err := os.ReadFile(caFile)
+	if err != nil {
+		return nil, fmt.Errorf("读取 CA 文件 %s: %w", caFile, err)
+	}
+	pool := x509.NewCertPool()
+	if !pool.AppendCertsFromPEM(pemBytes) {
+		return nil, fmt.Errorf("CA 文件 %s 不是有效 PEM", caFile)
+	}
+	cfg.RootCAs = pool
+	return cfg, nil
 }
