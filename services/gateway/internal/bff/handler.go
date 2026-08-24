@@ -42,6 +42,8 @@ func DefaultCookieConfig() CookieConfig {
 const (
 	stateCookieName = "ct_oauth_state"
 	stateTTL        = 10 * time.Minute
+	// defaultSessionHeader 与 httpmw 的 SessionHeader 默认值一致。
+	defaultSessionHeader = "X-CT-Session"
 )
 
 // Handler 提供 /auth/{login,callback,logout,me}。
@@ -56,8 +58,10 @@ type Handler struct {
 	PublicBaseURL string
 	// AllowedRedirects 是登录后允许跳回的前端来源白名单（防开放重定向）。
 	AllowedRedirects []string
-	Log              *zap.Logger
-	Now              func() time.Time
+	// SessionHeader 是原生客户端携带 session id 的头名；空则用默认值。
+	SessionHeader string
+	Log           *zap.Logger
+	Now           func() time.Time
 }
 
 func (h *Handler) now() time.Time {
@@ -300,11 +304,19 @@ func (h *Handler) me(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// sessionIDFrom 取会话标识：cookie（浏览器）或会话头（原生客户端）。
+//
+// 必须两者都认——桌面端根本没有 cookie，只读 cookie 会让它登录成功后
+// /auth/me 恒返回未登录、/auth/logout 也删不掉会话（实测踩过）。
 func (h *Handler) sessionIDFrom(r *http.Request) string {
 	if c, err := r.Cookie(h.Cookie.Name); err == nil && c.Value != "" {
 		return c.Value
 	}
-	return ""
+	name := h.SessionHeader
+	if name == "" {
+		name = defaultSessionHeader
+	}
+	return strings.TrimSpace(r.Header.Get(name))
 }
 
 func (h *Handler) setSessionCookie(w http.ResponseWriter, id string) {

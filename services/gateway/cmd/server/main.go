@@ -206,6 +206,7 @@ func run(lc fx.Lifecycle, log *zap.Logger) error {
 			Cookie:           cookieCfg,
 			PublicBaseURL:    publicBase,
 			AllowedRedirects: splitCSV(os.Getenv("BFF_ALLOWED_REDIRECTS")),
+			SessionHeader:    envOr("SESSION_HEADER", "X-CT-Session"),
 			Log:              log,
 		}
 		lc.Append(fx.Hook{OnStop: func(context.Context) error { return rdb.Close() }})

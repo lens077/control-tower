@@ -377,3 +377,32 @@ func TestNativeCallbackWorksWithoutStateCookie(t *testing.T) {
 		t.Fatal("state 必须单次使用，重放不能成功")
 	}
 }
+
+// 原生客户端用会话头访问 /auth/me 与 /auth/logout（桌面端没有 cookie）。
+// 回归：只读 cookie 会让桌面端登录成功后仍显示未登录、登出也删不掉会话。
+func TestSessionHeaderWorksForMeAndLogout(t *testing.T) {
+	hs := newHarness(t, func(http.ResponseWriter, *http.Request) {})
+	_ = hs.store.Create(t.Context(), &session.Session{
+		ID: "sid-native", Sub: "u-alice", Owner: "lens", Name: "alice",
+		Roles: []string{"consumer"}, CreatedAt: now,
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/auth/me", nil)
+	req.Header.Set("X-CT-Session", "sid-native") // 刻意不带任何 cookie
+	rec := httptest.NewRecorder()
+	hs.mux.ServeHTTP(rec, req)
+	if !strings.Contains(rec.Body.String(), `"authenticated":true`) {
+		t.Fatalf("会话头必须被 /auth/me 识别: %s", rec.Body.String())
+	}
+
+	req = httptest.NewRequest(http.MethodPost, "/auth/logout", nil)
+	req.Header.Set("X-CT-Session", "sid-native")
+	rec = httptest.NewRecorder()
+	hs.mux.ServeHTTP(rec, req)
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("status=%d", rec.Code)
+	}
+	if _, err := hs.store.Get(t.Context(), "sid-native"); err != session.ErrNotFound {
+		t.Fatal("原生客户端登出必须删除会话")
+	}
+}
