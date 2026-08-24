@@ -191,4 +191,8 @@ data:
   # 逗号分隔的 Casdoor client id 白名单：consumer/merchant/admin/desktop。
   # 占位值，P5 切流前以实际 client id 填充（非机密）。
   JWT_AUDIENCES: "a36e6718e392099b7915"
-  OTEL_EXPORTER_OTLP_ENDPOINT: "jaeger.observability.svc:4318"
+  # 2026-08-24 修正：原值是 jaeger.observability.svc:4318 —— 网关把**指标**也发到了
+  # Jaeger 的 OTLP 端口，而 Jaeger 只收 trace，日志里一直在刷
+  #   failed to send metrics to http://jaeger.observability.svc:4318/v1/metrics: 404
+  # OTLP 三种信号要发给 collector 统一分流，不能直连某个后端。
+  OTEL_EXPORTER_OTLP_ENDPOINT: "otel-opentelemetry-collector.opentelemetry.svc:4318"
