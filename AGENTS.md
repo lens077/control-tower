@@ -9,6 +9,7 @@
 | `docs/design/architecture.md` | 两服务架构、网关请求链路、不变式 |
 | `docs/design/auth.md` | JWT 信任域、混合撤权三场景操作手册 |
 | `docs/design/decisions.md` | 砍掉/不做清单及原因——**改动前先查这里，别把砍掉的东西加回来** |
+| `docs/design/adr-0001-token-model.md` | 为什么 bearer JWT 而非 cookie session：权衡、翻案触发条件、迁移代价 |
 
 ## 硬约束
 

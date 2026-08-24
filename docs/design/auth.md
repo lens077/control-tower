@@ -1,9 +1,11 @@
 # 鉴权设计：JWT 信任域、混合撤权与操作手册
 
+> 「为什么是 bearer JWT 而不是 cookie session」的权衡、翻案触发条件与迁移代价见 [ADR-0001](adr-0001-token-model.md)。
+
 ## 结论摘要
 
 - IdP 保持 Casdoor；授权引擎保持 Casbin（网关进程内粗闸）。
-- Access token 短 TTL（首选 15 分钟起步），角色进 JWT claims；网关热路径零远程调用。
+- Access token 短 TTL（dev 实测 900 秒生效）。**角色不在 claims 里**——2026-08-24 真 token 实测本部署 Casdoor 不嵌 `roles`，已按下文回退分支启用 `CasdoorRoleSource`（get-user + 5 分钟进程内缓存）。
 - 撤权走「配置中心撤销名单键 + Casdoor 侧操作」的混合通道，生效时间约等于 Watch 推送延迟（秒级）。
 - 高危路由可标注 `online_check`，命中时实时调 Casdoor 校验，错误按 fail-close 处理（只收窄授权，不放大）。
 
