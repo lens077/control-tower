@@ -97,7 +97,31 @@ cookie/session-header → Dragonfly 查会话 → [access token 近过期则服�
 | 空闲/绝对双 TTL、会话清单、整户踢出 | `session` 包五个测试 |
 | state 校验、开放重定向防护、`/auth/me` 不泄露令牌 | `bff` 包五个测试 |
 
-待 P0 前置（Casdoor 机密客户端、Dragonfly 凭据 Secret）就绪后即可部署验证。
+### P1 部署与端到端实测（2026-08-24，dev 集群）
+
+镜像 `sha-c8cb6a8`，先以「会话轨关闭」形态上线验证零影响，再补 `casdoor-bff` Secret 点亮。
+
+**前置落地**：`ecommerce/dragonfly-session`（密码/用户名/CA，值取自集群内 `dragonfly-password-secret` 与 `dragonfly-tls`）；
+`ecommerce/casdoor-bff`（client id/secret，取自 Config Center `user/dev/bootstrap.yaml` 的 casdoor 段，
+与网关 `JWT_AUDIENCES` 同属应用 `lens/ecommerce`）。
+
+**坑**：Dragonfly 以 `--tls` 启动，明文连不上；其证书 SAN 含 `dragonfly.dragonfly.svc`，故走正常 CA 校验即可。
+
+| 验证项 | 实测结果 |
+|---|---|
+| 会话轨关闭态（缺 Casdoor Secret） | 日志 `has_casdoor_client:false`，Pod 正常启动；healthz/readyz 200、匿名 200、无 token 401、`/auth/me` 404（端点未注册） |
+| 会话轨启用 | 日志 `BFF 会话轨已启用`；**启动 ping 通过**即证明 Dragonfly TLS+AUTH 可用 |
+| 登录闭环 | `/auth/login` → Casdoor（机密客户端换 code）→ `/auth/callback` → 建会话 → 下发 cookie → 跳回前端，浏览器实测一次通过 |
+| 会话落库 | `EXISTS sess:*`=1、TTL≈43200s、`SMEMBERS user:<sub>` 命中 → 二级索引（会话清单底座）生效 |
+| 身份与角色 | `/auth/me` 返回 name/owner/roles，**roles 在登录时取一次存入会话**，热路径不回源 |
+| cookie 轨 + 可信 Origin | 受保护 RPC 200，真后端返回 `{"isCartEmpty":true}` |
+| CSRF | 同一 cookie + 恶意 Origin → **403 CSRF_ORIGIN_REJECTED** |
+| 桌面端 header 轨 | 无 Origin → 200 |
+| **即时撤权** | 删会话后**下一个请求**即 `SESSION_INVALID`，间隔 40ms 且全为建连开销——**零传播延迟**（旧模型为写名单+1s 推送） |
+| 登出 | 204 + `Max-Age=0` 清 cookie + 会话删除 + 后续请求 401 |
+
+**dev 的已知限制**：前端 `localhost:3000` 与网关 `192.168.3.131:8080` 跨站，`SameSite=Lax` 会拦掉 cookie，
+因此上述验证在网关同源下完成。P2 的 vite proxy 正是为解决这一点（prod 同属 `apikv.com` 无此问题）。
 
 ## 工作项清单
 
