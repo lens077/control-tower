@@ -61,10 +61,10 @@ func TestExactAndWildcard(t *testing.T) {
 	a := newEnforcer(t)
 
 	cases := []struct {
-		roles  []string
-		obj    string
-		act    string
-		want   bool
+		roles []string
+		obj   string
+		act   string
+		want  bool
 	}{
 		{[]string{"consumer"}, "/user.v1.UserService/UserProfile", "POST", true},
 		{[]string{"consumer"}, "/cart.v1.CartService/AddItem", "POST", true}, // 通配

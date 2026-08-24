@@ -73,11 +73,11 @@ func TestWriteFallback(t *testing.T) {
 
 func TestHTTPStatusMapping(t *testing.T) {
 	cases := map[connect.Code]int{
-		connect.CodeNotFound:         404,
-		connect.CodeUnauthenticated:  401,
-		connect.CodePermissionDenied: 403,
-		connect.CodeUnavailable:      503,
-		connect.CodeDeadlineExceeded: 504,
+		connect.CodeNotFound:          404,
+		connect.CodeUnauthenticated:   401,
+		connect.CodePermissionDenied:  403,
+		connect.CodeUnavailable:       503,
+		connect.CodeDeadlineExceeded:  504,
 		connect.CodeResourceExhausted: 429,
 	}
 	for code, want := range cases {
