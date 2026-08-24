@@ -71,7 +71,7 @@ cookie/session-header → Dragonfly 查会话 → [access token 近过期则服�
 | **P0 前置** | Casdoor 机密客户端 + secret；**重建 Dragonfly 凭据 Secret**（旧 `redis-auth`/`redis-tls-ca` 随旧网关删除已不存在）；定 cookie domain | 无 | 无需 |
 | **P1 网关加能力** ✅ 代码完成 | session 存储 + BFF 端点 + 三接受（cookie ∥ session header ∥ legacy bearer） | **零**（现有 bearer 客户端照常） | 回滚镜像 |
 | **P2 前端切换** | 删 PKCE/tokenStore，改 `credentials:'include'` + `/auth/me`；dev 加 vite proxy 走同源 | 浏览器端切到 cookie | 前端回滚（网关三接受不变，旧前端立刻可用） |
-| **P3 桌面端** | Tauri 改存 session id（OS keychain）并以 header 携带 | 桌面端切换 | 桌面端回滚到 bearer（网关仍接受） |
+| **P3 桌面端** ✅ 真机验证过 | Tauri 以 header 携带 session id；网关 `mode=native` 经回环回调交回 | 桌面端切换 | 桌面端回滚到 bearer（网关仍接受） |
 | **P4 拆除** | 移除 legacy bearer 轨、撤销名单机制、`auth/revocations.yaml` 键、每请求回源路径 | 无 | 需重新部署才能回退，故必须在 P2/P3 稳定后再做 |
 
 每阶段验收：`make verify` 全绿 + 该阶段的实测项（P1：三轨各自能通；P2：登录/续期/登出/撤权四项浏览器实测；P3：桌面端同上；P4：全链路回归 + 确认无 legacy 流量）。
