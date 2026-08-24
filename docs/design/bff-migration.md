@@ -146,3 +146,29 @@ cookie/session-header → Dragonfly 查会话 → [access token 近过期则服�
 **后端 10 服务**：零改动
 
 **文档**：ADR-0001 标记 superseded；`auth.md` 重写为会话模型；`decisions.md` 更新 Redis 依赖与撤销名单两条
+
+### P3 真机验证记录（2026-08-24，Tauri 桌面端）
+
+**结果**：登录闭环通过，日志链路 `GET /auth/login 302 → GET /auth/callback 302 → GET /auth/me 200
+→ POST /user.v1.UserService/UserProfile 200`——最后一条是真业务 RPC 带权成功，证明会话头贯穿全链。
+
+**真机才暴露的四个问题**（Web 端全绿、类型检查全绿都发现不了）：
+
+| # | 问题 | 根因 | 修法 |
+|---|---|---|---|
+| 1 | `missing oauth state` | Tauri 登录子窗口是**独立 WebView**，回写的 state cookie 在回调时取不到 | native 流程 **state 存服务端**（GETDEL 单次使用 + 10min TTL）。安全性由「state 不可猜 + 单次使用 + 回调必须回环」保证 |
+| 2 | `/auth/me` 恒返回未登录 | 该端点与 `/auth/logout` **只读 cookie**，不认会话头 | 两端点同时识别 cookie 与会话头 |
+| 3 | 请求打不到网关 | `bff.ts` 读**构建期** env（dev 是 `/api`），在 `tauri://localhost` 下解析成 `tauri://localhost/api/...` | 改用运行时 `getGatewayBaseUrl()` |
+| 4 | 预检被挡 | `bff.ts` 用全局 fetch，而 `tauri://localhost` 不在 CORS 允许列表 | 改用 `getAppFetch()`（桌面端是 Rust 侧 http 插件，绕开 CORS） |
+
+**同时补上 P1 的两个缺口**：`/auth/*` 原先直接挂 mux、**绕过整条中间件链**——
+既不进访问日志（问题 1 发生时网关侧查不到任何记录，排障只能靠推测），
+生产上跨源调 `/auth/me` 也拿不到 CORS 头（`shop.apikv.com` → `gateway.apikv.com` 必被浏览器挡）。
+现套 Recover/AccessLog/Cors，但**不套 Auth**（登录入口必须匿名可达）。
+
+**dev 环境的硬约束**：整条 BFF 流程必须与 `BFF_PUBLIC_BASE_URL` **同源**，否则 state cookie 中途丢失。
+dev 里靠 vite proxy 凑同源（桌面端网关设为 `http://localhost:3000/api`）；
+生产天然满足（三域同属 `apikv.com`）。
+
+**会话清单实证**：`user:<sub>` 索引 6 条、实际存活 4 条（2 条是撤权演练直删 `sess:` 留下的悬挂条目，
+`ListByUser` 惰性清理，设计如此）。这是服务端会话方案独有的能力。
