@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -81,6 +82,21 @@ func (h *Handler) Register(mux *http.ServeMux) {
 type statePayload struct {
 	State    string `json:"s"`
 	Redirect string `json:"r"`
+	// Native 标记桌面端（Tauri）流程：会话 id 经 loopback 回调交回原生客户端，
+	// 而不是下发 cookie——原生窗口的源是 tauri://localhost，拿不到浏览器 cookie。
+	// 见 bff-migration.md P3。
+	Native bool `json:"n,omitempty"`
+}
+
+// isLoopback 判定是否为本机回环地址。
+// native 模式只接受回环回调：会话 id 会出现在回调 URL 上，只有回环才不出本机。
+func isLoopback(raw string) bool {
+	u, err := url.Parse(raw)
+	if err != nil || u.Scheme != "http" {
+		return false
+	}
+	host := u.Hostname()
+	return host == "127.0.0.1" || host == "localhost" || host == "::1"
 }
 
 // login 生成 state 并跳 Casdoor。state 存进短时 httpOnly cookie，回调时比对——
@@ -94,11 +110,19 @@ func (h *Handler) login(w http.ResponseWriter, r *http.Request) {
 	state := base64.RawURLEncoding.EncodeToString(raw)
 
 	redirect := r.URL.Query().Get("redirect")
-	if !h.redirectAllowed(redirect) {
+	// native=桌面端：回调必须是回环地址，且不走 AllowedRedirects 白名单
+	// （每次运行的端口都不同，白名单表达不了）。回环本身就是边界。
+	native := r.URL.Query().Get("mode") == "native"
+	if native {
+		if !isLoopback(redirect) {
+			http.Error(w, "native mode requires a loopback redirect", http.StatusBadRequest)
+			return
+		}
+	} else if !h.redirectAllowed(redirect) {
 		redirect = h.defaultRedirect()
 	}
 
-	payload, _ := json.Marshal(statePayload{State: state, Redirect: redirect})
+	payload, _ := json.Marshal(statePayload{State: state, Redirect: redirect, Native: native})
 	http.SetCookie(w, &http.Cookie{
 		Name:     stateCookieName,
 		Value:    base64.RawURLEncoding.EncodeToString(payload),
@@ -158,6 +182,22 @@ func (h *Handler) callback(w http.ResponseWriter, r *http.Request) {
 	if err := h.Store.Create(r.Context(), sess); err != nil {
 		h.Log.Error("session create failed", zap.Error(err))
 		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	if sp.Native {
+		// 桌面端：会话 id 经回环回调交回原生客户端，不下发 cookie（它也收不到）。
+		// 参数名沿用 code/state 是刻意的——Tauri 侧 Rust 拦截器就认这两个 key，
+		// 于是桌面端切换不需要动 Rust、不需要重建原生层。
+		target, err := url.Parse(sp.Redirect)
+		if err != nil {
+			http.Error(w, "bad native redirect", http.StatusBadRequest)
+			return
+		}
+		q := target.Query()
+		q.Set("code", sess.ID)
+		q.Set("state", sp.State)
+		target.RawQuery = q.Encode()
+		http.Redirect(w, r, target.String(), http.StatusFound)
 		return
 	}
 	h.setSessionCookie(w, sess.ID)

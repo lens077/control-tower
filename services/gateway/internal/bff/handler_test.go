@@ -265,3 +265,71 @@ type roleSourceFunc func(owner, name string) []string
 func (f roleSourceFunc) Roles(_ context.Context, owner, name string) ([]string, error) {
 	return f(owner, name), nil
 }
+
+// native 模式（桌面端）：会话 id 经回环回调交回，不下发 cookie。
+func TestNativeCallbackReturnsSessionViaLoopback(t *testing.T) {
+	var hs *harness
+	hs = newHarness(t, func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprintf(w, `{"access_token":%q,"refresh_token":"rt","expires_in":900}`, hs.mintToken(t))
+	})
+	hs.h.Roles = roleSourceFunc(func(string, string) []string { return []string{"consumer"} })
+
+	loopback := "http://127.0.0.1:54321/oauth/callback"
+	loginRec := httptest.NewRecorder()
+	hs.mux.ServeHTTP(loginRec, httptest.NewRequest(http.MethodGet,
+		"/auth/login?mode=native&redirect="+url.QueryEscape(loopback), nil))
+	if loginRec.Code != http.StatusFound {
+		t.Fatalf("login status=%d body=%s", loginRec.Code, loginRec.Body.String())
+	}
+	var stateCookie *http.Cookie
+	for _, c := range loginRec.Result().Cookies() {
+		if c.Name == stateCookieName {
+			stateCookie = c
+		}
+	}
+	raw, _ := base64Decode(stateCookie.Value)
+	var sp statePayload
+	_ = json.Unmarshal(raw, &sp)
+	if !sp.Native || sp.Redirect != loopback {
+		t.Fatalf("state payload=%+v", sp)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/auth/callback?code=abc&state="+url.QueryEscape(sp.State), nil)
+	req.AddCookie(stateCookie)
+	rec := httptest.NewRecorder()
+	hs.mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusFound {
+		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	loc, err := url.Parse(rec.Header().Get("Location"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	sid := loc.Query().Get("code")
+	if sid == "" || loc.Query().Get("state") != sp.State {
+		t.Fatalf("loopback callback missing session/state: %s", loc)
+	}
+	// 会话必须真的建出来，且 id 与回调里给的一致。
+	if _, err := hs.store.Get(req.Context(), sid); err != nil {
+		t.Fatalf("session not created: %v", err)
+	}
+	// native 模式不下发 cookie——原生窗口收不到，发了只会造成误解。
+	for _, c := range rec.Result().Cookies() {
+		if c.Name == "ct_session" && c.Value != "" {
+			t.Fatal("native mode must not set a session cookie")
+		}
+	}
+}
+
+// native 模式拒绝非回环回调：会话 id 会出现在 URL 上，不能送出本机。
+func TestNativeRejectsNonLoopbackRedirect(t *testing.T) {
+	hs := newHarness(t, func(http.ResponseWriter, *http.Request) {})
+	rec := httptest.NewRecorder()
+	hs.mux.ServeHTTP(rec, httptest.NewRequest(http.MethodGet,
+		"/auth/login?mode=native&redirect="+url.QueryEscape("https://evil.example/grab"), nil))
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status=%d（非回环必须拒绝）", rec.Code)
+	}
+}
