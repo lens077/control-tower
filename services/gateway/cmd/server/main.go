@@ -18,12 +18,15 @@ import (
 	"github.com/lens077/control-tower/services/gateway/internal/app"
 	"github.com/lens077/control-tower/services/gateway/internal/authn"
 	"github.com/lens077/control-tower/services/gateway/internal/authz"
+	"github.com/lens077/control-tower/services/gateway/internal/bff"
 	"github.com/lens077/control-tower/services/gateway/internal/gwerrors"
 	"github.com/lens077/control-tower/services/gateway/internal/httpmw"
 	"github.com/lens077/control-tower/services/gateway/internal/loader"
 	"github.com/lens077/control-tower/services/gateway/internal/observability"
 	"github.com/lens077/control-tower/services/gateway/internal/resolver"
+	"github.com/lens077/control-tower/services/gateway/internal/session"
 
+	"github.com/redis/go-redis/v9"
 	"go.uber.org/fx"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
@@ -128,6 +131,70 @@ func run(lc fx.Lifecycle, log *zap.Logger) error {
 		roleSource = authn.NewCasdoorRoleSource(cu, 5*time.Minute)
 	}
 
+	// ── BFF 会话轨（ADR-0002）。配置齐备才启用；缺任一项即退化为纯 legacy bearer——
+	// 这正是 bff-migration.md 中 P1「零客户端影响」的实现方式。
+	var (
+		sessions   session.Store
+		bffHandler *bff.Handler
+		refresher  httpmw.SessionRefresher
+	)
+	sessionAddr := os.Getenv("SESSION_REDIS_ADDR")
+	casdoorID, casdoorSecret := os.Getenv("CASDOOR_CLIENT_ID"), os.Getenv("CASDOOR_CLIENT_SECRET")
+	publicBase := os.Getenv("BFF_PUBLIC_BASE_URL")
+	switch {
+	case envOr("BFF_ENABLED", "auto") == "false":
+		log.Info("BFF 会话轨被 BFF_ENABLED=false 显式关闭，仅 legacy bearer")
+	case sessionAddr == "" || casdoorID == "" || casdoorSecret == "" || publicBase == "":
+		log.Info("BFF 会话轨未配置，仅 legacy bearer",
+			zap.Bool("has_session_store", sessionAddr != ""),
+			zap.Bool("has_casdoor_client", casdoorID != "" && casdoorSecret != ""),
+			zap.Bool("has_public_base_url", publicBase != ""))
+	default:
+		rdb := redis.NewClient(&redis.Options{
+			Addr:     sessionAddr,
+			Password: os.Getenv("SESSION_REDIS_PASSWORD"),
+		})
+		ttl := session.DefaultTTL()
+		if v, err := time.ParseDuration(os.Getenv("SESSION_IDLE_TTL")); err == nil && v > 0 {
+			ttl.Idle = v
+		}
+		if v, err := time.ParseDuration(os.Getenv("SESSION_ABSOLUTE_TTL")); err == nil && v > 0 {
+			ttl.Absolute = v
+		}
+		sessions = session.NewRedisStore(rdb, ttl)
+
+		casdoorClient := bff.NewCasdoorClient(envOr("CASDOOR_URL", issuer), casdoorID, casdoorSecret)
+		refresher = bff.Refresher{Client: casdoorClient}
+
+		cookieCfg := bff.DefaultCookieConfig()
+		cookieCfg.Domain = os.Getenv("SESSION_COOKIE_DOMAIN")
+		if n := os.Getenv("SESSION_COOKIE_NAME"); n != "" {
+			cookieCfg.Name = n
+		}
+		if envOr("SESSION_COOKIE_INSECURE", "false") == "true" {
+			// 仅供无 TLS 的本地开发；__Secure- 前缀要求 Secure 属性，一并去掉。
+			cookieCfg.Secure = false
+			cookieCfg.Name = strings.TrimPrefix(cookieCfg.Name, "__Secure-")
+			log.Warn("会话 cookie 的 Secure 已关闭（仅限本地开发）")
+		}
+		bffHandler = &bff.Handler{
+			Store:            sessions,
+			Casdoor:          casdoorClient,
+			Verifier:         verifier,
+			Roles:            roleSource,
+			Cookie:           cookieCfg,
+			PublicBaseURL:    publicBase,
+			AllowedRedirects: splitCSV(os.Getenv("BFF_ALLOWED_REDIRECTS")),
+			Log:              log,
+		}
+		lc.Append(fx.Hook{OnStop: func(context.Context) error { return rdb.Close() }})
+		log.Info("BFF 会话轨已启用",
+			zap.String("session_store", sessionAddr),
+			zap.String("cookie", cookieCfg.Name),
+			zap.Duration("idle_ttl", ttl.Idle),
+			zap.Duration("absolute_ttl", ttl.Absolute))
+	}
+
 	// ── 动态配置：生产走 selector+SDK；CONFIG_SOURCE=file 是显式本地/测试模式（非生产回退）。
 	loaderCtx, cancelLoader := context.WithCancel(context.Background())
 	switch envOr("CONFIG_SOURCE", "config_center") {
@@ -182,13 +249,18 @@ func run(lc fx.Lifecycle, log *zap.Logger) error {
 
 	// ── 请求链装配（healthz/readyz 先于包路由，见 internal/app）。
 	handler := app.BuildHandler(app.Deps{
-		State:      state,
-		Cors:       corsSwap,
-		Introspect: introspect,
-		Roles:      roleSource,
-		Resolver:   res,
-		Errors:     gwerrors.NewWriter(),
-		Log:        log,
+		State:         state,
+		Cors:          corsSwap,
+		Introspect:    introspect,
+		Roles:         roleSource,
+		Resolver:      res,
+		Errors:        gwerrors.NewWriter(),
+		Log:           log,
+		Sessions:      sessions,
+		BFF:           bffHandler,
+		SessionCookie: bffCookieName(bffHandler),
+		SessionHeader: envOr("SESSION_HEADER", "X-CT-Session"),
+		Refresher:     refresher,
 	})
 
 	srv := &http.Server{
@@ -283,4 +355,12 @@ func splitCSV(s string) []string {
 		}
 	}
 	return out
+}
+
+// bffCookieName 返回会话 cookie 名；BFF 未启用时为空串（会话轨随之关闭）。
+func bffCookieName(h *bff.Handler) string {
+	if h == nil {
+		return ""
+	}
+	return h.Cookie.Name
 }

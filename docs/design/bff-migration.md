@@ -69,12 +69,35 @@ cookie/session-header → Dragonfly 查会话 → [access token 近过期则服�
 | 阶段 | 内容 | 客户端影响 | 回滚 |
 |---|---|---|---|
 | **P0 前置** | Casdoor 机密客户端 + secret；**重建 Dragonfly 凭据 Secret**（旧 `redis-auth`/`redis-tls-ca` 随旧网关删除已不存在）；定 cookie domain | 无 | 无需 |
-| **P1 网关加能力** | session 存储 + BFF 端点 + 三接受（cookie ∥ session header ∥ legacy bearer），BFF 默认**开但无人使用** | **零**（现有 bearer 客户端照常） | 回滚镜像 |
+| **P1 网关加能力** ✅ 代码完成 | session 存储 + BFF 端点 + 三接受（cookie ∥ session header ∥ legacy bearer） | **零**（现有 bearer 客户端照常） | 回滚镜像 |
 | **P2 前端切换** | 删 PKCE/tokenStore，改 `credentials:'include'` + `/auth/me`；dev 加 vite proxy 走同源 | 浏览器端切到 cookie | 前端回滚（网关三接受不变，旧前端立刻可用） |
 | **P3 桌面端** | Tauri 改存 session id（OS keychain）并以 header 携带 | 桌面端切换 | 桌面端回滚到 bearer（网关仍接受） |
 | **P4 拆除** | 移除 legacy bearer 轨、撤销名单机制、`auth/revocations.yaml` 键、每请求回源路径 | 无 | 需重新部署才能回退，故必须在 P2/P3 稳定后再做 |
 
 每阶段验收：`make verify` 全绿 + 该阶段的实测项（P1：三轨各自能通；P2：登录/续期/登出/撤权四项浏览器实测；P3：桌面端同上；P4：全链路回归 + 确认无 legacy 流量）。
+
+### P1 落地记录（2026-08-24）
+
+代码已完成，`make verify` 25 包全绿（新增 `bff`、`session` 两包）。**启用方式是配置驱动**：
+`SESSION_REDIS_ADDR`、`CASDOOR_CLIENT_ID/SECRET`、`BFF_PUBLIC_BASE_URL` 四项齐备才启用会话轨，
+缺任一项即退化为纯 legacy bearer（`BFF_ENABLED=false` 可强制关闭）。因此**镜像上线本身不改变任何行为**。
+
+单测覆盖的行为契约：
+
+| 契约 | 测试 |
+|---|---|
+| cookie 轨认证通过，角色取自会话（热路径不回源 Casdoor） | `TestSessionCookieAuthenticates`（回退源被设为「一调用就失败」） |
+| header 轨（桌面端）同一套会话 | `TestSessionHeaderAuthenticates` |
+| cookie 轨状态变更请求必须带可信 Origin | `TestCookieTrackRejectsBadOrigin`（坏 Origin 与缺失 Origin 都拒） |
+| header 轨不受 Origin 影响（非环境凭据） | `TestHeaderTrackIgnoresOrigin` |
+| 删会话即时生效 | `TestDeletedSessionRejected` |
+| 临近过期服务端续期，前端无感 | `TestServerSideRefresh` |
+| 续期被 IdP 拒 → 删会话 + 401 | `TestRefreshRejectionRevokesSession` |
+| **legacy bearer 与会话轨并存不受影响** | `TestLegacyBearerStillWorksAlongsideSessions` |
+| 空闲/绝对双 TTL、会话清单、整户踢出 | `session` 包五个测试 |
+| state 校验、开放重定向防护、`/auth/me` 不泄露令牌 | `bff` 包五个测试 |
+
+待 P0 前置（Casdoor 机密客户端、Dragonfly 凭据 Secret）就绪后即可部署验证。
 
 ## 工作项清单
 

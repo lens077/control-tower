@@ -96,6 +96,23 @@ func AccessLog(log *zap.Logger) func(http.Handler) http.Handler {
 // CorsSwapper 支持 CORS 策略热切换（策略在 routes.yaml 里，随路由表一起下发）。
 type CorsSwapper struct {
 	c atomic.Pointer[cors.Cors]
+	// origins 保存当前允许来源，让 CSRF 的 Origin 校验与 CORS 共用同一份真相。
+	origins atomic.Pointer[[]string]
+}
+
+// OriginAllowed 判定来源是否可信（CSRF 第一道防线，见 ADR-0002）。
+// 策略未加载或 Origin 为空时一律拒绝——状态变更请求宁可拒绝也不放行来源不明者。
+func (s *CorsSwapper) OriginAllowed(origin string) bool {
+	list := s.origins.Load()
+	if list == nil || origin == "" {
+		return false
+	}
+	for _, o := range *list {
+		if o == origin {
+			return true
+		}
+	}
+	return false
 }
 
 // NewCorsSwapper 构造空的切换器；策略到位前 CORS 中间件直通。
@@ -132,6 +149,8 @@ func (s *CorsSwapper) Update(cfg *confv1.Cors) error {
 		AllowPrivateNetwork: true,
 	})
 	s.c.Store(c)
+	origins := append([]string(nil), cfg.GetAllowOrigins()...)
+	s.origins.Store(&origins)
 	return nil
 }
 
