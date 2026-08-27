@@ -80,6 +80,14 @@ spec:
                   optional: true
             - name: OTEL_TRACES_SAMPLER_RATIO
               value: "0.2"
+            # OTLP 鉴权头(Vault → ExternalSecret otel-auth，网关专属 key)。
+            # optional=true：Secret 未就绪时退回匿名发送而不是 CrashLoop。
+            - name: OTEL_EXPORTER_OTLP_HEADERS
+              valueFrom:
+                secretKeyRef:
+                  name: otel-auth
+                  key: OTEL_EXPORTER_OTLP_HEADERS_GATEWAY
+                  optional: true
             - name: LOG_LEVEL
               value: info
           volumeMounts:
