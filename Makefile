@@ -1,6 +1,6 @@
 # control-tower 聚合入口。目标保持幂等；CI 与本地共用。
 
-.PHONY: api lint build test tidy verify
+.PHONY: api lint build test tidy verify sync-ecommerce-schemas
 
 # 重新生成 proto 产物（Go + Connect）。
 api:
@@ -22,6 +22,10 @@ tidy:
 
 # 提交前最小验证链。
 verify: build lint test
+
+# 从 sibling ecommerce 仓同步 10 个服务的 Bootstrap Schema 快照。
+sync-ecommerce-schemas:
+	bash scripts/sync-ecommerce-schemas.sh
 
 # wire 冻结门禁：对旧 config-center 仓做 WIRE_JSON 口径的破坏性检查
 # （go_package 更名与服务私有 conf.proto 搬家是预期差异，WIRE_JSON 不涉及）。

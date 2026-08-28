@@ -1,6 +1,7 @@
 package service
 
 import (
+	"fmt"
 	"testing"
 	"time"
 
@@ -76,4 +77,10 @@ func TestMaskedValue_SharedByEntryAndRevision(t *testing.T) {
 	revision := toPBRevision(&biz.ConfigRevision{Value: "s3cret", IsSecret: true})
 	assert.Equal(t, entry.Value, revision.Value)
 	assert.Equal(t, maskedValue, entry.Value)
+}
+
+func TestToErr_MapsSchemaViolationToInvalidArgument(t *testing.T) {
+	service := &ConfigService{}
+	err := service.toErr(fmt.Errorf("%w: schema: invalid configuration at /search", biz.ErrInvalidFormat))
+	assert.Equal(t, connect.CodeInvalidArgument, connect.CodeOf(err))
 }

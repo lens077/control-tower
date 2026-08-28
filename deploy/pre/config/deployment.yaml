@@ -27,6 +27,9 @@ spec:
             # 日志输出到 stdout，由部署在 k8s 的 Fluent Bit 统一采集
             - name: OTEL_LOGS_EXPORTER
               value: "none"
+            # 紧急旁路改为 observe；正常环境必须保持 enforce。
+            - name: CONFIG_SCHEMA_MODE
+              value: "enforce"
             # SERVICE_NAME 就是注册进 Consul 的服务名,必须与网关
             # gateway/configs/config.yaml 里的 discovery:///config-service 完全一致
             - name: SERVICE_NAME

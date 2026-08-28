@@ -22,6 +22,7 @@ import (
 	"github.com/lens077/control-tower/services/config/internal/pkg/registry"
 	"github.com/lens077/control-tower/services/config/internal/pkg/sysstat"
 	"github.com/lens077/control-tower/services/config/internal/presence"
+	"github.com/lens077/control-tower/services/config/internal/schema"
 	"github.com/lens077/control-tower/services/config/internal/server"
 	"github.com/lens077/control-tower/services/config/internal/service"
 
@@ -107,6 +108,7 @@ func NewApp(serviceName, deploymentMode, serviceVersion string) *fx.App {
 		// 注入业务模块（按依赖顺序）
 		data.Module,
 		iam.Module,
+		schema.Module,
 		biz.Module,
 		presence.Module,
 		service.Module,

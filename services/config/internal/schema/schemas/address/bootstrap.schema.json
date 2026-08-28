@@ -1,0 +1,925 @@
+{
+  "$defs": {
+    "conf.v1.Auth.Casdoor.schema.json": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "patternProperties": {
+        "^(applicationName)$": {
+          "default": "",
+          "type": "string"
+        },
+        "^(clientId)$": {
+          "default": "",
+          "type": "string"
+        },
+        "^(clientSecret)$": {
+          "default": "",
+          "type": "string"
+        },
+        "^(organizationName)$": {
+          "default": "",
+          "type": "string"
+        }
+      },
+      "properties": {
+        "application_name": {
+          "default": "",
+          "type": "string"
+        },
+        "certificate": {
+          "default": "",
+          "type": "string"
+        },
+        "client_id": {
+          "default": "",
+          "type": "string"
+        },
+        "client_secret": {
+          "default": "",
+          "type": "string"
+        },
+        "endpoint": {
+          "default": "",
+          "pattern": "^(?:(?:[a-zA-Z][a-zA-Z\\d+\\-.]*):)?(?://(?:[A-Za-z0-9\\-\\.]+(?::\\d+)?))?(/[^\\?#]*)?(?:\\?([^\\#]*))?(?:\\#(.*))?$",
+          "type": "string"
+        },
+        "organization_name": {
+          "default": "",
+          "type": "string"
+        }
+      },
+      "title": "Casdoor",
+      "type": "object"
+    },
+    "conf.v1.Auth.schema.json": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "casdoor": {
+          "$ref": "#/$defs/conf.v1.Auth.Casdoor.schema.json"
+        }
+      },
+      "title": "Auth",
+      "type": "object"
+    },
+    "conf.v1.Bootstrap.schema.json": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "auth": {
+          "$ref": "#/$defs/conf.v1.Auth.schema.json"
+        },
+        "data": {
+          "$ref": "#/$defs/conf.v1.Data.schema.json"
+        },
+        "discovery": {
+          "$ref": "#/$defs/conf.v1.Discovery.schema.json"
+        },
+        "log": {
+          "$ref": "#/$defs/conf.v1.Log.schema.json"
+        },
+        "observability": {
+          "$ref": "#/$defs/conf.v1.Observability.schema.json"
+        },
+        "server": {
+          "$ref": "#/$defs/conf.v1.Server.schema.json"
+        }
+      },
+      "required": [
+        "server",
+        "data",
+        "auth",
+        "log"
+      ],
+      "title": "Bootstrap",
+      "type": "object"
+    },
+    "conf.v1.Data.Cache.Redis.Tls.schema.json": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "patternProperties": {
+        "^(caPem)$": {
+          "default": "",
+          "type": "string"
+        },
+        "^(insecureSkipVerify)$": {
+          "default": false,
+          "type": "boolean"
+        }
+      },
+      "properties": {
+        "ca_pem": {
+          "default": "",
+          "type": "string"
+        },
+        "enable": {
+          "default": false,
+          "type": "boolean"
+        },
+        "insecure_skip_verify": {
+          "default": false,
+          "type": "boolean"
+        }
+      },
+      "title": "Tls",
+      "type": "object"
+    },
+    "conf.v1.Data.Cache.Redis.schema.json": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "patternProperties": {
+        "^(dialTimeout)$": {
+          "$ref": "#/$defs/google.protobuf.Duration.schema.json"
+        },
+        "^(minIdleConns)$": {
+          "anyOf": [
+            {
+              "exclusiveMaximum": 4294967296,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "pattern": "^[0-9]+$",
+              "type": "string"
+            }
+          ],
+          "default": 0
+        },
+        "^(poolSize)$": {
+          "anyOf": [
+            {
+              "maximum": 4294967295,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "pattern": "^[0-9]+$",
+              "type": "string"
+            }
+          ],
+          "default": 0
+        },
+        "^(readTimeout)$": {
+          "$ref": "#/$defs/google.protobuf.Duration.schema.json"
+        },
+        "^(writeTimeout)$": {
+          "$ref": "#/$defs/google.protobuf.Duration.schema.json"
+        }
+      },
+      "properties": {
+        "db": {
+          "anyOf": [
+            {
+              "maximum": 4294967295,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "pattern": "^[0-9]+$",
+              "type": "string"
+            }
+          ],
+          "default": 0
+        },
+        "dial_timeout": {
+          "$ref": "#/$defs/google.protobuf.Duration.schema.json"
+        },
+        "host": {
+          "default": "",
+          "pattern": "^((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\\.){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$|^(([0-9a-fA-F]{1,4}::?){1,7}([0-9a-fA-F]{1,4})|([0-9a-fA-F]{1,4}:){1,7}:|:((([0-9a-fA-F]{1,4}:){1,6})?[0-9a-fA-F]{1,4})?|::)$|^[A-Za-z0-9][A-Za-z0-9-]{0,63}(\\.[A-Za-z0-9-][A-Za-z0-9-]{0,63})*$",
+          "type": "string"
+        },
+        "min_idle_conns": {
+          "anyOf": [
+            {
+              "exclusiveMaximum": 4294967296,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "pattern": "^[0-9]+$",
+              "type": "string"
+            }
+          ],
+          "default": 0
+        },
+        "password": {
+          "default": "",
+          "type": "string"
+        },
+        "pool_size": {
+          "anyOf": [
+            {
+              "maximum": 4294967295,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "pattern": "^[0-9]+$",
+              "type": "string"
+            }
+          ],
+          "default": 0
+        },
+        "port": {
+          "anyOf": [
+            {
+              "exclusiveMaximum": 4294967296,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "pattern": "^[0-9]+$",
+              "type": "string"
+            }
+          ],
+          "default": 0
+        },
+        "read_timeout": {
+          "$ref": "#/$defs/google.protobuf.Duration.schema.json"
+        },
+        "tls": {
+          "$ref": "#/$defs/conf.v1.Data.Cache.Redis.Tls.schema.json"
+        },
+        "username": {
+          "default": "",
+          "type": "string"
+        },
+        "write_timeout": {
+          "$ref": "#/$defs/google.protobuf.Duration.schema.json"
+        }
+      },
+      "title": "Redis",
+      "type": "object"
+    },
+    "conf.v1.Data.Cache.schema.json": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "redis": {
+          "$ref": "#/$defs/conf.v1.Data.Cache.Redis.schema.json"
+        }
+      },
+      "title": "Cache",
+      "type": "object"
+    },
+    "conf.v1.Data.Database.Postgres.DatabasePool.schema.json": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "patternProperties": {
+        "^(maxConnIdleTime)$": {
+          "$ref": "#/$defs/google.protobuf.Duration.schema.json"
+        },
+        "^(maxConnLifetime)$": {
+          "$ref": "#/$defs/google.protobuf.Duration.schema.json"
+        },
+        "^(maxConns)$": {
+          "anyOf": [
+            {
+              "exclusiveMaximum": 4294967296,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "pattern": "^[0-9]+$",
+              "type": "string"
+            }
+          ],
+          "default": 0
+        },
+        "^(minConns)$": {
+          "anyOf": [
+            {
+              "exclusiveMaximum": 4294967296,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "pattern": "^[0-9]+$",
+              "type": "string"
+            }
+          ],
+          "default": 0
+        },
+        "^(pingTimeout)$": {
+          "$ref": "#/$defs/google.protobuf.Duration.schema.json"
+        }
+      },
+      "properties": {
+        "max_conn_idle_time": {
+          "$ref": "#/$defs/google.protobuf.Duration.schema.json"
+        },
+        "max_conn_lifetime": {
+          "$ref": "#/$defs/google.protobuf.Duration.schema.json"
+        },
+        "max_conns": {
+          "anyOf": [
+            {
+              "exclusiveMaximum": 4294967296,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "pattern": "^[0-9]+$",
+              "type": "string"
+            }
+          ],
+          "default": 0
+        },
+        "min_conns": {
+          "anyOf": [
+            {
+              "exclusiveMaximum": 4294967296,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "pattern": "^[0-9]+$",
+              "type": "string"
+            }
+          ],
+          "default": 0
+        },
+        "ping_timeout": {
+          "$ref": "#/$defs/google.protobuf.Duration.schema.json"
+        }
+      },
+      "title": "Database Pool",
+      "type": "object"
+    },
+    "conf.v1.Data.Database.Postgres.Tls.schema.json": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "patternProperties": {
+        "^(caPem)$": {
+          "default": "",
+          "type": "string"
+        },
+        "^(sslMode)$": {
+          "default": "",
+          "enum": [
+            "disable",
+            "allow",
+            "prefer",
+            "require",
+            "verify-ca",
+            "verify-full"
+          ],
+          "type": "string"
+        }
+      },
+      "properties": {
+        "ca_pem": {
+          "default": "",
+          "type": "string"
+        },
+        "enable": {
+          "default": false,
+          "type": "boolean"
+        },
+        "ssl_mode": {
+          "default": "",
+          "enum": [
+            "disable",
+            "allow",
+            "prefer",
+            "require",
+            "verify-ca",
+            "verify-full"
+          ],
+          "type": "string"
+        }
+      },
+      "title": "Tls",
+      "type": "object"
+    },
+    "conf.v1.Data.Database.Postgres.schema.json": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "patternProperties": {
+        "^(dbName)$": {
+          "default": "",
+          "type": "string"
+        }
+      },
+      "properties": {
+        "db_name": {
+          "default": "",
+          "type": "string"
+        },
+        "host": {
+          "default": "",
+          "pattern": "^((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\\.){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$|^(([0-9a-fA-F]{1,4}::?){1,7}([0-9a-fA-F]{1,4})|([0-9a-fA-F]{1,4}:){1,7}:|:((([0-9a-fA-F]{1,4}:){1,6})?[0-9a-fA-F]{1,4})?|::)$|^[A-Za-z0-9][A-Za-z0-9-]{0,63}(\\.[A-Za-z0-9-][A-Za-z0-9-]{0,63})*$",
+          "type": "string"
+        },
+        "password": {
+          "default": "",
+          "type": "string"
+        },
+        "pool": {
+          "$ref": "#/$defs/conf.v1.Data.Database.Postgres.DatabasePool.schema.json"
+        },
+        "port": {
+          "anyOf": [
+            {
+              "exclusiveMaximum": 4294967296,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "pattern": "^[0-9]+$",
+              "type": "string"
+            }
+          ],
+          "default": 0
+        },
+        "timezone": {
+          "default": "",
+          "type": "string"
+        },
+        "tls": {
+          "$ref": "#/$defs/conf.v1.Data.Database.Postgres.Tls.schema.json"
+        },
+        "user": {
+          "default": "",
+          "type": "string"
+        }
+      },
+      "title": "Postgres",
+      "type": "object"
+    },
+    "conf.v1.Data.Database.schema.json": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "postgres": {
+          "$ref": "#/$defs/conf.v1.Data.Database.Postgres.schema.json"
+        }
+      },
+      "title": "Database",
+      "type": "object"
+    },
+    "conf.v1.Data.schema.json": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "cache": {
+          "$ref": "#/$defs/conf.v1.Data.Cache.schema.json"
+        },
+        "database": {
+          "$ref": "#/$defs/conf.v1.Data.Database.schema.json"
+        }
+      },
+      "title": "Data",
+      "type": "object"
+    },
+    "conf.v1.Discovery.Consul.Check.TTL.schema.json": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "patternProperties": {
+        "^(pingInterval)$": {
+          "$ref": "#/$defs/google.protobuf.Duration.schema.json"
+        }
+      },
+      "properties": {
+        "duration": {
+          "default": "",
+          "type": "string"
+        },
+        "ping_interval": {
+          "$ref": "#/$defs/google.protobuf.Duration.schema.json"
+        }
+      },
+      "title": "TTL",
+      "type": "object"
+    },
+    "conf.v1.Discovery.Consul.Check.schema.json": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "patternProperties": {
+        "^(deregisterCriticalServiceAfter)$": {
+          "default": "",
+          "type": "string"
+        }
+      },
+      "properties": {
+        "deregister_critical_service_after": {
+          "default": "",
+          "type": "string"
+        },
+        "ttl": {
+          "$ref": "#/$defs/conf.v1.Discovery.Consul.Check.TTL.schema.json"
+        }
+      },
+      "title": "Check",
+      "type": "object"
+    },
+    "conf.v1.Discovery.Consul.Tls.schema.json": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "patternProperties": {
+        "^(caPem)$": {
+          "default": "",
+          "type": "string"
+        },
+        "^(insecureSkipVerify)$": {
+          "default": false,
+          "type": "boolean"
+        }
+      },
+      "properties": {
+        "ca_pem": {
+          "default": "",
+          "type": "string"
+        },
+        "enable": {
+          "default": false,
+          "type": "boolean"
+        },
+        "insecure_skip_verify": {
+          "default": false,
+          "type": "boolean"
+        }
+      },
+      "title": "Tls",
+      "type": "object"
+    },
+    "conf.v1.Discovery.Consul.schema.json": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "patternProperties": {
+        "^(healthCheck)$": {
+          "default": false,
+          "type": "boolean"
+        }
+      },
+      "properties": {
+        "addr": {
+          "default": "",
+          "pattern": "^[A-Za-z0-9.-]+(:[0-9]{1,5})?$",
+          "type": "string"
+        },
+        "check": {
+          "$ref": "#/$defs/conf.v1.Discovery.Consul.Check.schema.json"
+        },
+        "health_check": {
+          "default": false,
+          "type": "boolean"
+        },
+        "scheme": {
+          "default": "",
+          "type": "string"
+        },
+        "tls": {
+          "$ref": "#/$defs/conf.v1.Discovery.Consul.Tls.schema.json"
+        }
+      },
+      "title": "Consul",
+      "type": "object"
+    },
+    "conf.v1.Discovery.schema.json": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "consul": {
+          "$ref": "#/$defs/conf.v1.Discovery.Consul.schema.json"
+        }
+      },
+      "title": "Discovery",
+      "type": "object"
+    },
+    "conf.v1.Log.Application.schema.json": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "format": {
+          "default": "",
+          "enum": [
+            "console",
+            "json"
+          ],
+          "type": "string"
+        },
+        "level": {
+          "default": "",
+          "enum": [
+            "debug",
+            "info",
+            "warn",
+            "error",
+            "dpanic",
+            "panic",
+            "fatal"
+          ],
+          "type": "string"
+        }
+      },
+      "title": "Application",
+      "type": "object"
+    },
+    "conf.v1.Log.Framework.schema.json": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "patternProperties": {
+        "^(errorLevel)$": {
+          "default": "",
+          "enum": [
+            "debug",
+            "info",
+            "warn",
+            "error",
+            "dpanic",
+            "panic",
+            "fatal"
+          ],
+          "type": "string"
+        },
+        "^(logLevel)$": {
+          "default": "",
+          "enum": [
+            "debug",
+            "info",
+            "warn",
+            "error",
+            "dpanic",
+            "panic",
+            "fatal"
+          ],
+          "type": "string"
+        }
+      },
+      "properties": {
+        "error_level": {
+          "default": "",
+          "enum": [
+            "debug",
+            "info",
+            "warn",
+            "error",
+            "dpanic",
+            "panic",
+            "fatal"
+          ],
+          "type": "string"
+        },
+        "format": {
+          "default": "",
+          "enum": [
+            "console",
+            "json"
+          ],
+          "type": "string"
+        },
+        "log_level": {
+          "default": "",
+          "enum": [
+            "debug",
+            "info",
+            "warn",
+            "error",
+            "dpanic",
+            "panic",
+            "fatal"
+          ],
+          "type": "string"
+        }
+      },
+      "title": "Framework",
+      "type": "object"
+    },
+    "conf.v1.Log.schema.json": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "application": {
+          "$ref": "#/$defs/conf.v1.Log.Application.schema.json"
+        },
+        "framework": {
+          "$ref": "#/$defs/conf.v1.Log.Framework.schema.json"
+        }
+      },
+      "title": "Log",
+      "type": "object"
+    },
+    "conf.v1.Observability.Logging.schema.json": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "endpoint": {
+          "default": "",
+          "pattern": "^([A-Za-z0-9][A-Za-z0-9-]{0,63}(\\.[A-Za-z0-9-][A-Za-z0-9-]{0,63})*|((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\\.){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)|\\[(([0-9a-fA-F]{1,4}::?){1,7}([0-9a-fA-F]{1,4})|([0-9a-fA-F]{1,4}:){1,7}:|:((([0-9a-fA-F]{1,4}:){1,6})?[0-9a-fA-F]{1,4})?|::)\\]):([1-9][0-9]{0,4}|[1-5][0-9]{4}|6[0-4][0-9]{3}|65[0-4][0-9]{2}|655[0-2][0-9]|6553[0-5])$",
+          "type": "string"
+        },
+        "tls": {
+          "$ref": "#/$defs/conf.v1.Observability.Tls.schema.json"
+        }
+      },
+      "title": "Logging",
+      "type": "object"
+    },
+    "conf.v1.Observability.Metric.schema.json": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "patternProperties": {
+        "^(exportInterval)$": {
+          "$ref": "#/$defs/google.protobuf.Duration.schema.json",
+          "description": "指标导出间隔。不配置回落到 30s。\n (OTel SDK 默认 60s;这里取 30s,原来硬编码的 3s 对 collector 压力过大)"
+        }
+      },
+      "properties": {
+        "endpoint": {
+          "default": "",
+          "pattern": "^([A-Za-z0-9][A-Za-z0-9-]{0,63}(\\.[A-Za-z0-9-][A-Za-z0-9-]{0,63})*|((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\\.){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)|\\[(([0-9a-fA-F]{1,4}::?){1,7}([0-9a-fA-F]{1,4})|([0-9a-fA-F]{1,4}:){1,7}:|:((([0-9a-fA-F]{1,4}:){1,6})?[0-9a-fA-F]{1,4})?|::)\\]):([1-9][0-9]{0,4}|[1-5][0-9]{4}|6[0-4][0-9]{3}|65[0-4][0-9]{2}|655[0-2][0-9]|6553[0-5])$",
+          "type": "string"
+        },
+        "export_interval": {
+          "$ref": "#/$defs/google.protobuf.Duration.schema.json",
+          "description": "指标导出间隔。不配置回落到 30s。\n (OTel SDK 默认 60s;这里取 30s,原来硬编码的 3s 对 collector 压力过大)"
+        },
+        "tls": {
+          "$ref": "#/$defs/conf.v1.Observability.Tls.schema.json"
+        }
+      },
+      "title": "Metric",
+      "type": "object"
+    },
+    "conf.v1.Observability.Tls.schema.json": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "patternProperties": {
+        "^(caPem)$": {
+          "default": "",
+          "type": "string"
+        },
+        "^(insecureSkipVerify)$": {
+          "default": false,
+          "type": "boolean"
+        }
+      },
+      "properties": {
+        "ca_pem": {
+          "default": "",
+          "type": "string"
+        },
+        "enable": {
+          "default": false,
+          "type": "boolean"
+        },
+        "insecure_skip_verify": {
+          "default": false,
+          "type": "boolean"
+        }
+      },
+      "title": "Tls",
+      "type": "object"
+    },
+    "conf.v1.Observability.Trace.schema.json": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "patternProperties": {
+        "^(sampleRatio)$": {
+          "$ref": "#/$defs/google.protobuf.DoubleValue.schema.json",
+          "description": "采样率 [0.0, 1.0]。1.0 = 全采,0.0 = 全不采。\n 用 wrapper 而不是裸 double:proto3 裸 double 的零值就是 0.0,和「没配置」\n 无法区分 —— 那样所有存量配置(都还没有这个字段)升级后会被解析成 0.0,\n 等于一条 trace 都不采,而且不报任何错。wrapper 让「没配」是 null,\n 由代码回落到 1.0,与升级前的 AlwaysSample 行为一致。"
+        }
+      },
+      "properties": {
+        "endpoint": {
+          "default": "",
+          "pattern": "^([A-Za-z0-9][A-Za-z0-9-]{0,63}(\\.[A-Za-z0-9-][A-Za-z0-9-]{0,63})*|((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\\.){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)|\\[(([0-9a-fA-F]{1,4}::?){1,7}([0-9a-fA-F]{1,4})|([0-9a-fA-F]{1,4}:){1,7}:|:((([0-9a-fA-F]{1,4}:){1,6})?[0-9a-fA-F]{1,4})?|::)\\]):([1-9][0-9]{0,4}|[1-5][0-9]{4}|6[0-4][0-9]{3}|65[0-4][0-9]{2}|655[0-2][0-9]|6553[0-5])$",
+          "type": "string"
+        },
+        "sample_ratio": {
+          "$ref": "#/$defs/google.protobuf.DoubleValue.schema.json",
+          "description": "采样率 [0.0, 1.0]。1.0 = 全采,0.0 = 全不采。\n 用 wrapper 而不是裸 double:proto3 裸 double 的零值就是 0.0,和「没配置」\n 无法区分 —— 那样所有存量配置(都还没有这个字段)升级后会被解析成 0.0,\n 等于一条 trace 都不采,而且不报任何错。wrapper 让「没配」是 null,\n 由代码回落到 1.0,与升级前的 AlwaysSample 行为一致。"
+        },
+        "tls": {
+          "$ref": "#/$defs/conf.v1.Observability.Tls.schema.json"
+        }
+      },
+      "title": "Trace",
+      "type": "object"
+    },
+    "conf.v1.Observability.schema.json": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "enable": {
+          "default": false,
+          "type": "boolean"
+        },
+        "log": {
+          "$ref": "#/$defs/conf.v1.Observability.Logging.schema.json"
+        },
+        "metric": {
+          "$ref": "#/$defs/conf.v1.Observability.Metric.schema.json"
+        },
+        "trace": {
+          "$ref": "#/$defs/conf.v1.Observability.Trace.schema.json"
+        }
+      },
+      "title": "Observability",
+      "type": "object"
+    },
+    "conf.v1.Server.Cors.schema.json": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "patternProperties": {
+        "^(allowedOrigins)$": {
+          "items": {
+            "pattern": "^(?:(?:[a-zA-Z][a-zA-Z\\d+\\-.]*):)?(?://(?:[A-Za-z0-9\\-\\.]+(?::\\d+)?))?(/[^\\?#]*)?(?:\\?([^\\#]*))?(?:\\#(.*))?$",
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "properties": {
+        "allowed_origins": {
+          "items": {
+            "pattern": "^(?:(?:[a-zA-Z][a-zA-Z\\d+\\-.]*):)?(?://(?:[A-Za-z0-9\\-\\.]+(?::\\d+)?))?(/[^\\?#]*)?(?:\\?([^\\#]*))?(?:\\#(.*))?$",
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "title": "Cors",
+      "type": "object"
+    },
+    "conf.v1.Server.HTTP.schema.json": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "patternProperties": {
+        "^(idleTimeout)$": {
+          "$ref": "#/$defs/google.protobuf.Duration.schema.json"
+        },
+        "^(readTimeout)$": {
+          "$ref": "#/$defs/google.protobuf.Duration.schema.json"
+        },
+        "^(writeTimeout)$": {
+          "$ref": "#/$defs/google.protobuf.Duration.schema.json"
+        }
+      },
+      "properties": {
+        "idle_timeout": {
+          "$ref": "#/$defs/google.protobuf.Duration.schema.json"
+        },
+        "read_timeout": {
+          "$ref": "#/$defs/google.protobuf.Duration.schema.json"
+        },
+        "write_timeout": {
+          "$ref": "#/$defs/google.protobuf.Duration.schema.json"
+        }
+      },
+      "title": "HTTP",
+      "type": "object"
+    },
+    "conf.v1.Server.schema.json": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "addr": {
+          "default": "",
+          "pattern": "^([A-Za-z0-9][A-Za-z0-9-]{0,63}(\\.[A-Za-z0-9-][A-Za-z0-9-]{0,63})*|((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\\.){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)|\\[(([0-9a-fA-F]{1,4}::?){1,7}([0-9a-fA-F]{1,4})|([0-9a-fA-F]{1,4}:){1,7}:|:((([0-9a-fA-F]{1,4}:){1,6})?[0-9a-fA-F]{1,4})?|::)\\]):([1-9][0-9]{0,4}|[1-5][0-9]{4}|6[0-4][0-9]{3}|65[0-4][0-9]{2}|655[0-2][0-9]|6553[0-5])$",
+          "type": "string"
+        },
+        "cors": {
+          "$ref": "#/$defs/conf.v1.Server.Cors.schema.json"
+        },
+        "http": {
+          "$ref": "#/$defs/conf.v1.Server.HTTP.schema.json"
+        }
+      },
+      "title": "Server",
+      "type": "object"
+    },
+    "google.protobuf.DoubleValue.schema.json": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "enum": [
+            "Infinity",
+            "-Infinity",
+            "NaN"
+          ],
+          "type": "string"
+        },
+        {
+          "type": "string"
+        }
+      ],
+      "description": "The double value.",
+      "title": "Double Value"
+    },
+    "google.protobuf.Duration.schema.json": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "pattern": "^-?([0-9]+([.][0-9]+)?(ns|us|µs|ms|s|m|h))+$",
+      "title": "Duration",
+      "type": "string"
+    }
+  },
+  "$id": "conf.v1.Bootstrap.schema.bundle.json",
+  "$ref": "#/$defs/conf.v1.Bootstrap.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema"
+}

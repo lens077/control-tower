@@ -17,6 +17,7 @@ require (
 	github.com/pelletier/go-toml/v2 v2.4.3
 	github.com/redis/go-redis/v9 v9.22.0
 	github.com/rs/cors v1.11.1
+	github.com/santhosh-tekuri/jsonschema/v5 v5.3.1
 	github.com/shirou/gopsutil/v4 v4.26.7
 	github.com/spf13/viper v1.21.0
 	github.com/stretchr/testify v1.11.1

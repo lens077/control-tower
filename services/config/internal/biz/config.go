@@ -113,13 +113,19 @@ type ConfigWatcher interface {
 
 // ConfigUseCase 配置中心用例
 type ConfigUseCase struct {
-	repo    ConfigRepo
-	watcher ConfigWatcher
-	log     *zap.Logger
+	repo      ConfigRepo
+	watcher   ConfigWatcher
+	validator ContentValidator
+	log       *zap.Logger
 }
 
-func NewConfigUseCase(repo ConfigRepo, watcher ConfigWatcher, logger *zap.Logger) *ConfigUseCase {
-	return &ConfigUseCase{repo: repo, watcher: watcher, log: logger.Named("ConfigUseCase")}
+func NewConfigUseCase(repo ConfigRepo, watcher ConfigWatcher, validator ContentValidator, logger *zap.Logger) *ConfigUseCase {
+	return &ConfigUseCase{
+		repo:      repo,
+		watcher:   watcher,
+		validator: validator,
+		log:       logger.Named("ConfigUseCase"),
+	}
 }
 
 // WatchKeys 订阅 namespace+environment 下若干 key 的变更;keys 为空表示订阅全部。
@@ -139,10 +145,16 @@ func (uc *ConfigUseCase) GetKey(ctx context.Context, namespace, environment, key
 	return uc.repo.GetEntry(ctx, namespace, environment, key)
 }
 
-// PutKey 保存前做服务端语法校验,再写入。
+// PutKey 保存前依次做语法和已登记的结构校验，再写入。
 func (uc *ConfigUseCase) PutKey(ctx context.Context, in PutParams) (*ConfigEntry, error) {
 	if err := ValidateFormat(in.Format, in.Value); err != nil {
 		return nil, err
+	}
+	if uc.validator != nil {
+		target := ContentTarget{Namespace: in.Namespace, Environment: in.Environment, Key: in.Key}
+		if err := uc.validator.Validate(target, in.Format, in.Value); err != nil {
+			return nil, fmt.Errorf("%w: schema: %s", ErrInvalidFormat, err)
+		}
 	}
 	return uc.repo.PutEntry(ctx, in)
 }
@@ -168,7 +180,7 @@ func (uc *ConfigUseCase) Rollback(ctx context.Context, namespace, environment, k
 	if comment == "" {
 		comment = fmt.Sprintf("rollback to v%d", version)
 	}
-	return uc.repo.PutEntry(ctx, PutParams{
+	return uc.PutKey(ctx, PutParams{
 		Namespace:   namespace,
 		Environment: environment,
 		Key:         key,

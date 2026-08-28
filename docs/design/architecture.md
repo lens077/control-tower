@@ -43,7 +43,8 @@ Client（Connect/JSON 或 gRPC-Web）
 
 - 数据面鉴权升级为 per-service × per-environment machine token（哈希入库、namespace 白名单、两代重叠轮换、吊销即断流）。
 - goose 管理 migrations（0001 为存量 schema 快照，存量库按接管手顺插基线记录）。
-- 对外 proto 处于 wire 冻结期：存量包名/Service/RPC 名/字段号/类型不动，新增自由（见 decisions.md）。
+- `PutKey` 在持久化前执行「格式 → 已登记业务 Schema」双校验；Rollback 走同一入口，错误只返回实例位置。ecommerce Schema 的来源、同步和跨仓发布顺序见 [Config Center 内容 Schema 校验](config-schema.md)。
+- 对外 proto 处于 wire 冻结期：存量包名/Service/RPC 名、字段号与类型不动，新增自由（见 decisions.md）。
 
 ## 发布与部署
 
