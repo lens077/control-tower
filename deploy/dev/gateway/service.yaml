@@ -1,5 +1,5 @@
-# 网关对外 Service（dev）。集群重建后旧 ecommerce-gateway-service 不存在，
-# 属绿地创建：selector 直指新网关。若将来旧网关回归并行，切流语义见 cutover.md §3。
+# 网关后端 Service（dev）。对外入口统一由共享 cilium-gateway 的 HTTPRoute 提供；
+# 本 Service 只在集群内承接转发。若将来旧网关回归并行，切流语义见 cutover.md §3。
 apiVersion: v1
 kind: Service
 metadata:
@@ -8,7 +8,7 @@ metadata:
   labels:
     app: control-tower-gateway
 spec:
-  type: LoadBalancer
+  type: ClusterIP
   selector:
     app: control-tower-gateway
   ports:

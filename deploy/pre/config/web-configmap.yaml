@@ -4,11 +4,11 @@
 # 所以改完重启 Pod 即可生效,不必重建镜像 —— 这正是没把 apiUrl 做成
 # 构建期 env 的原因:同一个镜像能在 dev/pre/prod 用不同后端地址跑。
 #
-# ⚠️ apiUrl 变了要同步改两处,否则浏览器会被 CORS 拦掉:
-#   1. 这里
-#   2. config-center 自己的 server.cors.allowed_origins(在 bootstrap 配置里),
-#      必须包含 Web 控制台的来源 https://config.app.com
-# 因为 Web 与 API 是两个 hostname,跨源,CORS 是必经之路。
+# Web/API 公网 hostname 变更时必须同步检查两处，否则浏览器会请求旧域名或被 CORS 拦截：
+#   1. 这里的 apiUrl 必须指向 API 公网入口 https://config-api.apikv.com
+#   2. config-center 的 bootstrap 配置必须在 server.cors.allowed_origins 中包含
+#      Web 控制台来源 https://config.apikv.com
+# Web 与 API 是两个 hostname，跨源请求必须通过预检。
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -17,7 +17,7 @@ metadata:
 data:
   config.json: |
     {
-      "apiUrl": "https://config-api.app.com",
+      "apiUrl": "https://config-api.apikv.com",
       "casdoor": {
         "serverUrl": "https://casdoor.apikv.com",
         "clientId": "a36e6718e392099b7915",

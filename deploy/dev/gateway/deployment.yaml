@@ -8,14 +8,16 @@ metadata:
   namespace: ecommerce
   labels:
     app: control-tower-gateway
+    app.kubernetes.io/part-of: ecommerce
 spec:
-  # 无状态网关滚更/金丝雀语义成立的底线：双副本 + RollingUpdate + PDB（DEVOPS 纪律）。
+  # 双副本 + PDB 保证滚动期至少一个副本可用。硬 spread 与 anti-affinity 下不使用 surge，
+  # 否则第三个临时 Pod 可能没有同时满足两条约束的节点。
   replicas: 2
   strategy:
     type: RollingUpdate
     rollingUpdate:
-      maxUnavailable: 0
-      maxSurge: 1
+      maxUnavailable: 1
+      maxSurge: 0
   selector:
     matchLabels:
       app: control-tower-gateway
@@ -23,7 +25,28 @@ spec:
     metadata:
       labels:
         app: control-tower-gateway
+        app.kubernetes.io/part-of: ecommerce
     spec:
+      # anti-affinity 保证双副本分节点；suite-wide spread 让网关与单副本业务共同计数。
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchLabels:
+                  app: control-tower-gateway
+              topologyKey: kubernetes.io/hostname
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: DoNotSchedule
+          nodeAffinityPolicy: Honor
+          nodeTaintsPolicy: Honor
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/part-of: ecommerce
+      serviceAccountName: control-tower-gateway
+      automountServiceAccountToken: false
+      enableServiceLinks: false
       imagePullSecrets:
         - name: tcr-pull
       securityContext:
