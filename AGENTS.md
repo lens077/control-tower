@@ -4,14 +4,18 @@
 
 ## 部署现状（2026-08-29 逐资源核对）
 
-⚠️ **当前集群里本仓的两个服务都没有在跑**。集群 2026-08-21 前后重建过，`config-center`
-与 `postgresql` 两个 ns 都已不存在；gateway 的 Deployment/Service 被手工 `delete -f` 掉了。
+集群 2026-08-21 前后重建过，`postgresql` ns 已不存在，`config-center` ns 于 2026-08-29
+按 `deploy/pre/config/` 重建；gateway 仍是被手工 `delete -f` 掉的状态。
 
-| 服务 | 集群状态 | 残留 |
+| 服务 | 集群状态 | 备注 |
 |---|---|---|
-| gateway | Deployment / Service / Pod **均不存在** | HTTPRoute `ecommerce/control-tower-gateway`（backendRef 指向已不存在的 `ecommerce-gateway-service`，`ResolvedRefs=False`，`https://gateway.apikv.com/` 因此返回 **500**）、VPA `ecommerce/control-tower-gateway-vpa`、Secret `ecommerce/control-tower-config-source-dev` |
-| config | ns `config-center` **不存在** | 无 |
-| config web | ns `config-center` **不存在** | 无 |
+| config | `config-center/config-center` **运行中**（`0.2.1`） | 镜像走 TCR —— GHCR 上 `control-tower-config` 是 private，匿名拉取 401 |
+| config web | `config-center/config-center-web` **运行中**（`0.2.1`） | `https://config.apikv.com` |
+| gateway | Deployment / Service / Pod **均不存在** | 残留 HTTPRoute `ecommerce/control-tower-gateway`（backendRef 指向已不存在的 `ecommerce-gateway-service`，`ResolvedRefs=False`，`https://gateway.apikv.com/` 因此返回 **500**）、VPA `control-tower-gateway-vpa`、Secret `control-tower-config-source-dev` |
+
+⚠️ config 服务的 Consul 注册当前是失败的（`anonymous token lacks permission 'service:write'`，
+降级为「服务发现关闭」）。gateway 回来后 `discovery:///config-service` 会解析不到，
+需要先用 `consul/consul-bootstrap-acl-token` 给 `config-service` 建策略与 token。
 
 数据面也已经搬离集群，这是配置里最容易踩空的一点：
 
@@ -19,8 +23,17 @@
 |---|---|---|
 | PostgreSQL | node3 的 Patroni（`pg-meta`，单实例），**不再是集群内 CNPG** | `pg.apikv.com:30001`（node1 Pangolin raw 口） |
 | Redis | node3 的 Redis 主从 + stunnel TLS 终止，**不再是集群内 dragonfly** | `redis.apikv.com:30002` |
-| 指标查询端 | node3 的 VictoriaMetrics；集群 `victoriametrics` ns 已空 | 只有带 SSO 的 `node3-metrics.apikv.com`，**机器对机器暂无可用地址** |
-| OTLP 采集 | 集群内 collector 仍在 | `otel-opentelemetry-collector.opentelemetry.svc:4318`（仅集群内可解析） |
+| 指标查询端 | node3 的 VictoriaMetrics；集群 `victoriametrics` ns 已空 | `http://metrics.apikv.com`（**只有 http**，https 返回 404） |
+| OTLP 采集 | 集群内 collector（Deployment）+ 每节点 agent（DaemonSet，只采主机指标） | `otel-opentelemetry-collector.opentelemetry.svc:4318`（仅集群内可解析） |
+
+指标链路 2026-08-29 修过三处，改动 owner 在 kubernetes 仓 `components/opentelemetry{,-node}/`：
+①域名由 `node3-metrics` 改名为 `metrics`，collector 没同步导致整条指标链路静默断了；
+②node3 的 VictoriaMetrics 要开 `-opentelemetry.usePrometheusNaming=true`，否则指标名保持
+OTLP 点号形态（`pgxpool.acquired_connections`），与 `internal/pkg/promql/catalog.go` 按
+Prometheus 规范写的查询对不上，表现为**查询成功但一条序列都没有**；
+③主机指标需要 DaemonSet + 显式打开 `system.cpu/memory.utilization`。
+验收用仓库自带的 live 测试：
+`CONFIG_CENTER_VM_ENDPOINT=http://metrics.apikv.com go test ./services/config/internal/pkg/promql -run Live -v`。
 
 PG 与 Redis 的证书由 node3 的 Pigsty 自签 CA 签发，SAN 已补上两个公网域名（2026-08-29），
 可以 `verify-full` / 严格校验。补签步骤见工作区 `pigsty-deploy/cert-san-resign.md`。
@@ -63,4 +76,4 @@ CI 由裸 semver tag（`X.Y.Z`）触发发布；PR 只跑质量门禁；push mai
 
 迁移期决策与对抗评审档案在工作区 `.migration-scratch/`（不入本仓）：06 决策日志、11 终裁书、12 实施方案 v2。
 
-迁移本身已完成、上游旧目录已删（当前集群里没有在跑的实例，原因见上方「部署现状」，与迁移无关）。**本节保留的唯一理由**是那批档案记着「哪些东西是被刻意砍掉的、为什么」——与 `docs/design/decisions.md` 配合使用，避免有人把砍掉的东西当成遗漏加回来。等 `decisions.md` 把这些理由全部吸收之后，本节连同档案一并归档。
+迁移本身已完成、上游旧目录已删（当前集群里 config 已重新拉起、gateway 未部署，见上方「部署现状」，与迁移无关）。**本节保留的唯一理由**是那批档案记着「哪些东西是被刻意砍掉的、为什么」——与 `docs/design/decisions.md` 配合使用，避免有人把砍掉的东西当成遗漏加回来。等 `decisions.md` 把这些理由全部吸收之后，本节连同档案一并归档。
