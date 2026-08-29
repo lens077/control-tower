@@ -11,11 +11,20 @@
 |---|---|---|
 | config | `config-center/config-center` **运行中**（`0.2.1`） | 镜像走 TCR —— GHCR 上 `control-tower-config` 是 private，匿名拉取 401 |
 | config web | `config-center/config-center-web` **运行中**（`0.2.1`） | `https://config.apikv.com` |
-| gateway | Deployment / Service / Pod **均不存在** | 残留 HTTPRoute `ecommerce/control-tower-gateway`（backendRef 指向已不存在的 `ecommerce-gateway-service`，`ResolvedRefs=False`，`https://gateway.apikv.com/` 因此返回 **500**）、VPA `control-tower-gateway-vpa`、Secret `control-tower-config-source-dev` |
+| gateway | Deployment / Service / Pod **均不存在** | 孤儿 HTTPRoute 与 VPA 已于 2026-08-29 清掉，`https://gateway.apikv.com/` 从 500 变成 404（「没有路由」的诚实状态）。**保留** Secret `ecommerce/control-tower-config-source-dev`——它是网关的配置源、含机器令牌，重新部署时要用 |
 
-⚠️ config 服务的 Consul 注册当前是失败的（`anonymous token lacks permission 'service:write'`，
-降级为「服务发现关闭」）。gateway 回来后 `discovery:///config-service` 会解析不到，
-需要先用 `consul/consul-bootstrap-acl-token` 给 `config-service` 建策略与 token。
+### Consul 的实际作用范围（别照着 `deploy/*/config/deployment.yaml` 里那条注释理解）
+
+- **网关需要 Consul**：`routes/{dev,pre}.yaml` 的 11 个后端全是 `discovery:///<service>`，
+  靠 Consul 解析成 Pod IP。这 10 个业务服务都已注册在案（token 是 `ecommerce/consul-ecommerce-token`，
+  策略 `ecommerce-services` = `service_prefix "" { policy = "write" }`）。
+- **找 config 服务不需要 Consul**：网关的配置源写死的是
+  `http://config-center.config-center.svc:30010`，走 K8s Service DNS。
+- 所以 config 服务当前注册失败（`anonymous token lacks permission 'service:write'`；
+  ACL 默认策略是 deny，而它的 token 随旧 `config-center` ns 一起没了）**没有任何消费方受影响**，
+  代价只是每次启动刷一条 ERROR。要么补一个 token，要么直接 `CONSUL_ENABLED=false`。
+- ⚠️ 匿名读 Consul catalog 会返回**空对象**而不是 403，很容易误判成「一个服务都没注册」。
+  查真实状态要带 token：`curl -H "X-Consul-Token: $TOK" .../v1/catalog/services`。
 
 数据面也已经搬离集群，这是配置里最容易踩空的一点：
 
