@@ -323,7 +323,7 @@ function EditPage() {
           disabled={save.isPending || saveBlocked}
           onClick={() => save.mutate()}
         >
-          {save.isPending ? t("edit.saving") : t("common:action.save")}
+          {save.isPending ? t("edit.saving") : t("action.save")}
         </Button>
       </span>
     </Tooltip>
@@ -400,7 +400,7 @@ function EditPage() {
             disabled={isNew || del.isPending}
             onClick={() => del.mutate()}
           >
-            {t("common:action.delete")}
+            {t("action.delete")}
           </Button>
           {saveButton}
         </Box>

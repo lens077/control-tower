@@ -174,7 +174,7 @@ function HistoryPage() {
           severity="error"
           action={
             <Button size="small" color="inherit" onClick={() => revisions.refetch()}>
-              {t("common:action.retry")}
+              {t("action.retry")}
             </Button>
           }
         >
@@ -362,7 +362,7 @@ function HistoryPage() {
             current.refetch();
           }}
         >
-          {t("common:action.refresh")}
+          {t("action.refresh")}
         </Button>
       </Box>
 
@@ -498,7 +498,7 @@ function HistoryPage() {
           </DialogContentText>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setPendingRollback(null)}>{t("common:action.cancel")}</Button>
+          <Button onClick={() => setPendingRollback(null)}>{t("action.cancel")}</Button>
           <Button
             variant="contained"
             disabled={rollback.isPending}

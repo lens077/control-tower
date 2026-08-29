@@ -62,6 +62,15 @@ RUN cat > /etc/caddy/Caddyfile <<'EOF'
         respond "ok" 200
     }
 
+    # Monaco 编辑器的自托管资源(构建时由 vite 插件从 node_modules 拷进 dist/vs)。
+    # 单独 handle 是为了不落进下面的 SPA fallback —— 少文件时应该诚实地 404,
+    # 而不是把 index.html 当 JS 喂给 AMD loader,那种错误极难看出来。
+    # 文件名不带指纹(loader.js / editor.main.js),所以只缓存一周,不用 immutable。
+    handle /vs/* {
+        header Cache-Control "public, max-age=604800"
+        file_server
+    }
+
     handle {
         try_files {path} /index.html
         file_server

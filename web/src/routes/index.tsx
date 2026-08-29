@@ -144,7 +144,7 @@ function BrowserPage() {
             onChange={(e) => setPrefix(e.target.value)}
             sx={{ flex: 1, minWidth: 200 }}
           />
-          <Tooltip title={t("common:action.refresh")}>
+          <Tooltip title={t("action.refresh")}>
             <IconButton
               onClick={() => {
                 void refetchNamespaces();
@@ -275,7 +275,7 @@ function NewKeyDialog({
         </Box>
       </DialogContent>
       <DialogActions>
-        <Button onClick={onClose}>{t("common:action.cancel")}</Button>
+        <Button onClick={onClose}>{t("action.cancel")}</Button>
         <Button variant="contained" disabled={!key.trim()} onClick={() => onCreate(key.trim())}>
           {t("newKey.submit")}
         </Button>

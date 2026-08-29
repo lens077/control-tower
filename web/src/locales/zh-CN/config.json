@@ -7,6 +7,13 @@
     "loginRequired": "请先登录以管理配置。",
     "accessDenied": "当前 Casdoor 账号没有 Config Center 管理权限。点击「切换账号」会先结束当前单点登录会话。"
   },
+  "action": {
+    "save": "保存",
+    "delete": "删除",
+    "cancel": "取消",
+    "refresh": "刷新",
+    "retry": "重试"
+  },
   "format": {
     "unspecified": "未指定"
   },

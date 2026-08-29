@@ -53,3 +53,4 @@
 - 出现 streaming 路由时豁免路由级总超时（当前后端 API 实测零 streaming RPC）。
 - resolver 的 Consul Watch 集合取自**启动时**路由表：热更新中新增的 discovery 后端需要滚动重启网关才被监听（新增后端服务本就伴随发布窗口，代价可接受）。
 - 迁移 SQL 内禁止 `SET search_path`：goose 版本表在 public，改会话 search_path 会让版本表写入解析失败（跨版本实测踩到）。全部对象显式 schema 限定。
+- Web 的 Monaco 资源自托管在同源 `/vs`（`web/vite.config.ts` 的 `monaco-self-host` 插件 + `src/monaco.ts` 的 `loader.config`），**不放开 CSP 去用 CDN**：`@monaco-editor/react` 默认从 `cdn.jsdelivr.net` 注入 AMD `loader.js`，被镜像里的 `script-src 'self'` 静默拦掉——拦截不产生网络请求，而组件只把失败 `console.error`，`/edit` 与 `/history` 会永远停在 `Loading...`。放开 `script-src` 既削弱 CSP，又把编辑器能否打开绑在公网 CDN 上。

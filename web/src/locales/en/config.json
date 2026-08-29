@@ -7,6 +7,13 @@
     "loginRequired": "Sign in to manage configuration.",
     "accessDenied": "This Casdoor account cannot administer Config Center. Switch account first ends the current single sign-on session."
   },
+  "action": {
+    "save": "Save",
+    "delete": "Delete",
+    "cancel": "Cancel",
+    "refresh": "Refresh",
+    "retry": "Retry"
+  },
   "format": {
     "unspecified": "Unspecified"
   },
