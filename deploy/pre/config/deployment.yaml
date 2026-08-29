@@ -20,7 +20,7 @@ spec:
         - name: tcr-pull
       containers:
         - name: config-center
-          image: ghcr.io/lens077/control-tower-config:sha-c30713c
+          image: ghcr.io/lens077/control-tower-config:0.2.1
           imagePullPolicy: Always
           env:
             # 关闭应用内的 Log 导出器，只保留 Trace 和 Metric。
@@ -55,12 +55,13 @@ spec:
             # Consul is discovery only, never this service's configuration source.
             - name: CONSUL_ENABLED
               value: "true"
+            # 8501(HTTPS API)在当前 consul Service 上根本没暴露(实测只有
+            # 8500/8502/8301/8302/8300/8600),打 8501 会注册失败并降级为
+            # 「服务发现关闭」—— 网关的 discovery:///config-service 随之解析不到。
             - name: CONSUL_ADDR
-              value: "consul-server.consul.svc:8501"
+              value: "consul-server.consul.svc:8500"
             - name: CONSUL_SCHEME
-              value: "https"
-            - name: CONSUL_INSECURE_SKIP_VERIFY
-              value: "true"
+              value: "http"
           ports:
             # 命名端口:Service 与 HTTPRoute 用名字引用,改端口号时不必三处同步
             - name: http
