@@ -1,77 +1,94 @@
 #!/usr/bin/env bash
-# 在 Mac 上跑 control-tower，依赖直连内网集群。
+# 在 Mac 上跑 control-tower，数据面走 node3（Pigsty）的 Pangolin 隧道口。
 #
-#   scripts/dev-local.sh config     # 起 config 服务（PG 端口转发 + Dragonfly/Consul LAN 直连）
+#   scripts/dev-local.sh config     # 起 config 服务
 #   scripts/dev-local.sh gateway    # 起网关（file 模式；见下方「为什么不用 discovery」）
 #   scripts/dev-local.sh print      # 只渲染配置并打印路径，不启动
 #
-# 凭据全部运行时从集群 Secret 取，渲染进 mktemp 文件（0600），退出即删——不进仓库、不进日志。
+# 2026-08-29 重写。旧版把 PostgreSQL 当成集群内的 CNPG、凭据从 config-center 的
+# Secret 取，这两条现在都不成立：
+#   - `postgresql` 与 `config-center` 两个 ns 在当前集群都已不存在；
+#   - PostgreSQL 与 Redis 都在集群外的 node3，唯一通路是 node1 Pangolin 的 raw 端口
+#     pg.apikv.com:30001 / redis.apikv.com:30002 —— 本机与集群用的是同一个地址，
+#     所以本地能跑就等于进集群也能跑，不再需要端口转发。
+#
+# 凭据优先取本地 services/config/configs/dev.yaml（已 gitignore，0600）；该文件缺失时
+# 从 node3 的 .credentials-extra 渲染到 mktemp 文件（0600），退出即删——不进仓库、不进日志。
 # 兼容 macOS Bash 3.2。
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-PG_LOCAL_PORT="${PG_LOCAL_PORT:-15432}"
-CONSUL_LAN="${CONSUL_LAN:-192.168.3.120:8500}"      # consul-expose-servers LoadBalancer
-DRAGONFLY_LAN="${DRAGONFLY_LAN:-192.168.3.122}"      # cilium-gateway-dragonfly-gateway（TLS 6380）
-DRAGONFLY_PORT="${DRAGONFLY_PORT:-6380}"
-CFG=""; PF_PID=""
+SSH_HOST="${SSH_HOST:-node3}"
+DEV_CONFIG="$ROOT/services/config/configs/dev.yaml"
+PG_HOST="${PG_HOST:-pg.apikv.com}"
+PG_PORT="${PG_PORT:-30001}"
+REDIS_HOST="${REDIS_HOST:-redis.apikv.com}"
+REDIS_PORT="${REDIS_PORT:-30002}"
+CFG=""
 
-cleanup() {
-  [ -n "$PF_PID" ] && kill "$PF_PID" 2>/dev/null || true
-  [ -n "$CFG" ] && rm -f "$CFG" || true
-}
+cleanup() { [ -n "$CFG" ] && rm -f "$CFG" || true; }
 trap cleanup EXIT
 
 need() { command -v "$1" >/dev/null || { echo "缺少 $1"; exit 1; }; }
-need kubectl
+need ssh
+need go
 
-secret() { kubectl -n "$1" get secret "$2" -o jsonpath="{.data.$3}" 2>/dev/null | base64 -d; }
+# 在 node3 上执行 SQL。SQL 走 stdin，避免 ssh → su → psql 三层引号转义。
+pgq() { ssh -o BatchMode=yes "$SSH_HOST" "su - postgres -c 'psql -d ecommerce -At'"; }
 
-start_pg_forward() {
-  kubectl -n postgresql port-forward svc/pg-main-rw "$PG_LOCAL_PORT:5432" >/tmp/ct-pf-pg.log 2>&1 &
-  PF_PID=$!
-  for i in $(seq 1 20); do nc -z 127.0.0.1 "$PG_LOCAL_PORT" 2>/dev/null && return 0; sleep 0.5; done
-  echo "PG 端口转发未就绪，见 /tmp/ct-pf-pg.log"; exit 1
+# 从本地 dev.yaml 派生一份「本地跑」的配置：
+# 只改一处——关掉 observability。它的三个 OTLP 端点是集群内 DNS（*.svc），
+# 在 Mac 上解析不了，开着会每 30s 打一条 "failed to upload metrics: no such host"。
+# 其余（含 PG/Redis 的公网地址与 TLS）逐字沿用，保证「本地跑的就是要部署的」。
+derive_from_dev_config() {
+  CFG="$(mktemp -t ct-config)"; chmod 600 "$CFG"
+  sed 's/^  enable: true$/  enable: false/' "$DEV_CONFIG" > "$CFG"
 }
 
-render_config() {
-  # PG 口令取自集群内 bootstrap（与线上同一份），失败则退回 CNPG app 用户 Secret。
-  local pgpw rpw
-  pgpw="$(kubectl -n config-center get secret config-center-bootstrap -o jsonpath='{.data.config\.yaml}' 2>/dev/null \
-          | base64 -d | sed -n '/postgres:/,/timezone/p' | sed -n 's/^ *password: *//p' | head -1 | tr -d '"')"
-  [ -z "$pgpw" ] && pgpw="$(secret postgresql pg-main-app password)"
-  rpw="$(secret dragonfly dragonfly-password-secret password)"
+# dev.yaml 不在时的兜底：从 node3 现取凭据与 CA，渲染一份最小配置。
+render_from_node3() {
+  local creds pgpw pguser pgdb rpw ca
+  creds="$(ssh -o BatchMode=yes "$SSH_HOST" 'cat /root/pigsty-deploy/.credentials-extra')" || {
+    echo "取不到 node3 的 .credentials-extra"; exit 1; }
+  pguser="$(printf '%s\n' "$creds" | sed -n 's/^pg_app_user=//p' | head -1)"
+  pgpw="$(printf '%s\n' "$creds"  | sed -n 's/^pg_app_password=//p' | head -1)"
+  pgdb="$(printf '%s\n' "$creds"  | sed -n 's/^pg_database=//p' | head -1)"
+  rpw="$(printf '%s\n' "$creds"   | sed -n 's/^redis_password=//p' | head -1)"
+  ca="$(ssh -o BatchMode=yes "$SSH_HOST" 'cat /etc/pki/ca.crt')"
   [ -z "$pgpw" ] && { echo "取不到 PG 口令"; exit 1; }
 
   CFG="$(mktemp -t ct-config)"; chmod 600 "$CFG"
-  cat > "$CFG" <<EOF
-# 本地开发渲染件（临时文件，退出即删）。集群内形态见 services/config/configs/config.yaml。
+  {
+    echo "# 本地开发渲染件（临时文件，退出即删）。集群内形态见 services/config/configs/pre.yaml。"
+    cat <<EOF
 server:
   addr: 0.0.0.0:30010
   http: { read_timeout: 5s, idle_timeout: 60s }
   cors:
     allowed_origins:
       - http://localhost:3005
-  tls: { enable: false, cert_pem: "", key_pem: "", client_ca_pem: "", require_client_cert: false }
 data:
   database:
     postgres:
-      # ClusterIP-only，必须端口转发（本脚本已起）。
-      host: 127.0.0.1
-      port: ${PG_LOCAL_PORT}
-      user: app
+      host: ${PG_HOST}
+      port: ${PG_PORT}
+      user: "${pguser:-app}"
       password: "${pgpw}"
-      db_name: ecommerce
-      tls: { enable: false, ssl_mode: "disable", ca_pem: "" }
+      db_name: "${pgdb:-ecommerce}"
       timezone: "Asia/Shanghai"
+      tls:
+        enable: true
+        # 证书 SAN 已含 pg.apikv.com（2026-08-29 补签），可以严格校验。
+        # 见 pigsty-deploy 仓 cert-san-resign.md。
+        ssl_mode: "verify-full"
+        ca_pem: |
+$(printf '%s\n' "$ca" | sed 's/^/          /')
       pool: { max_conns: 10, min_conns: 2, max_conn_lifetime: 1h, max_conn_idle_time: 5m, ping_timeout: 5s }
   cache:
     redis:
-      # LAN 直连 Cilium Gateway 的 TLS 端口（证书按 IP 访问不匹配，故 skip verify）。
       presence: { enabled: true, key_prefix: "control-tower:presence-local", ttl: 90s }
-      host: ${DRAGONFLY_LAN}
-      port: ${DRAGONFLY_PORT}
-      tls: { enable: true, insecure_skip_verify: true, ca_pem: "" }
+      host: ${REDIS_HOST}
+      port: ${REDIS_PORT}
       username: ""
       password: "${rpw}"
       db: 0
@@ -80,41 +97,47 @@ data:
       write_timeout: 3s
       pool_size: 5
       min_idle_conns: 1
+      tls:
+        # 同上：SAN 已含 redis.apikv.com，不需要 insecure_skip_verify。
+        enable: true
+        insecure_skip_verify: false
+        ca_pem: |
+$(printf '%s\n' "$ca" | sed 's/^/          /')
 log:
   framework: { format: console, log_level: info, error_level: error }
   application: { format: console, level: debug }
 observability:
   enable: false
-discovery:
-  consul:
-    # 只为「能查询目录」；注册由 CONSUL_ENABLED=false 关掉（见下）。
-    addr: ${CONSUL_LAN}
-    health_check: false
-    scheme: http
-    check: { ttl: { duration: "30s", ping_interval: 10s } }
-    tls: { enable: false, insecure_skip_verify: true, ca_pem: "" }
 EOF
+  } > "$CFG"
+}
+
+prepare_config() {
+  if [ -f "$DEV_CONFIG" ]; then
+    derive_from_dev_config
+    echo "→ 配置来源：${DEV_CONFIG}（本地副本已关掉 observability）"
+  else
+    render_from_node3
+    echo "→ 配置来源：node3 现取凭据渲染（$DEV_CONFIG 不存在）"
+  fi
 }
 
 case "${1:-config}" in
   print)
-    start_pg_forward; render_config
+    prepare_config
     echo "渲染完成：${CFG}（本命令退出后会删除，仅供查看结构）"
     sed 's/\(password:\).*/\1 ***/' "$CFG"
     ;;
 
   config)
-    start_pg_forward; render_config
-    echo "→ PG 经 127.0.0.1:${PG_LOCAL_PORT}（转发）｜Redis ${DRAGONFLY_LAN}:${DRAGONFLY_PORT} TLS｜Consul ${CONSUL_LAN}"
+    prepare_config
+    echo "→ PG ${PG_HOST}:${PG_PORT} TLS｜Redis ${REDIS_HOST}:${REDIS_PORT} TLS｜均在 node3，经 node1 Pangolin"
     echo "→ 服务将监听 http://127.0.0.1:30010（web 控制台 pnpm dev 在 3005，已在 CORS 白名单）"
-    # CONSUL_ENABLED=false 是硬要求：本机实例若注册进集群 Consul，
-    # 集群内客户端可能把流量解析到你的 Mac（pod 网段回不来，表现为诡异超时）。
     cd "$ROOT"
+    # CONSUL_ENABLED=false 是硬要求：本机实例若注册进集群 Consul，
+    # 集群内客户端可能把流量解析到你的 Mac（Pod 网段回不来，表现为诡异超时）。
     CONFIG_FILE="$CFG" \
     CONSUL_ENABLED=false \
-    CONSUL_HTTP_ADDR="$CONSUL_LAN" \
-    CONSUL_HTTP_TOKEN="$(secret config-center consul-config-center-token CONSUL_HTTP_TOKEN)" \
-    CONFIG_CENTER_SERVICE_TOKEN="$(secret config-center config-center-iam service-token)" \
     go run ./services/config/cmd/server
     ;;
 
@@ -123,12 +146,16 @@ case "${1:-config}" in
     # 因此本地跑网关用 file 模式 + direct:// 目标，后端自己按需 kubectl port-forward。
     DIR="${GATEWAY_CONFIG_DIR:-/tmp/ct-gateway-local}"
     mkdir -p "$DIR"
-    kubectl -n postgresql exec pg-main-1 -c postgres -- psql -U postgres -d ecommerce -Atc \
-      "SELECT value FROM config.entry WHERE namespace='gateway' AND environment='dev' AND key='secrets/public.pem'" > "$DIR/public.pem"
-    kubectl -n postgresql exec pg-main-1 -c postgres -- psql -U postgres -d ecommerce -Atc \
-      "SELECT value FROM config.entry WHERE namespace='gateway' AND environment='dev' AND key='policies/policies.csv'" > "$DIR/policies.csv"
-    kubectl -n postgresql exec pg-main-1 -c postgres -- psql -U postgres -d ecommerce -Atc \
-      "SELECT value FROM config.entry WHERE namespace='gateway' AND environment='dev' AND key='policies/model.conf'" > "$DIR/model.conf"
+    # 网关配置存在 node3 的 config.entry 表里（PG 已从集群搬到 node3）。
+    pgq > "$DIR/public.pem" <<'SQL'
+SELECT value FROM config.entry WHERE namespace='gateway' AND environment='dev' AND key='secrets/public.pem';
+SQL
+    pgq > "$DIR/policies.csv" <<'SQL'
+SELECT value FROM config.entry WHERE namespace='gateway' AND environment='dev' AND key='policies/policies.csv';
+SQL
+    pgq > "$DIR/model.conf" <<'SQL'
+SELECT value FROM config.entry WHERE namespace='gateway' AND environment='dev' AND key='policies/model.conf';
+SQL
     [ -f "$DIR/routes.yaml" ] || {
       cp "$ROOT/routes/dev.yaml" "$DIR/routes.yaml"
       echo "已复制 routes 模板到 $DIR/routes.yaml —— 把要打的后端 target 改成 direct://127.0.0.1:<你转发的端口>"

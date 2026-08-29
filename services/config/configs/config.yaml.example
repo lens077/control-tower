@@ -5,10 +5,11 @@ server:
     write_timeout: 5s
     idle_timeout: 60s
   cors:
-    # 部署配置还必须允许对应 Web 的精确 origin，例如 https://config.app.com。
+    # 部署配置还必须允许对应 Web 的精确 origin，例如 https://config.apikv.com。
     # Bearer 请求依赖浏览器预检，因此不要使用模糊的 origin。
     allowed_origins:
       - http://localhost:3005
+      # - https://config.apikv.com
   # 服务端 TLS。默认关闭 —— 集群里 TLS 由共享 Gateway 的 https listener
   # 终止(mode: Terminate),Pod 侧收到明文,与 otel/grafana/loki 等组件一致。
   # 只在「不经 Gateway 直连」或「将来上 mTLS」时才打开。

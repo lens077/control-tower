@@ -2,15 +2,32 @@
 
 网关与配置中心合一的平台仓：单 module、两服务（`services/gateway`、`services/config`）。由 ecommerce 旧网关（go-kratos/gateway fork）与 config-center 合并重写而来。
 
-**两个服务都已切流上线**（2026-08-24 逐 Pod 核对）：
+## 部署现状（2026-08-29 逐资源核对）
 
-| 服务 | 集群位置 | 镜像 |
+⚠️ **当前集群里本仓的两个服务都没有在跑**。集群 2026-08-21 前后重建过，`config-center`
+与 `postgresql` 两个 ns 都已不存在；gateway 的 Deployment/Service 被手工 `delete -f` 掉了。
+
+| 服务 | 集群状态 | 残留 |
 |---|---|---|
-| gateway | `ecommerce/control-tower-gateway`，LB `192.168.3.131:8080` | `control-tower-gateway:sha-143ef5f` |
-| config | `config-center/config-center` | `control-tower-config:sha-a27f90a` |
-| config web | `config-center/config-center-web` | `control-tower-config-web:sha-a27f90a` |
+| gateway | Deployment / Service / Pod **均不存在** | HTTPRoute `ecommerce/control-tower-gateway`（backendRef 指向已不存在的 `ecommerce-gateway-service`，`ResolvedRefs=False`，`https://gateway.apikv.com/` 因此返回 **500**）、VPA `ecommerce/control-tower-gateway-vpa`、Secret `ecommerce/control-tower-config-source-dev` |
+| config | ns `config-center` **不存在** | 无 |
+| config web | ns `config-center` **不存在** | 无 |
 
-⚠️ **`config-center` 这个 ns 与 Deployment 名是没改的遗留标签**，不代表旧 config-center 仓还在跑——里面的镜像就是本仓的 config 服务。看到这个名字不要以为迁移没完成。
+数据面也已经搬离集群，这是配置里最容易踩空的一点：
+
+| 依赖 | 现在在哪 | 地址 |
+|---|---|---|
+| PostgreSQL | node3 的 Patroni（`pg-meta`，单实例），**不再是集群内 CNPG** | `pg.apikv.com:30001`（node1 Pangolin raw 口） |
+| Redis | node3 的 Redis 主从 + stunnel TLS 终止，**不再是集群内 dragonfly** | `redis.apikv.com:30002` |
+| 指标查询端 | node3 的 VictoriaMetrics；集群 `victoriametrics` ns 已空 | 只有带 SSO 的 `node3-metrics.apikv.com`，**机器对机器暂无可用地址** |
+| OTLP 采集 | 集群内 collector 仍在 | `otel-opentelemetry-collector.opentelemetry.svc:4318`（仅集群内可解析） |
+
+PG 与 Redis 的证书由 node3 的 Pigsty 自签 CA 签发，SAN 已补上两个公网域名（2026-08-29），
+可以 `verify-full` / 严格校验。补签步骤见工作区 `pigsty-deploy/cert-san-resign.md`。
+
+历史：2026-08-24 曾以 `ecommerce/control-tower-gateway`（`sha-143ef5f`）与
+`config-center/config-center`（`sha-a27f90a`）切流上线；`config-center` 这个 ns 名是当时
+没改的遗留标签，里面跑的就是本仓的 config 服务，不代表旧 config-center 仓还在跑。
 
 上游 ecommerce 仓的旧 `gateway/` 目录已于 2026-08-24 删除（历史在其 tag `backup/pre-control-tower-20260823`），旧 config-center 仓同样退役。本仓是这两块的唯一真相源。
 
@@ -46,4 +63,4 @@ CI 由裸 semver tag（`X.Y.Z`）触发发布；PR 只跑质量门禁；push mai
 
 迁移期决策与对抗评审档案在工作区 `.migration-scratch/`（不入本仓）：06 决策日志、11 终裁书、12 实施方案 v2。
 
-两个服务均已切流，烘烤期结束、上游旧目录已删。**本节保留的唯一理由**是那批档案记着「哪些东西是被刻意砍掉的、为什么」——与 `docs/design/decisions.md` 配合使用，避免有人把砍掉的东西当成遗漏加回来。等 `decisions.md` 把这些理由全部吸收之后，本节连同档案一并归档。
+迁移本身已完成、上游旧目录已删（当前集群里没有在跑的实例，原因见上方「部署现状」，与迁移无关）。**本节保留的唯一理由**是那批档案记着「哪些东西是被刻意砍掉的、为什么」——与 `docs/design/decisions.md` 配合使用，避免有人把砍掉的东西当成遗漏加回来。等 `decisions.md` 把这些理由全部吸收之后，本节连同档案一并归档。

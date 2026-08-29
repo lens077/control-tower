@@ -6,3 +6,7 @@ prod.yml
 prod.yaml
 pre.yml
 pre.yaml
+
+# 改配置时留下的时间戳备份，与原件一样含真实凭据，绝不能进仓库
+*.bak
+*.bak-*

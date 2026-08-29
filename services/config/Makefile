@@ -1,5 +1,5 @@
 ROOT_DIR := ../..
-CONFIG_FILE ?= $(CURDIR)/configs/config.yaml
+CONFIG_FILE ?= $(CURDIR)/configs/dev.yaml
 SERVICE_NAME ?= config-service
 SERVICE_VERSION ?= v1
 DEPLOYMENT_MODE ?= dev
