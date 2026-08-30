@@ -88,6 +88,7 @@ E2E_USERNAME=<账号> E2E_PASSWORD=<口令> pnpm test
 
 CI 里由 `.github/workflows/e2e.yml` 承接：`workflow_dispatch`（**每次 `kubectl apply` 之后手动跑一次**）
 ＋ 每 6 小时的定期巡检。**没挂在 PR 上**——它测的是已部署的东西，PR 里的代码还没上集群。
+失败发 ntfy（与 Gatus/Alertmanager 同一个私有 topic），正文带失败用例名。
 
 `e2e/` 的每条用例都对应一个真实发生过的故障（见其 README 的对照表）。它抓到过
 `make verify` 与单测都测不到的三类问题：CSP/安全响应头把自家资源拦掉、

@@ -49,6 +49,18 @@ gh run list --workflow=e2e.yml --limit 1 --repo lens077/control-tower
 凭据存仓库 Secrets `E2E_USERNAME` / `E2E_PASSWORD`。失败时报告与 trace 作为
 artifact 上传，保留 7 天。
 
+### 失败通知
+
+失败会发到 ntfy，与 Gatus / Healthchecks / Alertmanager 共用同一个私有 topic 与 bearer token
+（Secrets：`NTFY_URL` / `NTFY_TOPIC` / `NTFY_TOKEN`）。
+
+通知正文**带上具体挂了哪几条用例**——只发「e2e 失败了」没有信息量，收的人还得点进来
+才知道发生了什么。实现上额外出一份 JSON reporter，用 jq 递归抽失败用例名；解析不到时
+显式说明「多半是依赖安装、装浏览器或登录阶段就失败了」，避免「0 条失败用例」被当成误报。
+
+⚠️ 想演练失败路径就带一个打不通的地址触发，例如
+`gh workflow run e2e.yml -f gateway_url=http://127.0.0.1:1`。**这会真实发出一条 ntfy**。
+
 ## 登录态怎么处理
 
 `global-setup.ts` 登录一次，存下的是 **Casdoor 那边的会话 Cookie**，不是控制台的登录态——
