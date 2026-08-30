@@ -53,19 +53,22 @@ spec:
                   name: config-center-iam
                   key: service-token
             # Consul is discovery only, never this service's configuration source.
+            #
+            # 2026-08-29 关掉,理由同 pre：本服务注册进 Consul 没有消费方,
+            # 网关走 K8s Service DNS 找它,routes 里的 discovery:/// 只指业务后端。
+            # 同时删掉了 CONSUL_HTTP_TOKEN —— 它引用的 Secret consul-config-center-token
+            # 随旧 config-center ns 一起没了,**留着会让 Pod 起不来**:
+            # 环境变量解析先于容器启动,secretKeyRef 找不到就是 CreateContainerConfigError,
+            # 与 CONSUL_ENABLED 是不是 false 无关。
+            # 重新开启的步骤见 deploy/pre/config/deployment.yaml 同一段注释。
             - name: CONSUL_ENABLED
-              value: "true"
+              value: "false"
             - name: CONSUL_ADDR
               value: "consul-server.consul.svc:8500"
             - name: CONSUL_SCHEME
               value: "http"
             - name: CONSUL_INSECURE_SKIP_VERIFY
               value: "false"
-            - name: CONSUL_HTTP_TOKEN
-              valueFrom:
-                secretKeyRef:
-                  name: consul-config-center-token
-                  key: CONSUL_HTTP_TOKEN
           ports:
             # 命名端口:Service 与 HTTPRoute 用名字引用,改端口号时不必三处同步
             - name: http

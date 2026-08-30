@@ -57,11 +57,22 @@ spec:
                   name: config-center-iam
                   key: service-token
             # Consul is discovery only, never this service's configuration source.
+            #
+            # 2026-08-29 关掉:把本服务注册进 Consul 目前没有任何消费方 ——
+            # 网关是用 K8s Service DNS 找过来的(http://config-center.config-center.svc:30010,
+            # 见 Secret ecommerce/control-tower-config-source-dev),
+            # routes/{dev,pre}.yaml 里的 discovery:/// 只指向 11 个业务后端,不含本服务。
+            # 而本服务的 Consul 令牌随旧 config-center ns 一起消失、ACL 默认 deny,
+            # 开着只会每次启动刷一条 403 ERROR。
+            #
+            # 要重新开启:先用 consul/consul-bootstrap-acl-token 建一条
+            # service "config-service" { policy = "write" } 的策略与令牌,存成 Secret,
+            # 在这里补 CONSUL_HTTP_TOKEN,再把下面改回 "true"。
             - name: CONSUL_ENABLED
-              value: "true"
-            # 8501(HTTPS API)在当前 consul Service 上根本没暴露(实测只有
-            # 8500/8502/8301/8302/8300/8600),打 8501 会注册失败并降级为
-            # 「服务发现关闭」—— 网关的 discovery:///config-service 随之解析不到。
+              value: "false"
+            # 下面两个留着:重新开启时不必再查一遍。
+            # 注意 8501(HTTPS API)在当前 consul Service 上根本没暴露
+            # (实测只有 8500/8502/8301/8302/8300/8600),别改回 8501/https。
             - name: CONSUL_ADDR
               value: "consul-server.consul.svc:8500"
             - name: CONSUL_SCHEME

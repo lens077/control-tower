@@ -20,9 +20,12 @@
   策略 `ecommerce-services` = `service_prefix "" { policy = "write" }`）。
 - **找 config 服务不需要 Consul**：网关的配置源写死的是
   `http://config-center.config-center.svc:30010`，走 K8s Service DNS。
-- 所以 config 服务当前注册失败（`anonymous token lacks permission 'service:write'`；
-  ACL 默认策略是 deny，而它的 token 随旧 `config-center` ns 一起没了）**没有任何消费方受影响**，
-  代价只是每次启动刷一条 ERROR。要么补一个 token，要么直接 `CONSUL_ENABLED=false`。
+- 所以 config 服务的 Consul 注册**没有任何消费方**。它的 token 随旧 `config-center` ns 一起没了，
+  ACL 默认策略是 deny，开着只会每次启动刷一条 403 ERROR ——
+  **2026-08-29 已在 `deploy/{dev,pre}/config/deployment.yaml` 里置 `CONSUL_ENABLED=false`**。
+  要重新开启：先用 `consul/consul-bootstrap-acl-token` 建
+  `service "config-service" { policy = "write" }` 的策略与令牌，存成 Secret 后补
+  `CONSUL_HTTP_TOKEN`，再把开关改回 `true`。
 - ⚠️ 匿名读 Consul catalog 会返回**空对象**而不是 403，很容易误判成「一个服务都没注册」。
   查真实状态要带 token：`curl -H "X-Consul-Token: $TOK" .../v1/catalog/services`。
 
