@@ -83,7 +83,13 @@ RUN cat > /etc/caddy/Caddyfile <<'EOF'
         # connect-src 要放开 API 与 Casdoor 两个来源 —— 它们与本站不同源,
         # 具体地址随环境变(见 config.json),所以这里用通配的 https:;
         # 收紧成具体域名需要构建期就知道环境,与运行时注入的设计冲突。
-        Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self' https: http:; worker-src 'self' blob:"
+        #
+        # frame-src 同理,而且**必须显式写出**:静默续期靠往隐藏 iframe 里加载
+        # Casdoor 的 authorize?prompt=none 完成(src/auth/pkce.ts 的 silentRenew)。
+        # 不写 frame-src 就会落到 default-src 'self' 把 iframe 拦掉 → 续期永远失败 →
+        # **每次整页加载(刷新、直接打开深链)都退回「请先登录」**,而网络面板一片正常、
+        # 只有控制台一条 CSP 报告。2026-08-30 由 e2e/ 的浏览器实测发现。
+        Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self' https: http:; frame-src https:; worker-src 'self' blob:"
     }
 }
 EOF

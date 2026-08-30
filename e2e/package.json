@@ -1,0 +1,16 @@
+{
+  "name": "@lens077/control-tower-e2e",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "description": "control-tower 两个微服务的实机浏览器端到端测试",
+  "scripts": {
+    "test": "playwright test",
+    "test:headed": "playwright test --headed",
+    "report": "playwright show-report",
+    "install-browser": "playwright install chromium"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.62.1"
+  }
+}
