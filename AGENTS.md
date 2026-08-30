@@ -2,10 +2,10 @@
 
 网关与配置中心合一的平台仓：单 module、两服务（`services/gateway`、`services/config`）。由 ecommerce 旧网关（go-kratos/gateway fork）与 config-center 合并重写而来。
 
-## 部署现状（2026-08-29 逐资源核对）
+## 部署现状（2026-08-30 逐资源核对 + e2e 实测）
 
-集群 2026-08-21 前后重建过，`postgresql` ns 已不存在，`config-center` ns 于 2026-08-29
-按 `deploy/pre/config/` 重建；gateway 仍是被手工 `delete -f` 掉的状态。
+集群 2026-08-21 前后重建过，`postgresql` ns 已不存在。`config-center` ns 于 2026-08-29
+按 `deploy/pre/config/` 重建，gateway 于 2026-08-30 重新拉起，**两个服务都在跑**。
 
 | 服务 | 集群状态 | 备注 |
 |---|---|---|
@@ -97,4 +97,4 @@ CI 由裸 semver tag（`X.Y.Z`）触发发布；PR 只跑质量门禁；push mai
 
 迁移期决策与对抗评审档案在工作区 `.migration-scratch/`（不入本仓）：06 决策日志、11 终裁书、12 实施方案 v2。
 
-迁移本身已完成、上游旧目录已删（当前集群里 config 已重新拉起、gateway 未部署，见上方「部署现状」，与迁移无关）。**本节保留的唯一理由**是那批档案记着「哪些东西是被刻意砍掉的、为什么」——与 `docs/design/decisions.md` 配合使用，避免有人把砍掉的东西当成遗漏加回来。等 `decisions.md` 把这些理由全部吸收之后，本节连同档案一并归档。
+迁移本身已完成、上游旧目录已删（两个服务当前都在跑，见上方「部署现状」）。**本节保留的唯一理由**是那批档案记着「哪些东西是被刻意砍掉的、为什么」——与 `docs/design/decisions.md` 配合使用，避免有人把砍掉的东西当成遗漏加回来。等 `decisions.md` 把这些理由全部吸收之后，本节连同档案一并归档。
