@@ -9,9 +9,9 @@
 
 | 服务 | 集群状态 | 备注 |
 |---|---|---|
-| config | `config-center/config-center` **运行中**（`0.2.1`） | 镜像走 TCR —— GHCR 上 `control-tower-config` 是 private，匿名拉取 401 |
-| config web | `config-center/config-center-web` **运行中**（`0.2.1`） | `https://config.apikv.com` |
-| gateway | Deployment / Service / Pod **均不存在** | 孤儿 HTTPRoute 与 VPA 已于 2026-08-29 清掉，`https://gateway.apikv.com/` 从 500 变成 404（「没有路由」的诚实状态）。**保留** Secret `ecommerce/control-tower-config-source-dev`——它是网关的配置源、含机器令牌，重新部署时要用 |
+| config | `config-center/config-center` **运行中**（`0.2.2`） | 镜像走 TCR —— GHCR 上 `control-tower-config` 是 private，匿名拉取 401 |
+| config web | `config-center/config-center-web` **运行中**（`0.2.3`） | `https://config.apikv.com` |
+| gateway | `ecommerce/control-tower-gateway` **运行中**（`0.2.1`，2 副本） | 2026-08-30 按 `deploy/dev/gateway/` + `deploy/pre/gateway/httproute.yaml` 重新拉起；`https://gateway.apikv.com` 就绪，路由表按一级 proto 包名匹配 |
 
 ### Consul 的实际作用范围（别照着 `deploy/*/config/deployment.yaml` 里那条注释理解）
 
@@ -80,7 +80,16 @@ PG 与 Redis 的证书由 node3 的 Pigsty 自签 CA 签发，SAN 已补上两�
 ```bash
 make verify        # build + buf lint + go vet + test（提交前必跑）
 make api           # proto 变更后重新生成（buf generate + lint）
+
+# 实机浏览器端到端（打真实环境，覆盖两个微服务）。凭据只从环境变量给。
+cd e2e && pnpm install && pnpm run install-browser
+E2E_USERNAME=<账号> E2E_PASSWORD=<口令> pnpm test
 ```
+
+`e2e/` 的每条用例都对应一个真实发生过的故障（见其 README 的对照表）。它抓到过
+`make verify` 与单测都测不到的三类问题：CSP/安全响应头把自家资源拦掉、
+指标链路名字对不上、网关路由形态被误解。**改 `web/Dockerfile` 的响应头、改鉴权流程、
+改 `promql/catalog.go` 之后必须跑它。**
 
 CI 由裸 semver tag（`X.Y.Z`）触发发布；PR 只跑质量门禁；push main 不构建。
 
