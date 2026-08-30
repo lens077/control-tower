@@ -72,7 +72,10 @@ jobs:
           # 额外出一份 JSON,给下面的失败通知抽「具体哪几条挂了」。
           # 只发「e2e 失败了」这种通知没有信息量,收的人还得点进来才知道发生了什么。
           PLAYWRIGHT_JSON_OUTPUT_NAME: results.json
-        run: pnpm test -- --reporter=list,json
+        # 直呼 playwright,不要写成 `pnpm test -- --reporter=…`:pnpm 会把 `--` 一起
+        # 传下去,playwright 把它当成测试文件过滤参数吃掉,reporter 根本没生效 ——
+        # 表现是用例照跑照红,但 results.json 不存在,通知里只剩兜底文案。
+        run: pnpm exec playwright test --reporter=list,json
 
       # 失败时最有价值的是 trace 与录像，它们只在报告里。always() 是为了
       # 失败路径也上传 —— 只在成功时上传等于没上传。
