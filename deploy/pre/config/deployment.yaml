@@ -24,7 +24,7 @@ spec:
           # (匿名取 token 返 401,kubelet 直接 ImagePullBackOff),而 control-tower-config-web
           # 是 public。两者可见性不一致,想统一走 GHCR 需要先把该包改成 public
           # 或在本 ns 建 GHCR 的 imagePullSecret。
-          image: ccr.ccs.tencentyun.com/sumery/control-tower-config:0.2.1
+          image: ccr.ccs.tencentyun.com/sumery/control-tower-config:0.2.2
           imagePullPolicy: Always
           env:
             # 关闭应用内的 Log 导出器，只保留 Trace 和 Metric。
