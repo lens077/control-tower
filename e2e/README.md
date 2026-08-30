@@ -28,6 +28,27 @@ E2E_USERNAME=<账号> E2E_PASSWORD=<口令> pnpm test
 
 失败后看报告：`pnpm run report`（失败用例带 trace 与录像）。
 
+## 在 CI 里怎么跑
+
+工作流 [`.github/workflows/e2e.yml`](../.github/workflows/e2e.yml)，两个触发口：
+
+| 触发 | 用法 |
+|---|---|
+| `workflow_dispatch` | **主用法：每次 `kubectl apply` 之后手动跑一次**。可传 `config_url` / `gateway_url` 打别的环境 |
+| `schedule`（每 6 小时） | 巡检「没人动代码但环境自己坏了」——证书过期、隧道域名改名、上游依赖挂掉 |
+
+```bash
+gh workflow run e2e.yml --repo lens077/control-tower --ref main
+gh run list --workflow=e2e.yml --limit 1 --repo lens077/control-tower
+```
+
+**没挂在 PR 上**，这是有意的：用例断言的是「已经部署出去的东西是否正常」，而 PR 里的代码
+还没构建成镜像、更没上集群。挂 PR 只会得到两种坏结果——测的是旧版本（绿了但无意义），
+或被外部环境抖动把无辜 PR 拦红。
+
+凭据存仓库 Secrets `E2E_USERNAME` / `E2E_PASSWORD`。失败时报告与 trace 作为
+artifact 上传，保留 7 天。
+
 ## 登录态怎么处理
 
 `global-setup.ts` 登录一次，存下的是 **Casdoor 那边的会话 Cookie**，不是控制台的登录态——
