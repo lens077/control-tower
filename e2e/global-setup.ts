@@ -28,8 +28,15 @@ async function globalSetup(_config: FullConfig) {
   await page.getByRole("button", { name: "登录" }).click();
 
   // Casdoor 的登录页。已有会话时它会直接跳回来，所以这两个框可能根本不出现。
+  // ⚠️ 这里必须用 waitFor 而不是 isVisible():isVisible() **不接受 timeout**,
+  // 它立刻返回当下的可见性 —— 页面还没渲染完就会得到 false,于是静默跳过登录,
+  // 最后表现成后面 waitForURL 超时,看上去像是登录失败。
   const usernameBox = page.getByRole("textbox", { name: /username|用户名/i });
-  if (await usernameBox.isVisible({ timeout: 15_000 }).catch(() => false)) {
+  const needsLogin = await usernameBox
+    .waitFor({ state: "visible", timeout: 15_000 })
+    .then(() => true)
+    .catch(() => false);
+  if (needsLogin) {
     await usernameBox.fill(username);
     await page.getByRole("textbox", { name: /password|密码/i }).fill(password);
     await page.getByRole("button", { name: /sign in|登录/i }).click();

@@ -58,7 +58,7 @@ spec:
       containers:
         - name: gateway
           # 禁 latest；部署引用不可变 sha tag/digest，由 CI 产出后回填。
-          image: ccr.ccs.tencentyun.com/sumery/control-tower-gateway:sha-daf2280
+          image: ccr.ccs.tencentyun.com/sumery/control-tower-gateway:0.2.1
           imagePullPolicy: IfNotPresent
           ports:
             - name: http
