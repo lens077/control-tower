@@ -1,0 +1,63 @@
+- generic [ref=f10e1]:
+  - generic [ref=f10e3]:
+    - banner [ref=f10e4]:
+      - generic [ref=f10e5]:
+        - link "配置中心" [ref=f10e105] [cursor=pointer]:
+          - /url: /
+        - generic [ref=f10e17]: Config Center
+        - link "客户端连接" [ref=f10e106] [cursor=pointer]:
+          - /url: /connections
+        - link "Machine Token" [ref=f10e107] [cursor=pointer]:
+          - /url: /tokens
+        - link "系统信息" [ref=f10e108] [cursor=pointer]:
+          - /url: /system
+        - group "language" [ref=f10e109]:
+          - button "中" [pressed] [ref=f10e110] [cursor=pointer]
+          - button "EN" [ref=f10e111] [cursor=pointer]
+        - button "登出" [ref=f10e112] [cursor=pointer]
+    - main [ref=f10e26]:
+      - generic [ref=f10e113]:
+        - generic [ref=f10e114]:
+          - generic [ref=f10e115]:
+            - paragraph [ref=f10e116]: smoke-181818.yaml
+            - generic [ref=f10e117]: e2e/dev
+            - generic [ref=f10e119]: 新建
+            - button "历史" [disabled]
+            - button "删除" [disabled]
+            - button [ref=f10e122] [cursor=pointer]
+          - generic [ref=f10e128]:
+            - generic [ref=f10e129]:
+              - generic [ref=f10e130]: 格式
+              - generic [ref=f10e131]:
+                - combobox "格式" [ref=f10e132] [cursor=pointer]: YAML
+                - textbox: "1"
+                - group:
+                  - generic: 格式
+            - generic [ref=f10e133]:
+              - generic: 说明
+              - generic [ref=f10e134]:
+                - textbox "说明" [ref=f10e135]
+                - group:
+                  - generic: 说明
+            - generic [ref=f10e136]:
+              - generic: 变更备注
+              - generic [ref=f10e137]:
+                - textbox "变更备注" [ref=f10e138]
+                - group:
+                  - generic: 变更备注
+            - generic [ref=f10e139] [cursor=pointer]:
+              - switch "密钥" [ref=f10e142]
+              - generic [ref=f10e145]: 密钥
+        - generic [ref=f10e146]:
+          - generic [ref=f10e147]:
+            - generic [ref=f10e148]: YAML 格式正确
+            - generic "格式化 (Alt+Shift+F)" [ref=f10e153]:
+              - button [ref=f10e154] [cursor=pointer]
+            - button "全屏" [ref=f10e165] [cursor=pointer]
+          - code [ref=f10e175]:
+            - generic [ref=f10e176]:
+              - textbox "Editor content" [active]
+              - generic [ref=f10e177]: "1"
+  - generic [ref=f10e188]:
+    - alert
+    - alert

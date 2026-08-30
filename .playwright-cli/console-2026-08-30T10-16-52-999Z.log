@@ -1,0 +1,265 @@
+[     211ms] [ERROR] [JavaScript Error: "Content-Security-Policy: The page’s settings blocked a JavaScript eval (script-src) from being executed because it violates the following directive: “script-src 'self'” (Missing 'unsafe-eval')" {file: "https://config.apikv.com/assets/schemas-CoaN9Lol.js" line: 1}] @ https://config.apikv.com/assets/schemas-CoaN9Lol.js:1
+[     214ms] [ERROR] [JavaScript Error: "Content-Security-Policy: The page’s settings blocked the loading of a resource (frame-src) at https://casdoor.apikv.com/login/oauth/authorize?client_id=a36e6718e392099b7915&response_type=code&redirect_uri=https%3A%2F%2Fconfig.apikv.com%2Fcallback&scope=openid+profile+email&state=GrWHzYhMb68j_YMkNEW6QA&code_challenge=qS1nvhoiYOhWzShnrMHMek_X31XQ14p7uVE0EfvVxx0&code_challenge_method=S256&prompt=none because it violates the following directive: “default-src 'self'”" {file: "https://config.apikv.com/" line: 0}] @ https://config.apikv.com/:0
+[  243772ms] Error: TextModel got disposed before DiffEditorWidget model got reset
+
+Ce@https://config.apikv.com/vs/editor.api-CalNCsUg.js:5:1351
+Bl/</<@https://config.apikv.com/vs/editor.api-CalNCsUg.js:390:50593
+_deliver@https://config.apikv.com/vs/editor.api-CalNCsUg.js:7:2719
+_deliverQueue@https://config.apikv.com/vs/editor.api-CalNCsUg.js:7:2810
+fire@https://config.apikv.com/vs/editor.api-CalNCsUg.js:7:3146
+dispose@https://config.apikv.com/vs/editor.api-CalNCsUg.js:244:68898
+A@https://config.apikv.com/assets/dist-DpdHp3x8.js:11:4880
+Ee/</<@https://config.apikv.com/assets/dist-DpdHp3x8.js:11:3416
+Uc@https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:91985
+Ll@https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109769
+Pl@https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109005
+Fl@https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109139
+Pl@https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109069
+Fl@https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109139
+Pl@https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109069
+Fl@https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109139
+Pl@https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109069
+Fl@https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109139
+Pl@https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109069
+Fl@https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109371
+Pl@https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109069
+Fl@https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109139
+Pl@https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109069
+Fl@https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109139
+Pl@https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109069
+Fl@https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109139
+Pl@https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109069
+Fl@https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109349
+Pl@https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109069
+Fl@https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109371
+Pl@https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109069
+Fl@https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109139
+Pl@https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109069
+Fl@https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109371
+Pl@https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109069
+Fl@https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109139
+Pl@https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109069
+Fl@https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109139
+Pl@https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109069
+Fl@https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109371
+Pl@https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109069
+Fl@https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109139
+Pl@https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109069
+Fl@https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109139
+Pl@https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109069
+Fl@https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109139
+Pl@https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109069
+Fl@https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109139
+Pl@https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109069
+Fl@https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109139
+Pl@https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109069
+Fl@https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109139
+Pl@https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109069
+Fl@https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109139
+Pl@https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109069
+Fl@https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109371
+Pl@https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109069
+Fl@https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109139
+Pl@https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109069
+Fl@https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109139
+Pl@https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109069
+Fl@https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109139
+Pl@https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109069
+Fl@https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109371
+Pl@https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109069
+Fl@https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109371
+Pl@https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109069
+Fl@https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109139
+Pl@https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109069
+Fl@https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109349
+Pl@https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109069
+Fl@https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109371
+Pl@https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109069
+Fl@https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109139
+Pl@https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109069
+Fl@https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109371
+Pl@https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109069
+Fl@https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109139
+Pl@https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109069
+Fl@https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109139
+Pl@https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109069
+Fl@https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109139
+Pl@https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109069
+Fl@https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109371
+Pl@https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109069
+Fl@https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109371
+Pl@https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109069
+Fl@https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109139
+Pl@https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109069
+Fl@https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109371
+Pl@https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109069
+Fl@https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109139
+Pl@https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109069
+Fl@https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109371
+Pl@https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109069
+Fl@https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109371
+Pl@https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109069
+Fl@https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109139
+Pl@https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109069
+Fl@https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109371
+Pl@https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109069
+Fl@https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109139
+Pl@https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109069
+Fl@https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109371
+Pl@https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109069
+Fl@https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109371
+Pl@https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109069
+Fl@https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109139
+Pl@https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109069
+Fl@https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109139
+Pl@https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109069
+Fl@https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109139
+Pl@https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109069
+Fl@https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109139
+Pl@https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109069
+Fl@https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109139
+Pl@https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109069
+Fl@https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109371
+Pl@https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109069
+Fl@https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109189
+Uu@https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:119645
+Hu@https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:119445
+Bu@https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:119227
+Lu@https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:117289
+_u@https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:112457
+gu@https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:111963
+ld@https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:123033
+id@https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:121591
+
+    at wie/this.unexpectedErrorHandler/< (https://config.apikv.com/vs/editor.api-CalNCsUg.js:3:12)
+    at setTimeout handler*wie/this.unexpectedErrorHandler (https://config.apikv.com/vs/editor.api-CalNCsUg.js:1:2332)
+    at onUnexpectedError (https://config.apikv.com/vs/editor.api-CalNCsUg.js:5:87)
+    at De (https://config.apikv.com/vs/editor.api-CalNCsUg.js:5:268)
+    at Bl/</< (https://config.apikv.com/vs/editor.api-CalNCsUg.js:390:50592)
+    at _deliver (https://config.apikv.com/vs/editor.api-CalNCsUg.js:7:2719)
+    at _deliverQueue (https://config.apikv.com/vs/editor.api-CalNCsUg.js:7:2810)
+    at fire (https://config.apikv.com/vs/editor.api-CalNCsUg.js:7:3146)
+    at dispose (https://config.apikv.com/vs/editor.api-CalNCsUg.js:244:68898)
+    at A (https://config.apikv.com/assets/dist-DpdHp3x8.js:11:4880)
+    at Ee/</< (https://config.apikv.com/assets/dist-DpdHp3x8.js:11:3416)
+    at Uc (https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:91985)
+    at Ll (https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109769)
+    at Pl (https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109005)
+    at Fl (https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109139)
+    at Pl (https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109069)
+    at Fl (https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109139)
+    at Pl (https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109069)
+    at Fl (https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109139)
+    at Pl (https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109069)
+    at Fl (https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109139)
+    at Pl (https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109069)
+    at Fl (https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109371)
+    at Pl (https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109069)
+    at Fl (https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109139)
+    at Pl (https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109069)
+    at Fl (https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109139)
+    at Pl (https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109069)
+    at Fl (https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109139)
+    at Pl (https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109069)
+    at Fl (https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109349)
+    at Pl (https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109069)
+    at Fl (https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109371)
+    at Pl (https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109069)
+    at Fl (https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109139)
+    at Pl (https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109069)
+    at Fl (https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109371)
+    at Pl (https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109069)
+    at Fl (https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109139)
+    at Pl (https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109069)
+    at Fl (https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109139)
+    at Pl (https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109069)
+    at Fl (https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109371)
+    at Pl (https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109069)
+    at Fl (https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109139)
+    at Pl (https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109069)
+    at Fl (https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109139)
+    at Pl (https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109069)
+    at Fl (https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109139)
+    at Pl (https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109069)
+    at Fl (https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109139)
+    at Pl (https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109069)
+    at Fl (https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109139)
+    at Pl (https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109069)
+    at Fl (https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109139)
+    at Pl (https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109069)
+    at Fl (https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109139)
+    at Pl (https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109069)
+    at Fl (https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109371)
+    at Pl (https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109069)
+    at Fl (https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109139)
+    at Pl (https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109069)
+    at Fl (https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109139)
+    at Pl (https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109069)
+    at Fl (https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109139)
+    at Pl (https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109069)
+    at Fl (https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109371)
+    at Pl (https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109069)
+    at Fl (https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109371)
+    at Pl (https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109069)
+    at Fl (https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109139)
+    at Pl (https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109069)
+    at Fl (https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109349)
+    at Pl (https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109069)
+    at Fl (https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109371)
+    at Pl (https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109069)
+    at Fl (https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109139)
+    at Pl (https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109069)
+    at Fl (https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109371)
+    at Pl (https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109069)
+    at Fl (https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109139)
+    at Pl (https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109069)
+    at Fl (https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109139)
+    at Pl (https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109069)
+    at Fl (https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109139)
+    at Pl (https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109069)
+    at Fl (https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109371)
+    at Pl (https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109069)
+    at Fl (https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109371)
+    at Pl (https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109069)
+    at Fl (https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109139)
+    at Pl (https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109069)
+    at Fl (https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109371)
+    at Pl (https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109069)
+    at Fl (https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109139)
+    at Pl (https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109069)
+    at Fl (https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109371)
+    at Pl (https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109069)
+    at Fl (https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109371)
+    at Pl (https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109069)
+    at Fl (https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109139)
+    at Pl (https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109069)
+    at Fl (https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109371)
+    at Pl (https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109069)
+    at Fl (https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109139)
+    at Pl (https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109069)
+    at Fl (https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109371)
+    at Pl (https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109069)
+    at Fl (https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109371)
+    at Pl (https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109069)
+    at Fl (https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109139)
+    at Pl (https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109069)
+    at Fl (https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109139)
+    at Pl (https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109069)
+    at Fl (https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109139)
+    at Pl (https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109069)
+    at Fl (https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109139)
+    at Pl (https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109069)
+    at Fl (https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109139)
+    at Pl (https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109069)
+    at Fl (https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109371)
+    at Pl (https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109069)
+    at Fl (https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:109189)
+    at Uu (https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:119645)
+    at Hu (https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:119445)
+    at Bu (https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:119227)
+    at Lu (https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:117289)
+    at _u (https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:112457)
+    at gu (https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:111963)
+[  856106ms] [WARNING] [Auth] refresh_token 续期失败，回退到静默授权: JSHandle@object @ https://config.apikv.com/assets/AuthProvider-B8o8Df3B.js:0
+[  856108ms] [ERROR] [JavaScript Error: "Cross-Origin Request Blocked: The Same Origin Policy disallows reading the remote resource at https://casdoor.apikv.com/api/login/oauth/refresh_token. (Reason: CORS header ‘Access-Control-Allow-Origin’ missing). Status code: 403."] @ :0
+[  857025ms] [WARNING] [JavaScript Warning: "Content-Security-Policy: Ignoring ‘x-frame-options’ because of ‘frame-ancestors’ directive."] @ :0

@@ -1,0 +1,79 @@
+- generic [ref=f10e1]:
+  - generic [ref=f10e3]:
+    - banner [ref=f10e4]:
+      - generic [ref=f10e5]:
+        - link [ref=f10e321] [cursor=pointer]:
+          - /url: /
+          - text: 配置中心
+        - generic [ref=f10e17]: Config Center
+        - link [ref=f10e322] [cursor=pointer]:
+          - /url: /connections
+          - text: 客户端连接
+        - link [ref=f10e323] [cursor=pointer]:
+          - /url: /tokens
+          - text: Machine Token
+        - link [ref=f10e324] [cursor=pointer]:
+          - /url: /system
+          - text: 系统信息
+        - group [ref=f10e325]:
+          - button [pressed] [ref=f10e326] [cursor=pointer]: 中
+          - button [ref=f10e327] [cursor=pointer]: EN
+        - button [ref=f10e328] [cursor=pointer]: 登出
+    - main [ref=f10e26]:
+      - generic [ref=f10e215]:
+        - generic [ref=f10e216]:
+          - button [ref=f10e329] [cursor=pointer]: 返回编辑
+          - paragraph [ref=f10e222]: smoke-181818.yaml
+          - generic [ref=f10e223]: e2e/dev
+          - generic [ref=f10e225]: 当前 v2
+          - button [ref=f10e330] [cursor=pointer]: 刷新
+        - generic [ref=f10e234]:
+          - generic [ref=f10e235]:
+            - generic [ref=f10e236]:
+              - heading [level=6] [ref=f10e331]: 版本历史
+              - generic [ref=f10e238]: 共 2 个版本
+            - separator [ref=f10e239]
+            - list [ref=f10e241]:
+              - listitem [ref=f10e242] [cursor=pointer]:
+                - generic [ref=f10e243]:
+                  - paragraph [ref=f10e244]: v2
+                  - generic [ref=f10e245]: 当前
+                  - generic [ref=f10e247]:
+                    - generic [ref=f10e248]: "+1"
+                    - generic [ref=f10e249]: −1
+                - paragraph [ref=f10e250]: 无备注
+                - generic [ref=f10e332]: admin_01 · 1 分钟前
+              - listitem [ref=f10e252] [cursor=pointer]:
+                - generic [ref=f10e253]:
+                  - paragraph [ref=f10e254]: v1
+                  - generic [ref=f10e255]: 初始
+                - paragraph [ref=f10e257]: 无备注
+                - generic [ref=f10e333]: admin_01 · 2 分钟前
+          - generic [ref=f10e259]:
+            - generic [ref=f10e260]:
+              - group [ref=f10e261]:
+                - button [pressed] [ref=f10e334] [cursor=pointer]: 对比当前
+                - button [ref=f10e335] [cursor=pointer]: 对比上一版
+              - paragraph [ref=f10e264]: 左:v1 → 右:当前 v2
+              - button [ref=f10e337] [cursor=pointer]: 回滚到 v1
+            - separator [ref=f10e271]
+            - generic [ref=f10e275]:
+              - code [ref=f10e277]:
+                - generic [ref=f10e278]:
+                  - generic [ref=f10e282]:
+                    - generic [ref=f10e285]: 
+                    - generic [ref=f10e286]: "1"
+                  - generic [ref=f10e287]: "e2e: v1"
+              - code [ref=f10e297]:
+                - generic [ref=f10e298]:
+                  - textbox [ref=f10e299]
+                  - generic [ref=f10e302]:
+                    - generic [ref=f10e305]: 
+                    - generic [ref=f10e306]: "1"
+                  - generic [ref=f10e307]: "e2e: v2"
+  - dialog [active] [ref=f10e340]:
+    - heading "回滚到 v1?" [level=2] [ref=f10e341]
+    - paragraph [ref=f10e343]: 会把 v1 的内容写成新版本 v3(历史不会被删除),并立即下发给正在运行的服务。
+    - generic [ref=f10e344]:
+      - button "取消" [ref=f10e345] [cursor=pointer]
+      - button "确认回滚" [ref=f10e346] [cursor=pointer]
