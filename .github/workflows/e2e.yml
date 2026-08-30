@@ -1,0 +1,85 @@
+name: e2e
+
+# 实机浏览器端到端：打**真实环境**，覆盖 config 控制台与 gateway 两条链路。
+#
+# 为什么不挂在 PR 上：这套用例断言的是「**已经部署出去的东西**是否正常」，
+# 而 PR 里的代码还没构建成镜像、更没上集群。挂在 PR 上只会得到两种坏结果 ——
+# 要么测的是旧版本（绿了但毫无意义），要么因为外部环境抖动把无辜的 PR 拦红。
+#
+# 因此只有两个触发口：
+#   1. workflow_dispatch —— **每次 kubectl apply 之后手动跑一次**，这是它的主用法；
+#   2. schedule —— 定期巡检，用来发现「没人动代码但环境自己坏了」的那一类问题
+#      （证书过期、隧道域名改名、上游依赖挂掉，都真实发生过）。
+on:
+  workflow_dispatch:
+    inputs:
+      config_url:
+        description: "控制台地址（留空用默认 https://config.apikv.com）"
+        required: false
+        type: string
+      gateway_url:
+        description: "网关地址（留空用默认 https://gateway.apikv.com）"
+        required: false
+        type: string
+  schedule:
+    # 每 6 小时一次（UTC）。失败时 GitHub 会给仓库所有者发通知。
+    - cron: "0 */6 * * *"
+
+# 用例串行共享同一个 Casdoor 会话，两次运行叠在一起会互相踢。
+# 不取消进行中的那次：巡检结果比「最新一次」更重要。
+concurrency:
+  group: e2e
+  cancel-in-progress: false
+
+jobs:
+  e2e:
+    name: e2e (browser)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: e2e
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 12
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: e2e/pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # --with-deps 装的是 chromium 需要的系统库；只装 chromium，不拉 firefox/webkit。
+      - name: Install browser
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Run e2e
+        env:
+          # 测试账号存在仓库 Secrets 里（凭据不进仓库，见 AGENTS.md 硬约束 4）。
+          E2E_USERNAME: ${{ secrets.E2E_USERNAME }}
+          E2E_PASSWORD: ${{ secrets.E2E_PASSWORD }}
+          E2E_CONFIG_URL: ${{ inputs.config_url }}
+          E2E_GATEWAY_URL: ${{ inputs.gateway_url }}
+        run: pnpm test
+
+      # 失败时最有价值的是 trace 与录像，它们只在报告里。always() 是为了
+      # 失败路径也上传 —— 只在成功时上传等于没上传。
+      - name: Upload report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report-${{ github.run_id }}
+          path: |
+            e2e/playwright-report
+            e2e/test-results
+          retention-days: 7
+          if-no-files-found: ignore

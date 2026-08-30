@@ -5,8 +5,20 @@ import { defineConfig, devices } from "@playwright/test";
  * 暴露的东西 —— CSP 响应头、Pangolin 隧道、Casdoor 单点登录、node3 上的 PG/Redis/VM。
  * 因此没有 webServer 段，地址一律由环境变量给。
  */
-export const CONFIG_URL = process.env.E2E_CONFIG_URL ?? "https://config.apikv.com";
-export const GATEWAY_URL = process.env.E2E_GATEWAY_URL ?? "https://gateway.apikv.com";
+/**
+ * 取环境变量，**空串等同于没给**。
+ *
+ * `??` 在这里不够用：GitHub Actions 里 `${{ inputs.x }}` 在 schedule 触发时会展开成
+ * 空串而不是不存在，`process.env.X ?? 默认值` 会得到 `""`，baseURL 就成了空 —— 表现为
+ * 所有用例莫名其妙地打到 about:blank。
+ */
+function envOr(name: string, fallback: string): string {
+  const value = process.env[name]?.trim();
+  return value ? value : fallback;
+}
+
+export const CONFIG_URL = envOr("E2E_CONFIG_URL", "https://config.apikv.com");
+export const GATEWAY_URL = envOr("E2E_GATEWAY_URL", "https://gateway.apikv.com");
 
 /** 登录态存这里。凭据只从环境变量来，绝不写进仓库（见 AGENTS.md 硬约束 4）。 */
 export const STORAGE_STATE = "./.auth/state.json";
