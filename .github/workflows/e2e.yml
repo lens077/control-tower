@@ -69,7 +69,10 @@ jobs:
           E2E_PASSWORD: ${{ secrets.E2E_PASSWORD }}
           E2E_CONFIG_URL: ${{ inputs.config_url }}
           E2E_GATEWAY_URL: ${{ inputs.gateway_url }}
-        run: pnpm test
+          # 额外出一份 JSON,给下面的失败通知抽「具体哪几条挂了」。
+          # 只发「e2e 失败了」这种通知没有信息量,收的人还得点进来才知道发生了什么。
+          PLAYWRIGHT_JSON_OUTPUT_NAME: results.json
+        run: pnpm test -- --reporter=list,json
 
       # 失败时最有价值的是 trace 与录像，它们只在报告里。always() 是为了
       # 失败路径也上传 —— 只在成功时上传等于没上传。
@@ -83,3 +86,40 @@ jobs:
             e2e/test-results
           retention-days: 7
           if-no-files-found: ignore
+
+      # 失败进 ntfy（与 Gatus/Healthchecks/Alertmanager 同一个私有 topic 与 bearer token）。
+      # 放在上传报告之后：通知里给的 run 链接点进去就能直接下 trace。
+      - name: Notify ntfy on failure
+        if: failure()
+        env:
+          NTFY_URL: ${{ secrets.NTFY_URL }}
+          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+          NTFY_TOKEN: ${{ secrets.NTFY_TOKEN }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          EVENT: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          # 抽失败用例名。JSON 是多层嵌套的 suites，用递归匹配「带 ok 且为 false」的节点。
+          failed=$(jq -r '[.. | objects | select(has("ok") and has("title") and .ok == false) | .title] | unique | join("\n· ")' results.json 2>/dev/null || true)
+          if [ -z "$failed" ]; then
+            # 没有 JSON 说明还没跑到用例就挂了（依赖安装、装浏览器、global-setup 登录失败）。
+            # 这种情况必须说清楚，否则收到「0 条失败用例」的通知会让人以为是误报。
+            failed="（没解析到用例名：多半是依赖安装、装浏览器或登录阶段就失败了）"
+          fi
+          payload=$(jq -n \
+            --arg topic "$NTFY_TOPIC" \
+            --arg failed "$failed" \
+            --arg url "$RUN_URL" \
+            --arg event "$EVENT" \
+            '{
+              topic: $topic,
+              title: "🔴 control-tower e2e 失败",
+              message: ("触发：" + $event + "\n失败用例：\n· " + $failed),
+              priority: 4,
+              tags: ["rotating_light"],
+              click: $url
+            }')
+          curl -fsS --max-time 20 -X POST "$NTFY_URL" \
+            -H "Authorization: Bearer $NTFY_TOKEN" \
+            -H "Content-Type: application/json" \
+            --data "$payload"
