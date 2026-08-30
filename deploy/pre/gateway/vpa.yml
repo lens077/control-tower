@@ -1,0 +1,38 @@
+# 网关的 VPA。
+#
+# 2026-08-30 重建：集群里原本有一个 `control-tower-gateway-vpa`，但**它的定义从来没有进过仓库**
+# ——清理网关孤儿资源时把它删掉，才发现无处可查。这份按删除前的实际状态（`updateMode: Off`）
+# 复原，并把当时只存在于集群里的取舍写下来。
+#
+# 为什么是 Off 而不是像 config 那样用 InPlace：
+#   - 网关是流量入口，且 `deployment.yaml` 里带 `PodDisruptionBudget: minAvailable: 1`。
+#     VPA 的 Recreate/Auto 模式驱逐 Pod 时会与 PDB 相互拉扯，2 副本的小集群上尤其容易卡住；
+#   - Off 模式只产出推荐值、不动 Pod，先观察一段时间再决定要不要放开，是更稳的起点。
+# 想改成 InPlace（原地调整不重启，见 config 那份 vpa.yml 的说明）之前，
+# 先确认 VPA controller 的 InPlace feature gate 确实打开了，否则会静默退化成不生效。
+---
+apiVersion: autoscaling.k8s.io/v1
+kind: VerticalPodAutoscaler
+metadata:
+  name: control-tower-gateway-vpa
+  namespace: ecommerce
+spec:
+  targetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    # 必须与 deployment.yaml 的 metadata.name 逐字一致 —— 写错 VPA 会静默不生效，
+    # 不报错也不告警（ecommerce 仓那份 application-vpa.yml 就踩过：写的是裸服务名，
+    # 而实际 Deployment 叫 ecommerce-xxx-deploy）
+    name: control-tower-gateway
+  updatePolicy:
+    updateMode: "Off"
+  resourcePolicy:
+    containerPolicies:
+      - containerName: '*'
+        minAllowed:
+          cpu: "100m"
+          memory: "128Mi"
+        maxAllowed:
+          # 上限对齐 deployment 里的 limits(300m / 512Mi)，VPA 不该把它推到超出集群预算
+          cpu: "300m"
+          memory: "512Mi"

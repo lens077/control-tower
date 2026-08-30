@@ -263,3 +263,27 @@ id@https://config.apikv.com/assets/bootstrap-DjUT58v7.js:9:121591
 [  856106ms] [WARNING] [Auth] refresh_token 续期失败，回退到静默授权: JSHandle@object @ https://config.apikv.com/assets/AuthProvider-B8o8Df3B.js:0
 [  856108ms] [ERROR] [JavaScript Error: "Cross-Origin Request Blocked: The Same Origin Policy disallows reading the remote resource at https://casdoor.apikv.com/api/login/oauth/refresh_token. (Reason: CORS header ‘Access-Control-Allow-Origin’ missing). Status code: 403."] @ :0
 [  857025ms] [WARNING] [JavaScript Warning: "Content-Security-Policy: Ignoring ‘x-frame-options’ because of ‘frame-ancestors’ directive."] @ :0
+[ 1697898ms] [WARNING] [Auth] refresh_token 续期失败，回退到静默授权: JSHandle@object @ https://config.apikv.com/assets/AuthProvider-B8o8Df3B.js:0
+[ 1697899ms] [ERROR] [JavaScript Error: "Cross-Origin Request Blocked: The Same Origin Policy disallows reading the remote resource at https://casdoor.apikv.com/api/login/oauth/refresh_token. (Reason: CORS header ‘Access-Control-Allow-Origin’ missing). Status code: 403."] @ :0
+[ 1699847ms] [WARNING] [JavaScript Warning: "Content-Security-Policy: Ignoring ‘x-frame-options’ because of ‘frame-ancestors’ directive."] @ :0
+[ 2539013ms] [WARNING] [Auth] refresh_token 续期失败，回退到静默授权: JSHandle@object @ https://config.apikv.com/assets/AuthProvider-B8o8Df3B.js:0
+[ 2539015ms] [ERROR] [JavaScript Error: "Cross-Origin Request Blocked: The Same Origin Policy disallows reading the remote resource at https://casdoor.apikv.com/api/login/oauth/refresh_token. (Reason: CORS header ‘Access-Control-Allow-Origin’ missing). Status code: 403."] @ :0
+[ 2539971ms] [WARNING] [JavaScript Warning: "Content-Security-Policy: Ignoring ‘x-frame-options’ because of ‘frame-ancestors’ directive."] @ :0
+[ 3379093ms] [WARNING] [Auth] refresh_token 续期失败，回退到静默授权: JSHandle@object @ https://config.apikv.com/assets/AuthProvider-B8o8Df3B.js:0
+[ 3379094ms] [ERROR] [JavaScript Error: "Cross-Origin Request Blocked: The Same Origin Policy disallows reading the remote resource at https://casdoor.apikv.com/api/login/oauth/refresh_token. (Reason: CORS header ‘Access-Control-Allow-Origin’ missing). Status code: 403."] @ :0
+[ 3379470ms] [WARNING] [JavaScript Warning: "Content-Security-Policy: Ignoring ‘x-frame-options’ because of ‘frame-ancestors’ directive."] @ :0
+[ 4219135ms] [WARNING] [Auth] refresh_token 续期失败，回退到静默授权: JSHandle@object @ https://config.apikv.com/assets/AuthProvider-B8o8Df3B.js:0
+[ 4219137ms] [ERROR] [JavaScript Error: "Cross-Origin Request Blocked: The Same Origin Policy disallows reading the remote resource at https://casdoor.apikv.com/api/login/oauth/refresh_token. (Reason: CORS header ‘Access-Control-Allow-Origin’ missing). Status code: 403."] @ :0
+[ 4219529ms] [WARNING] [JavaScript Warning: "Content-Security-Policy: Ignoring ‘x-frame-options’ because of ‘frame-ancestors’ directive."] @ :0
+[ 5059156ms] [WARNING] [Auth] refresh_token 续期失败，回退到静默授权: JSHandle@object @ https://config.apikv.com/assets/AuthProvider-B8o8Df3B.js:0
+[ 5059158ms] [ERROR] [JavaScript Error: "Cross-Origin Request Blocked: The Same Origin Policy disallows reading the remote resource at https://casdoor.apikv.com/api/login/oauth/refresh_token. (Reason: CORS header ‘Access-Control-Allow-Origin’ missing). Status code: 403."] @ :0
+[ 5059528ms] [WARNING] [JavaScript Warning: "Content-Security-Policy: Ignoring ‘x-frame-options’ because of ‘frame-ancestors’ directive."] @ :0
+[ 5899113ms] [WARNING] [Auth] refresh_token 续期失败，回退到静默授权: JSHandle@object @ https://config.apikv.com/assets/AuthProvider-B8o8Df3B.js:0
+[ 5899116ms] [ERROR] [JavaScript Error: "Cross-Origin Request Blocked: The Same Origin Policy disallows reading the remote resource at https://casdoor.apikv.com/api/login/oauth/refresh_token. (Reason: CORS header ‘Access-Control-Allow-Origin’ missing). Status code: 403."] @ :0
+[ 5899476ms] [WARNING] [JavaScript Warning: "Content-Security-Policy: Ignoring ‘x-frame-options’ because of ‘frame-ancestors’ directive."] @ :0
+[ 6739085ms] [WARNING] [Auth] refresh_token 续期失败，回退到静默授权: JSHandle@object @ https://config.apikv.com/assets/AuthProvider-B8o8Df3B.js:0
+[ 6739088ms] [ERROR] [JavaScript Error: "Cross-Origin Request Blocked: The Same Origin Policy disallows reading the remote resource at https://casdoor.apikv.com/api/login/oauth/refresh_token. (Reason: CORS header ‘Access-Control-Allow-Origin’ missing). Status code: 403."] @ :0
+[ 6739465ms] [WARNING] [JavaScript Warning: "Content-Security-Policy: Ignoring ‘x-frame-options’ because of ‘frame-ancestors’ directive."] @ :0
+[ 7579154ms] [WARNING] [Auth] refresh_token 续期失败，回退到静默授权: JSHandle@object @ https://config.apikv.com/assets/AuthProvider-B8o8Df3B.js:0
+[ 7579156ms] [ERROR] [JavaScript Error: "Cross-Origin Request Blocked: The Same Origin Policy disallows reading the remote resource at https://casdoor.apikv.com/api/login/oauth/refresh_token. (Reason: CORS header ‘Access-Control-Allow-Origin’ missing). Status code: 403."] @ :0
+[ 7580254ms] [WARNING] [JavaScript Warning: "Content-Security-Policy: Ignoring ‘x-frame-options’ because of ‘frame-ancestors’ directive."] @ :0

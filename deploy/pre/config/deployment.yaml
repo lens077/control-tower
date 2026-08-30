@@ -34,8 +34,14 @@ spec:
             # 紧急旁路改为 observe；正常环境必须保持 enforce。
             - name: CONFIG_SCHEMA_MODE
               value: "enforce"
-            # SERVICE_NAME 就是注册进 Consul 的服务名,必须与网关
-            # gateway/configs/config.yaml 里的 discovery:///config-service 完全一致
+            # SERVICE_NAME 是本服务的遥测/注册名(指标标签 service_name 就取自它)。
+            #
+            # ⚠️ 这里原来写着「必须与网关的 discovery:///config-service 完全一致」,
+            # 与实际配置不符,已于 2026-08-30 更正:网关是用 K8s Service DNS
+            # (http://config-center.config-center.svc:30010,见 Secret
+            # ecommerce/control-tower-config-source-dev)找过来的;
+            # routes/{dev,pre}.yaml 里的 discovery:/// 只指向 11 个业务后端,不含本服务。
+            # 改这个值之前先查真实配置,别照注释推断 —— 上一轮就是被这句带偏的。
             - name: SERVICE_NAME
               value: "config-service"
             - name: SERVICE_VERSION
