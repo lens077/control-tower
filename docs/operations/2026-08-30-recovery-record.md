@@ -197,7 +197,8 @@ CONFIG_CENTER_VM_ENDPOINT=http://metrics.apikv.com \
   以后改容器镜像只能用 `kubectl set image`、Strategic Merge Patch 或完整 manifest，不能用
   JSON Merge Patch 局部覆盖 `containers` 数组。
 - **GHCR 直连实测**：三节点分别在 60 秒观察窗内开始下载，最终直拉 27.8 MB 的 config-web
-  镜像耗时 108～117 秒，即 237～257 kB/s，超过 100 kB/s 门槛。节点 drop-in 备份名见回滚表。
+  镜像耗时 108～117 秒，即 237～257 kB/s，超过 100 kB/s 门槛。节点 drop-in 备份名见回滚表；
+  bootstrap 真相源已由 kubernetes 仓提交 `b7e0e520` 持久化。
 - **退役烘烤与实机验收**：`machine_token_legacy_hits` 当前值与 7 天窗口于
   `2026-08-31T16:05:03Z` 首次同时为零，最早删除时间为 `2026-09-07T16:05:03Z`。
   `/connections` 显示 10 个业务客户端各自唯一 target，2 个 gateway 客户端各自完整显示 5 个 target。
