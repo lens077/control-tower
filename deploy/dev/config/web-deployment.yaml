@@ -22,7 +22,7 @@ spec:
         - name: tcr-pull
       containers:
         - name: config-center-web
-          image: ccr.ccs.tencentyun.com/sumery/control-tower-config-web:sha-a27f90a
+          image: ghcr.io/lens077/control-tower-config-web:0.2.5
           imagePullPolicy: Always
           ports:
             - name: http

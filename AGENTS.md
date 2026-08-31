@@ -2,16 +2,29 @@
 
 网关与配置中心合一的平台仓：单 module、两服务（`services/gateway`、`services/config`）。由 ecommerce 旧网关（go-kratos/gateway fork）与 config-center 合并重写而来。
 
-## 部署现状（2026-08-30 逐资源核对 + e2e 实测）
+## 部署现状（2026-08-31 逐资源核对 + e2e 实测）
 
 集群 2026-08-21 前后重建过，`postgresql` ns 已不存在。`config-center` ns 于 2026-08-29
 按 `deploy/pre/config/` 重建，gateway 于 2026-08-30 重新拉起，**两个服务都在跑**。
+2026-08-31 三个服务镜像统一到 `0.2.5`，dev/pre 六份 manifest 使用同一版本 tag：
+config 走 TCR，config-web/gateway 走 public GHCR。config 包改 GHCR 后 kubelet 仍实测匿名 token 401、
+`ImagePullBackOff`，所以立即回 TCR；不要以本机 `docker manifest inspect` 为准（Keychain 会偷偷带凭据）。
+
+⚠️ **公网入口暂时关闭**：集群里的三条 HTTPRoute 已删除（文件仍在仓库），
+`config.apikv.com` / `config-api.apikv.com` / `gateway.apikv.com` 都返回 404；
+服务只在集群内可达。恢复命令见下表。
 
 | 服务 | 集群状态 | 备注 |
 |---|---|---|
-| config | `config-center/config-center` **运行中**（`0.2.2`） | 镜像走 TCR —— GHCR 上 `control-tower-config` 是 private，匿名拉取 401 |
-| config web | `config-center/config-center-web` **运行中**（`0.2.3`） | `https://config.apikv.com` |
-| gateway | `ecommerce/control-tower-gateway` **运行中**（`0.2.1`，2 副本） | 2026-08-30 按 `deploy/dev/gateway/` + `deploy/pre/gateway/httproute.yaml` 重新拉起；`https://gateway.apikv.com` 就绪，路由表按一级 proto 包名匹配 |
+| config | `config-center/config-center` **运行中**（`0.2.5`） | `config-center.config-center.svc:30010`，镜像走 TCR |
+| config web | `config-center/config-center-web` **运行中**（`0.2.5`） | `config-center-web.config-center.svc:80`，镜像走 GHCR |
+| gateway | `ecommerce/control-tower-gateway` **运行中**（`0.2.5`，2 副本） | `ecommerce-gateway-service.ecommerce.svc:8080`，镜像走 GHCR；`/healthz`、`/readyz` 均 200 |
+
+恢复公网入口（文件未删）：
+
+```bash
+kubectl apply -f deploy/pre/config/httproute.yaml -f deploy/pre/gateway/httproute.yaml
+```
 
 ### Consul 的实际作用范围（别照着 `deploy/*/config/deployment.yaml` 里那条注释理解）
 
@@ -20,11 +33,13 @@
   策略 `ecommerce-services` = `service_prefix "" { policy = "write" }`）。
 - **找 config 服务不需要 Consul**：网关的配置源写死的是
   `http://config-center.config-center.svc:30010`，走 K8s Service DNS。
-- 所以 config 服务的 Consul 注册**没有任何消费方**。它的 token 随旧 `config-center` ns 一起没了，
-  ACL 默认策略是 deny，开着只会每次启动刷一条 403 ERROR ——
-  **2026-08-29 已在 `deploy/{dev,pre}/config/deployment.yaml` 里置 `CONSUL_ENABLED=false`**。
-  要重新开启：先用 `consul/consul-bootstrap-acl-token` 建
-  `service "config-service" { policy = "write" }` 的策略与令牌，存成 Secret 后补
+- 所以 config 服务的 Consul 注册**没有任何消费方**，默认显式关闭：
+  `deploy/{dev,pre}/config/deployment.yaml` 均为 `CONSUL_ENABLED=false`。
+- 2026-08-31 已做一次完整烟测：用临时最小权限策略
+  `service "config-service" { policy = "write" }` 注册成功，catalog/health 显示 1 个 passing 实例；
+  随后切回 false，确认当前 Pod 日志为 `Consul disabled or not configured`，并删除临时实例、
+  ACL token/policy 与 K8s Secret。**能力已验证，默认仍保持关。**
+- 要长期重新开启：按烟测的最小策略建持久令牌，存成 Secret 后补
   `CONSUL_HTTP_TOKEN`，再把开关改回 `true`。
 - ⚠️ 匿名读 Consul catalog 会返回**空对象**而不是 403，很容易误判成「一个服务都没注册」。
   查真实状态要带 token：`curl -H "X-Consul-Token: $TOK" .../v1/catalog/services`。
@@ -47,8 +62,8 @@ Prometheus 规范写的查询对不上，表现为**查询成功但一条序列�
 验收用仓库自带的 live 测试：
 `CONFIG_CENTER_VM_ENDPOINT=http://metrics.apikv.com go test ./services/config/internal/pkg/promql -run Live -v`。
 
-PG 与 Redis 的证书由 node3 的 Pigsty 自签 CA 签发，SAN 已补上两个公网域名（2026-08-29），
-可以 `verify-full` / 严格校验。补签步骤见工作区 `pigsty-deploy/cert-san-resign.md`。
+PG 与 Redis 的证书由 node3 的 Pigsty 自签 CA 签发，SAN 已补上两个公网域名（2026-08-29）
+与入口 IP `114.132.233.129`（2026-08-30），域名/IP 两条路径都可 `verify-full`。补签步骤见工作区 `pigsty-deploy/cert-san-resign.md`。
 
 历史：2026-08-24 曾以 `ecommerce/control-tower-gateway`（`sha-143ef5f`）与
 `config-center/config-center`（`sha-a27f90a`）切流上线；`config-center` 这个 ns 名是当时
@@ -87,9 +102,11 @@ cd e2e && pnpm install && pnpm run install-browser
 E2E_USERNAME=<账号> E2E_PASSWORD=<口令> pnpm test
 ```
 
-CI 里由 `.github/workflows/e2e.yml` 承接：`workflow_dispatch`（**每次 `kubectl apply` 之后手动跑一次**）
-＋ 每 6 小时的定期巡检。**没挂在 PR 上**——它测的是已部署的东西，PR 里的代码还没上集群。
-失败发 ntfy（与 Gatus/Alertmanager 同一个私有 topic），正文带失败用例名。
+CI 里由 `.github/workflows/e2e.yml` 承接。2026-08-31 因公网 HTTPRoute 暂停，
+**schedule 同步暂停**——GitHub Runner 没有集群内网络，继续跑只会制造慢性红；恢复 HTTPRoute 后
+取消 workflow 里的 cron 注释。`workflow_dispatch` 保留，供恢复路由后手动验收。
+失败发 ntfy（正文带失败用例名）；B1 恢复通知已实测：前一次 failure、下一次 success 时只发一条
+「✅ 已恢复」，连续 success 不重复发。
 
 `e2e/` 的每条用例都对应一个真实发生过的故障（见其 README 的对照表）。它抓到过
 `make verify` 与单测都测不到的三类问题：CSP/安全响应头把自家资源拦掉、

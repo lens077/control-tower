@@ -147,16 +147,29 @@ CONFIG_CENTER_VM_ENDPOINT=http://metrics.apikv.com \
 
 | 变更 | 回滚 |
 |---|---|
-| node3 Redis 证书 | `/etc/stunnel/certs/redis-tls.pem.bak-20260829-220329` |
-| node3 PG 证书 | `/pg/cert/server.crt.bak-20260829-220415` + `pg_reload_conf()` |
+| node3 Redis 证书 | 初次补域名：`redis-tls.pem.bak-20260829-220329`；再补入口 IP：`redis-tls.pem.bak-20260830-181443` |
+| node3 PG 证书 | 初次补域名：`server.crt.bak-20260829-220415`；再补入口 IP：`server.crt.bak-20260830-181443` + `pg_reload_conf()` |
 | node3 VM 参数 | `/etc/default/vmetrics.bak-20260829-234102` |
-| 网关孤儿资源 | 删前快照在 `/tmp/gw-orphans/`（临时目录，需要就尽快取） |
-| 镜像 | `deploy/pre/config/*.yaml` 改回 `0.2.1` / `0.2.2` |
+| HTTPRoute | 文件仍在 `deploy/pre/{config,gateway}/`，集群对象临时删除；不要再依赖 `/tmp/gw-orphans/`（已随重启消失） |
+| 镜像 | 当前三个服务统一 `0.2.5`；config 走 TCR，web/gateway 走 public GHCR |
+
+## 2026-08-31 后续收口
+
+- **写路径 e2e 已补**：新建 → 保存 v1 → 列表可见 → 保存 v2 → 回滚为 v3 → 删除，
+  专用 `e2e` namespace，跑完零残留；CI 由 11 条变 12 条。
+- **恢复通知已补并实测**：上一次 failure、这一次 success 时 ntfy 只发一条「✅ 已恢复」；
+  连续 success 不重复发。实现直接查 GitHub Actions API，不用不可变 key 的 cache。
+- **Consul 注册能力已烟测**：临时最小权限 `service "config-service" {write}` 注册成功，
+  catalog/health 有 1 个 passing 实例；随后关闭并删除实例、ACL token/policy 与 K8s Secret。
+  dev/pre 默认仍显式 `CONSUL_ENABLED=false`。
+- **HTTPRoute 暂停**：三条集群对象已删除、文件保留，三个公网域名均 404；服务内部健康。
+  因 GitHub Runner 无集群网络，e2e 的 6 小时 schedule 同步暂停，避免慢性红；workflow_dispatch 保留。
+- **镜像统一**：dev/pre 六份 manifest 使用同一 `0.2.5` tag。config 包的 GHCR 仍被 kubelet
+  实测匿名 token 401，故 config 留 TCR；web/gateway 走 public GHCR。
 
 ## 遗留
 
-- **e2e 只发失败、不发恢复**：Gatus 那边是 failure + resolved 都发；e2e 要发恢复需要跨 run 记状态。
-- **`config-service` 的 Consul 注册**：需要时按 `AGENTS.md` 的三步建 ACL 策略与令牌再开回来。
 - **dev 与 pre 共用同一个库**：node3 是单实例，`pre.yaml` 里已标 TODO，拆开前别把 pre 当隔离环境用。
 - **API_\* 三组曲线**：`rpc.server.duration` 只在 RPC **完成时**记样本，而 config 服务当前流量
   几乎全是长连的 `WatchKeys`，所以那三张图要等有短请求才有数据（不是故障）。
+- **`metric-query.apikv.com` 已不再有匹配资源**：访问返回与不存在子域一致的 404；实际查询入口只保留 `http://metrics.apikv.com`。

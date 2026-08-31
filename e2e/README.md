@@ -30,12 +30,16 @@ E2E_USERNAME=<账号> E2E_PASSWORD=<口令> pnpm test
 
 ## 在 CI 里怎么跑
 
-工作流 [`.github/workflows/e2e.yml`](../.github/workflows/e2e.yml)，两个触发口：
+工作流 [`.github/workflows/e2e.yml`](../.github/workflows/e2e.yml)。正常有两个触发口：
 
 | 触发 | 用法 |
 |---|---|
 | `workflow_dispatch` | **主用法：每次 `kubectl apply` 之后手动跑一次**。可传 `config_url` / `gateway_url` 打别的环境 |
 | `schedule`（每 6 小时） | 巡检「没人动代码但环境自己坏了」——证书过期、隧道域名改名、上游依赖挂掉 |
+
+⚠️ **2026-08-31 schedule 暂停**：集群里的三条公网 HTTPRoute 临时删除，GitHub Runner
+没有集群内网络，继续定时跑只会每 6 小时稳定失败并发 ntfy，正好违反「慢性红等于没有告警」。
+恢复路由后，把 workflow 顶部注释掉的 `schedule` 两行取消注释，再手动跑一遍确认。
 
 ```bash
 gh workflow run e2e.yml --repo lens077/control-tower --ref main
@@ -57,6 +61,10 @@ artifact 上传，保留 7 天。
 通知正文**带上具体挂了哪几条用例**——只发「e2e 失败了」没有信息量，收的人还得点进来
 才知道发生了什么。实现上额外出一份 JSON reporter，用 jq 递归抽失败用例名；解析不到时
 显式说明「多半是依赖安装、装浏览器或登录阶段就失败了」，避免「0 条失败用例」被当成误报。
+
+恢复通知 B1 也已落地：成功运行时用 GitHub Actions API 查询上一次已完成运行；只有
+`failure → success` 才发一条「✅ 已恢复」，连续 success 不重复发（2026-08-31 两条路径均实测）。
+不使用 actions/cache 记状态：cache key 不可变，跨 run 更新同一状态需要滚动 key，反而更脆。
 
 ⚠️ 想演练失败路径就带一个打不通的地址触发，例如
 `gh workflow run e2e.yml -f gateway_url=http://127.0.0.1:1`。**这会真实发出一条 ntfy**。

@@ -6,10 +6,9 @@ name: e2e
 # 而 PR 里的代码还没构建成镜像、更没上集群。挂在 PR 上只会得到两种坏结果 ——
 # 要么测的是旧版本（绿了但毫无意义），要么因为外部环境抖动把无辜的 PR 拦红。
 #
-# 因此只有两个触发口：
-#   1. workflow_dispatch —— **每次 kubectl apply 之后手动跑一次**，这是它的主用法；
-#   2. schedule —— 定期巡检，用来发现「没人动代码但环境自己坏了」的那一类问题
-#      （证书过期、隧道域名改名、上游依赖挂掉，都真实发生过）。
+# 正常有两个触发口：workflow_dispatch（发布后）＋ schedule（环境巡检）。
+# 2026-08-31 三条公网 HTTPRoute 暂时删除，GitHub Runner 没有集群内网络，
+# schedule 已在下面暂停；恢复路由时把两行 cron 取消注释。
 on:
   workflow_dispatch:
     inputs:
@@ -21,9 +20,11 @@ on:
         description: "网关地址（留空用默认 https://gateway.apikv.com）"
         required: false
         type: string
-  schedule:
-    # 每 6 小时一次（UTC）。失败时 GitHub 会给仓库所有者发通知。
-    - cron: "0 */6 * * *"
+  # schedule 暂停（2026-08-31）：config.apikv.com / config-api.apikv.com /
+  # gateway.apikv.com 都因 HTTPRoute 暂时删除而返回 404。继续定时跑只会每 6 小时
+  # 稳定失败并发 ntfy，违反「慢性红等于没有告警」。恢复路由后取消注释：
+  # schedule:
+  #   - cron: "0 */6 * * *"
 
 # 用例串行共享同一个 Casdoor 会话，两次运行叠在一起会互相踢。
 # 不取消进行中的那次：巡检结果比「最新一次」更重要。
