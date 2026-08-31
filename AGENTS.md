@@ -107,7 +107,14 @@ make api           # proto 变更后重新生成（buf generate + lint）
 # 实机浏览器端到端（打真实环境，覆盖两个微服务）。凭据只从环境变量给。
 cd e2e && pnpm install && pnpm run install-browser
 E2E_USERNAME=<账号> E2E_PASSWORD=<口令> pnpm test
+
+# 管理面变更验收：真实 WatchKeys 长流 + /connections + token 吊销。
+E2E_USERNAME=<账号> E2E_PASSWORD=<口令> E2E_ADMIN_MUTATIONS=true \
+  pnpm exec playwright test tests/config-watch-admin.spec.ts
 ```
+
+管理面变更测试会签发并吊销一枚临时 Machine Token。吊销行按审计设计保留，因此默认关闭，
+不随 6 小时巡检运行；发布或鉴权变更后通过 `workflow_dispatch` 的 `admin_mutations=true` 显式打开。
 
 CI 里由 `.github/workflows/e2e.yml` 承接。当前工作树已恢复 6 小时 schedule，合入 `main` 后生效；
 `workflow_dispatch` 继续保留，当前公网环境已用它完成手动验收。
