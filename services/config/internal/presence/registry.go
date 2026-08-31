@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/lens077/control-tower/services/config/internal/pkg/config"
 	"github.com/redis/go-redis/v9"
 	"go.uber.org/fx"
@@ -29,6 +30,8 @@ type Target struct {
 
 type Connection struct {
 	Identity
+	// source 区分向共享 Backend 写入同一客户端的 Config Center 进程，不进入 API 或 JSON。
+	source               string
 	Targets              []Target
 	Watching             bool
 	ConnectedAt          time.Time
@@ -50,6 +53,7 @@ const (
 type Registry struct {
 	mu             sync.Mutex
 	persistMu      sync.Mutex
+	source         string
 	clients        map[string]Connection
 	watchStreams   map[string]int
 	watchTargets   map[string]map[Target]int
@@ -64,6 +68,7 @@ var Module = fx.Module("presence", fx.Provide(NewConfiguredRegistry))
 
 func NewRegistry() *Registry {
 	return &Registry{
+		source:       uuid.NewString(),
 		clients:      make(map[string]Connection),
 		watchStreams: make(map[string]int),
 		watchTargets: make(map[string]map[Target]int),
@@ -97,7 +102,12 @@ func (r *Registry) RecordRead(identity Identity, target Target) {
 	r.evictIfNeeded(key)
 	item := r.clients[key]
 	item.Identity = identity
-	item.Targets = mergeTargets(r.watchTargets[key], target)
+	item.source = r.source
+	if item.Watching {
+		item.Targets = activeTargets(r.watchTargets[key])
+	} else {
+		item.Targets = []Target{target}
+	}
 	item.LastReadAt = time.Now()
 	r.clients[key] = item
 	r.mu.Unlock()
@@ -114,6 +124,7 @@ func (r *Registry) StartWatch(identity Identity, targets []Target) {
 	now := time.Now()
 	item := r.clients[key]
 	item.Identity = identity
+	item.source = r.source
 	if r.watchStreams[key] == 0 {
 		item.ConnectedAt = now
 	}
@@ -197,7 +208,7 @@ func (r *Registry) List() []Connection {
 		connections, err := r.backend.List(ctx)
 		if err == nil {
 			r.setBackendHealthy()
-			return connections
+			return mergeConnections(connections)
 		}
 		r.setBackendFailed(err)
 	}
@@ -237,6 +248,90 @@ func sortConnections(items []Connection) {
 	})
 }
 
+func mergeConnections(items []Connection) []Connection {
+	groups := make(map[string][]Connection)
+	for _, item := range items {
+		if valid(item.Identity) {
+			groups[item.Identity.key()] = append(groups[item.Identity.key()], item)
+		}
+	}
+	merged := make([]Connection, 0, len(groups))
+	for _, group := range groups {
+		merged = append(merged, mergeConnectionGroup(group))
+	}
+	sortConnections(merged)
+	if len(merged) > maxClients {
+		merged = merged[:maxClients]
+	}
+	return merged
+}
+
+func mergeConnectionGroup(group []Connection) Connection {
+	var (
+		result          Connection
+		latestIdentity  time.Time
+		activeConnected time.Time
+		allConnected    time.Time
+		active          = make(map[Target]int)
+		all             = make(map[Target]int)
+	)
+	for _, item := range group {
+		activity := latestTime(item.LastReadAt, item.LastWatchAt, item.DisconnectedAt, item.ConnectedAt)
+		if result.Name == "" || activity.After(latestIdentity) {
+			result.Identity = item.Identity
+			latestIdentity = activity
+		}
+		allConnected = earliestTime(allConnected, item.ConnectedAt)
+		if item.LastReadAt.After(result.LastReadAt) {
+			result.LastReadAt = item.LastReadAt
+		}
+		if item.LastWatchAt.After(result.LastWatchAt) {
+			result.LastWatchAt = item.LastWatchAt
+		}
+		if item.DisconnectedAt.After(result.DisconnectedAt) {
+			result.DisconnectedAt = item.DisconnectedAt
+			result.LastDisconnectReason = item.LastDisconnectReason
+		}
+		for _, target := range item.Targets {
+			all[target]++
+			if item.Watching {
+				active[target]++
+			}
+		}
+		if item.Watching {
+			result.Watching = true
+			activeConnected = earliestTime(activeConnected, item.ConnectedAt)
+		}
+	}
+	if result.Watching {
+		result.Targets = activeTargets(active)
+		result.ConnectedAt = activeConnected
+		result.DisconnectedAt = time.Time{}
+		result.LastDisconnectReason = ""
+	} else {
+		result.Targets = activeTargets(all)
+		result.ConnectedAt = allConnected
+	}
+	return result
+}
+
+func latestTime(values ...time.Time) time.Time {
+	var latest time.Time
+	for _, value := range values {
+		if value.After(latest) {
+			latest = value
+		}
+	}
+	return latest
+}
+
+func earliestTime(current, candidate time.Time) time.Time {
+	if candidate.IsZero() || (!current.IsZero() && !candidate.Before(current)) {
+		return current
+	}
+	return candidate
+}
+
 func activeTargets(counts map[Target]int) []Target {
 	targets := make([]Target, 0, len(counts))
 	for target, count := range counts {
@@ -254,15 +349,6 @@ func activeTargets(counts map[Target]int) []Target {
 		return targets[i].Key < targets[j].Key
 	})
 	return targets
-}
-
-func mergeTargets(watches map[Target]int, read Target) []Target {
-	counts := make(map[Target]int, len(watches)+1)
-	for target, count := range watches {
-		counts[target] = count
-	}
-	counts[read]++
-	return activeTargets(counts)
 }
 
 func (r *Registry) persistCurrent(key string) {

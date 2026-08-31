@@ -32,7 +32,7 @@ func (b *redisBackend) Store(ctx context.Context, connection Connection, ttl tim
 	if err != nil {
 		return fmt.Errorf("encode client presence: %w", err)
 	}
-	return b.client.Set(ctx, b.key(connection.Identity), contents, ttl).Err()
+	return b.client.Set(ctx, b.key(connection), contents, ttl).Err()
 }
 
 func (b *redisBackend) List(ctx context.Context) ([]Connection, error) {
@@ -72,16 +72,13 @@ func (b *redisBackend) List(ctx context.Context) ([]Connection, error) {
 		connection.Targets = append([]Target(nil), connection.Targets...)
 		connections = append(connections, connection)
 	}
-	sortConnections(connections)
-	if len(connections) > maxClients {
-		connections = connections[:maxClients]
-	}
 	return connections, nil
 }
 
-func (b *redisBackend) key(identity Identity) string {
-	// Base64 makes identity values safe Redis key components without leaking a
-	// delimiter convention into service and instance names.
-	encoded := base64.RawURLEncoding.EncodeToString([]byte(identity.key()))
-	return b.prefix + encoded
+func (b *redisBackend) key(connection Connection) string {
+	// 写入进程和客户端身份分别编码。不同 Config Center 副本不再覆盖同一个 Redis key；
+	// List 在读取时把仍处于 TTL 窗口内的贡献合并成一个逻辑客户端。
+	source := base64.RawURLEncoding.EncodeToString([]byte(connection.source))
+	identity := base64.RawURLEncoding.EncodeToString([]byte(connection.Identity.key()))
+	return b.prefix + source + ":" + identity
 }

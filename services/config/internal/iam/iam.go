@@ -26,7 +26,10 @@ import (
 	"go.uber.org/zap"
 )
 
-var Module = fx.Module("iam", fx.Provide(NewAuthorizer))
+var Module = fx.Module("iam",
+	fx.Provide(NewAuthorizer),
+	fx.Invoke(registerLegacyHitMetric),
+)
 
 const metricScopeName = "github.com/lens077/control-tower/services/config/internal/iam"
 
@@ -143,10 +146,6 @@ func NewAuthorizer(logger *zap.Logger, tokens TokenStore) (*Authorizer, error) {
 		tokens:       tokens,
 		log:          logger.Named("iam"),
 	}
-	if err := registerLegacyHitMetric(authorizer); err != nil {
-		return nil, err
-	}
-
 	certificateFile := os.Getenv(constants.EnvCasdoorCertificateFile)
 	if certificateFile == "" {
 		authorizer.log.Warn("Casdoor certificate is not configured; browser IAM is disabled")

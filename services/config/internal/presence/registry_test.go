@@ -21,7 +21,7 @@ func (b *memoryBackend) Store(_ context.Context, connection Connection, ttl time
 		b.connections = make(map[string]Connection)
 	}
 	b.ttl = ttl
-	b.connections[connection.Identity.key()] = connection
+	b.connections[connection.source+"\x00"+connection.Identity.key()] = connection
 	return nil
 }
 
@@ -91,6 +91,56 @@ func TestRegistryMergesConcurrentWatchTargets(t *testing.T) {
 	connection = r.List()[0]
 	if connection.Watching || connection.DisconnectedAt.IsZero() || connection.LastDisconnectReason != "heartbeat_failed" {
 		t.Fatalf("connection after final stream stops = %#v, want disconnected client", connection)
+	}
+}
+
+func TestRegistryMergesSameClientAcrossSharedBackendWriters(t *testing.T) {
+	backend := &memoryBackend{}
+	newSharedRegistry := func() *Registry {
+		registry := NewRegistry()
+		registry.backend = backend
+		registry.backendEnabled = true
+		registry.backendTTL = 90 * time.Second
+		return registry
+	}
+	first := newSharedRegistry()
+	second := newSharedRegistry()
+	reader := newSharedRegistry()
+	identity := Identity{Name: "control-tower-gateway", Instance: "gateway-1", Version: "0.2.8"}
+	routes := Target{Namespace: "gateway", Environment: "pre", Key: "routes.yaml"}
+	policies := Target{Namespace: "gateway", Environment: "pre", Key: "policies/policies.csv"}
+
+	first.StartWatch(identity, []Target{routes})
+	second.StartWatch(identity, []Target{policies})
+	connection := reader.List()[0]
+	if !connection.Watching || len(connection.Targets) != 2 {
+		t.Fatalf("shared connection = %#v, want both writers' active targets", connection)
+	}
+
+	first.StopWatch(identity, []Target{routes}, "client_closed")
+	connection = reader.List()[0]
+	if !connection.Watching || len(connection.Targets) != 1 || connection.Targets[0] != policies {
+		t.Fatalf("shared connection after one writer stops = %#v, want remaining active writer", connection)
+	}
+	if !connection.DisconnectedAt.IsZero() || connection.LastDisconnectReason != "" {
+		t.Fatalf("one writer marked the shared client disconnected: %#v", connection)
+	}
+}
+
+func TestRegistryKeepsTargetsWatchOnlyWhileWatching(t *testing.T) {
+	r := NewRegistry()
+	identity := Identity{Name: "cart-service", Instance: "cart-1", Version: "dev"}
+	watch := Target{Namespace: "cart", Environment: "dev", Key: "bootstrap.yaml"}
+	read := Target{Namespace: "cart", Environment: "dev", Key: "one-off.yaml"}
+
+	r.StartWatch(identity, []Target{watch})
+	r.RecordRead(identity, read)
+	connection := r.List()[0]
+	if len(connection.Targets) != 1 || connection.Targets[0] != watch {
+		t.Fatalf("targets = %#v, want only active Watch target %#v", connection.Targets, watch)
+	}
+	if connection.LastReadAt.IsZero() {
+		t.Fatal("RecordRead must still update LastReadAt while a Watch is active")
 	}
 }
 

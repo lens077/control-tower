@@ -42,6 +42,16 @@ func TestToPBRevision_MasksSecret(t *testing.T) {
 	assert.Equal(t, now.Unix(), pb.CreatedAt.Seconds)
 }
 
+func TestWatchTargetsDeduplicatesKeys(t *testing.T) {
+	targets := watchTargets("gateway", "pre", []string{"routes.yaml", "routes.yaml", "policies/model.conf"})
+	if len(targets) != 2 {
+		t.Fatalf("targets = %#v, want two unique keys", targets)
+	}
+	if targets[0].Key != "routes.yaml" || targets[1].Key != "policies/model.conf" {
+		t.Fatalf("targets = %#v, want first-occurrence order", targets)
+	}
+}
+
 func TestListClientConnections_MapsPresenceWithoutSecrets(t *testing.T) {
 	registry := presence.NewRegistry()
 	identity := presence.Identity{Name: "cart-service", Instance: "cart-1", Version: "dev"}

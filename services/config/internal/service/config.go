@@ -290,7 +290,12 @@ func watchTargets(namespace, environment string, keys []string) []presence.Targe
 		return []presence.Target{{Namespace: namespace, Environment: environment, Key: "*"}}
 	}
 	targets := make([]presence.Target, 0, len(keys))
+	seen := make(map[string]struct{}, len(keys))
 	for _, key := range keys {
+		if _, exists := seen[key]; exists {
+			continue
+		}
+		seen[key] = struct{}{}
 		targets = append(targets, presence.Target{Namespace: namespace, Environment: environment, Key: key})
 	}
 	return targets
