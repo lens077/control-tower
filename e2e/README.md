@@ -28,7 +28,6 @@ E2E_USERNAME=<账号> E2E_PASSWORD=<口令> pnpm test
 | `E2E_GATEWAY_URL` | `https://gateway.apikv.com` |
 | `E2E_METRICS_URL` | `http://metrics.apikv.com` |
 | `E2E_ADMIN_MUTATIONS` | `false`；设为 `true` 时运行 Machine Token 签发/吊销测试 |
-| `E2E_CUSTOMER_ROLE_CUTOVER` | `false`；设为 `true` 时幂等地把 `gateway/pre` Casbin 角色从 `consumer` 严格切到 `customer` |
 
 管理面变更测试需要显式打开：
 
@@ -45,7 +44,7 @@ E2E_USERNAME=<账号> E2E_PASSWORD=<口令> E2E_ADMIN_MUTATIONS=true \
 
 | 触发 | 用法 |
 |---|---|
-| `workflow_dispatch` | **主用法：每次 `kubectl apply` 之后手动跑一次**。可传 `config_url` / `config_api_url` / `gateway_url` / `metrics_url` 打别的环境；`admin_mutations=true` 运行管理面变更测试，`customer_role_cutover=true` 执行严格角色切换 |
+| `workflow_dispatch` | **主用法：每次 `kubectl apply` 之后手动跑一次**。可传 `config_url` / `config_api_url` / `gateway_url` / `metrics_url` 打别的环境；传 `admin_mutations=true` 时再运行管理面变更测试 |
 | `schedule`（每 6 小时） | 巡检「没人动代码但环境自己坏了」——证书过期、隧道域名改名、上游依赖挂掉，并持续检查 legacy token 的 7 天零命中窗口；不签发 Machine Token |
 
 2026-08-31 三条公网 HTTPRoute 已恢复，workflow 中的 6 小时 `schedule` 也已恢复，合入
@@ -57,9 +56,6 @@ gh workflow run e2e.yml --repo lens077/control-tower --ref main
 
 # 涉及 WatchKeys / connections / Machine Token 时，显式打开管理面变更测试。
 gh workflow run e2e.yml --repo lens077/control-tower --ref main -f admin_mutations=true
-
-# 严格把线上 Casbin 角色切到 customer；幂等重跑只验证，不重复写版本。
-gh workflow run e2e.yml --repo lens077/control-tower --ref main -f customer_role_cutover=true
 
 gh run list --workflow=e2e.yml --limit 1 --repo lens077/control-tower
 ```

@@ -32,11 +32,6 @@ on:
         required: false
         default: false
         type: boolean
-      customer_role_cutover:
-        description: "将 gateway/pre Casbin 角色严格从 consumer 切换到 customer（幂等）"
-        required: false
-        default: false
-        type: boolean
   schedule:
     - cron: "0 */6 * * *"
 
@@ -93,8 +88,6 @@ jobs:
           E2E_METRICS_URL: ${{ inputs.metrics_url }}
           # token 吊销保留审计行，避免每 6 小时累计记录；只在发布后手动验收时显式打开。
           E2E_ADMIN_MUTATIONS: ${{ inputs.admin_mutations }}
-          # 角色切换只在人工 dispatch 显式打开；测试幂等，且只改 policies.csv 的角色字段。
-          E2E_CUSTOMER_ROLE_CUTOVER: ${{ inputs.customer_role_cutover }}
           # 额外出一份 JSON,给下面的失败通知抽「具体哪几条挂了」。
           # 只发「e2e 失败了」这种通知没有信息量,收的人还得点进来才知道发生了什么。
           PLAYWRIGHT_JSON_OUTPUT_NAME: results.json
