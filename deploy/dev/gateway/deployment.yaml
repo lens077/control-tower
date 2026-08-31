@@ -47,8 +47,6 @@ spec:
       serviceAccountName: control-tower-gateway
       automountServiceAccountToken: false
       enableServiceLinks: false
-      imagePullSecrets:
-        - name: tcr-pull
       securityContext:
         runAsNonRoot: true
         runAsUser: 1000
@@ -57,7 +55,7 @@ spec:
         fsGroupChangePolicy: OnRootMismatch
       containers:
         - name: gateway
-          # 禁 latest；部署引用不可变 sha tag/digest，由 CI 产出后回填。
+          # 禁 latest；使用发布 semver tag，发布后不得覆写同名 tag。
           image: ghcr.io/lens077/control-tower-gateway:0.2.5
           imagePullPolicy: IfNotPresent
           ports:

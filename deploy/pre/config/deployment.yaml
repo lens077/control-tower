@@ -16,11 +16,9 @@ spec:
       labels:
         app: config-center
     spec:
-      imagePullSecrets:
-        - name: tcr-pull
       containers:
         - name: config-center
-          image: ccr.ccs.tencentyun.com/sumery/control-tower-config:0.2.5
+          image: ghcr.io/lens077/control-tower-config:0.2.5
           imagePullPolicy: Always
           env:
             # 关闭应用内的 Log 导出器，只保留 Trace 和 Metric。
@@ -30,20 +28,17 @@ spec:
             # 紧急旁路改为 observe；正常环境必须保持 enforce。
             - name: CONFIG_SCHEMA_MODE
               value: "enforce"
-            # SERVICE_NAME 是本服务的遥测/注册名(指标标签 service_name 就取自它)。
-            #
-            # ⚠️ 这里原来写着「必须与网关的 discovery:///config-service 完全一致」,
-            # 与实际配置不符,已于 2026-08-30 更正:网关是用 K8s Service DNS
+            # SERVICE_NAME 只标识本服务的遥测与可选 Consul 注册名。
+            # 网关读取配置固定走 K8s Service DNS
             # (http://config-center.config-center.svc:30010,见 Secret
-            # ecommerce/control-tower-config-source-dev)找过来的;
-            # routes/{dev,pre}.yaml 里的 discovery:/// 只指向 11 个业务后端,不含本服务。
-            # 改这个值之前先查真实配置,别照注释推断 —— 上一轮就是被这句带偏的。
+            # ecommerce/control-tower-config-source-{dev,pre});
+            # routes/{dev,pre}.yaml 的 discovery:/// 只指向 11 个业务后端。
             - name: SERVICE_NAME
               value: "config-service"
             - name: SERVICE_VERSION
               value: "v1"
             - name: DEPLOYMENT_MODE
-              value: "dev"
+              value: "pre"
             # The service itself always boots from this mounted local file.
             - name: CONFIG_FILE
               value: "/etc/config-center/config.yaml"
@@ -62,7 +57,7 @@ spec:
             #
             # 2026-08-29 关掉:把本服务注册进 Consul 目前没有任何消费方 ——
             # 网关是用 K8s Service DNS 找过来的(http://config-center.config-center.svc:30010,
-            # 见 Secret ecommerce/control-tower-config-source-dev),
+            # 见 Secret ecommerce/control-tower-config-source-{dev,pre}),
             # routes/{dev,pre}.yaml 里的 discovery:/// 只指向 11 个业务后端,不含本服务。
             # 而本服务的 Consul 令牌随旧 config-center ns 一起消失、ACL 默认 deny,
             # 开着只会每次启动刷一条 403 ERROR。

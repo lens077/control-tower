@@ -6,27 +6,33 @@
 
 集群 2026-08-21 前后重建过，`postgresql` ns 已不存在。`config-center` ns 于 2026-08-29
 按 `deploy/pre/config/` 重建，gateway 于 2026-08-30 重新拉起，**两个服务都在跑**。
-2026-08-31 三个服务镜像统一到 `0.2.5`，dev/pre 六份 manifest 使用同一版本 tag：
-config 走 TCR，config-web/gateway 走 public GHCR。config 包改 GHCR 后 kubelet 仍实测匿名 token 401、
-`ImagePullBackOff`，所以立即回 TCR；不要以本机 `docker manifest inspect` 为准（Keychain 会偷偷带凭据）。
+2026-08-31 三个服务镜像统一到 public GHCR 的 `0.2.5`，dev/pre 六份 manifest 使用同一版本 tag。
+`control-tower-config` 改为 public 后，已用无凭据 OCI 请求与集群滚动拉取双重验证；三个包的
+匿名拉取路径一致。不要只用本机 `docker manifest inspect` 判断可见性（Keychain 会偷偷带凭据）。
 
-⚠️ **公网入口暂时关闭**：集群里的三条 HTTPRoute 已删除（文件仍在仓库），
-`config.apikv.com` / `config-api.apikv.com` / `gateway.apikv.com` 都返回 404；
-服务只在集群内可达。恢复命令见下表。
+**公网入口已恢复**：三条 HTTPRoute 均为 `Accepted=True`、`ResolvedRefs=True`。
+`config.apikv.com/` 返回 200，`config-api.apikv.com/healthz`、
+`gateway.apikv.com/{healthz,readyz}` 均返回 200。网关根路径 `/` 没有业务路由，按契约返回应用层
+`404 ROUTE_NOT_FOUND`；入口探活必须使用 `/healthz`，不能用根路径。
 
 | 服务 | 集群状态 | 备注 |
 |---|---|---|
-| config | `config-center/config-center` **运行中**（`0.2.5`） | `config-center.config-center.svc:30010`，镜像走 TCR |
+| config | `config-center/config-center` **运行中**（`0.2.5`） | `config-center.config-center.svc:30010`，镜像走 GHCR |
 | config web | `config-center/config-center-web` **运行中**（`0.2.5`） | `config-center-web.config-center.svc:80`，镜像走 GHCR |
 | gateway | `ecommerce/control-tower-gateway` **运行中**（`0.2.5`，2 副本） | `ecommerce-gateway-service.ecommerce.svc:8080`，镜像走 GHCR；`/healthz`、`/readyz` 均 200 |
 
-恢复公网入口（文件未删）：
+重新收敛公网入口：
 
 ```bash
 kubectl apply -f deploy/pre/config/httproute.yaml -f deploy/pre/gateway/httproute.yaml
 ```
 
-### Consul 的实际作用范围（别照着 `deploy/*/config/deployment.yaml` 里那条注释理解）
+2026-08-31 已对 `deploy/dev` 的 18 个资源执行 API Server dry-run，并把补齐后的
+`deploy/pre/gateway` 实际滚动到集群；随后 live e2e 通过。dev/pre manifest 仍指向同一组 namespace
+与对象名，不是两个隔离部署：公网 gateway 必须使用 pre config-source，不能再混用 dev deployment。
+pre 当前未配置 BFF 会话轨，按设计退回 legacy bearer；不得把 dev 的 insecure/localhost BFF 参数带到公网。
+
+### Consul 的实际作用范围
 
 - **网关需要 Consul**：`routes/{dev,pre}.yaml` 的 11 个后端全是 `discovery:///<service>`，
   靠 Consul 解析成 Pod IP。这 10 个业务服务都已注册在案（token 是 `ecommerce/consul-ecommerce-token`，
@@ -102,9 +108,8 @@ cd e2e && pnpm install && pnpm run install-browser
 E2E_USERNAME=<账号> E2E_PASSWORD=<口令> pnpm test
 ```
 
-CI 里由 `.github/workflows/e2e.yml` 承接。2026-08-31 因公网 HTTPRoute 暂停，
-**schedule 同步暂停**——GitHub Runner 没有集群内网络，继续跑只会制造慢性红；恢复 HTTPRoute 后
-取消 workflow 里的 cron 注释。`workflow_dispatch` 保留，供恢复路由后手动验收。
+CI 里由 `.github/workflows/e2e.yml` 承接。当前工作树已恢复 6 小时 schedule，合入 `main` 后生效；
+`workflow_dispatch` 继续保留，当前公网环境已用它完成手动验收。
 失败发 ntfy（正文带失败用例名）；B1 恢复通知已实测：前一次 failure、下一次 success 时只发一条
 「✅ 已恢复」，连续 success 不重复发。
 
@@ -114,9 +119,3 @@ CI 里由 `.github/workflows/e2e.yml` 承接。2026-08-31 因公网 HTTPRoute �
 改 `promql/catalog.go` 之后必须跑它。**
 
 CI 由裸 semver tag（`X.Y.Z`）触发发布；PR 只跑质量门禁；push main 不构建。
-
-## 迁移背景（迁移已完成，本节留作索引）
-
-迁移期决策与对抗评审档案在工作区 `.migration-scratch/`（不入本仓）：06 决策日志、11 终裁书、12 实施方案 v2。
-
-迁移本身已完成、上游旧目录已删（两个服务当前都在跑，见上方「部署现状」）。**本节保留的唯一理由**是那批档案记着「哪些东西是被刻意砍掉的、为什么」——与 `docs/design/decisions.md` 配合使用，避免有人把砍掉的东西当成遗漏加回来。等 `decisions.md` 把这些理由全部吸收之后，本节连同档案一并归档。

@@ -37,9 +37,8 @@ E2E_USERNAME=<账号> E2E_PASSWORD=<口令> pnpm test
 | `workflow_dispatch` | **主用法：每次 `kubectl apply` 之后手动跑一次**。可传 `config_url` / `gateway_url` 打别的环境 |
 | `schedule`（每 6 小时） | 巡检「没人动代码但环境自己坏了」——证书过期、隧道域名改名、上游依赖挂掉 |
 
-⚠️ **2026-08-31 schedule 暂停**：集群里的三条公网 HTTPRoute 临时删除，GitHub Runner
-没有集群内网络，继续定时跑只会每 6 小时稳定失败并发 ntfy，正好违反「慢性红等于没有告警」。
-恢复路由后，把 workflow 顶部注释掉的 `schedule` 两行取消注释，再手动跑一遍确认。
+2026-08-31 三条公网 HTTPRoute 已恢复，workflow 中的 6 小时 `schedule` 也已恢复，合入
+`main` 后生效。切换到 pre gateway 后，已用 `workflow_dispatch` 手动跑通一次真实环境验收。
 
 ```bash
 gh workflow run e2e.yml --repo lens077/control-tower --ref main

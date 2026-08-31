@@ -7,8 +7,7 @@ name: e2e
 # 要么测的是旧版本（绿了但毫无意义），要么因为外部环境抖动把无辜的 PR 拦红。
 #
 # 正常有两个触发口：workflow_dispatch（发布后）＋ schedule（环境巡检）。
-# 2026-08-31 三条公网 HTTPRoute 暂时删除，GitHub Runner 没有集群内网络，
-# schedule 已在下面暂停；恢复路由时把两行 cron 取消注释。
+# 2026-08-31 三条公网 HTTPRoute 恢复后，schedule 已重新启用。
 on:
   workflow_dispatch:
     inputs:
@@ -20,11 +19,8 @@ on:
         description: "网关地址（留空用默认 https://gateway.apikv.com）"
         required: false
         type: string
-  # schedule 暂停（2026-08-31）：config.apikv.com / config-api.apikv.com /
-  # gateway.apikv.com 都因 HTTPRoute 暂时删除而返回 404。继续定时跑只会每 6 小时
-  # 稳定失败并发 ntfy，违反「慢性红等于没有告警」。恢复路由后取消注释：
-  # schedule:
-  #   - cron: "0 */6 * * *"
+  schedule:
+    - cron: "0 */6 * * *"
 
 # 用例串行共享同一个 Casdoor 会话，两次运行叠在一起会互相踢。
 # 不取消进行中的那次：巡检结果比「最新一次」更重要。
@@ -50,12 +46,12 @@ jobs:
         uses: actions/checkout@v5
 
       - name: Set up pnpm
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@v6
         with:
           version: 12
 
       - name: Set up Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: 24
           cache: pnpm
@@ -87,7 +83,7 @@ jobs:
       # 失败路径也上传 —— 只在成功时上传等于没上传。
       - name: Upload report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: playwright-report-${{ github.run_id }}
           path: |

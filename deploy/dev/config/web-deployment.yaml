@@ -18,8 +18,6 @@ spec:
       labels:
         app: config-center-web
     spec:
-      imagePullSecrets:
-        - name: tcr-pull
       containers:
         - name: config-center-web
           image: ghcr.io/lens077/control-tower-config-web:0.2.5

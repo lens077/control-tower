@@ -150,8 +150,8 @@ CONFIG_CENTER_VM_ENDPOINT=http://metrics.apikv.com \
 | node3 Redis 证书 | 初次补域名：`redis-tls.pem.bak-20260829-220329`；再补入口 IP：`redis-tls.pem.bak-20260830-181443` |
 | node3 PG 证书 | 初次补域名：`server.crt.bak-20260829-220415`；再补入口 IP：`server.crt.bak-20260830-181443` + `pg_reload_conf()` |
 | node3 VM 参数 | `/etc/default/vmetrics.bak-20260829-234102` |
-| HTTPRoute | 文件仍在 `deploy/pre/{config,gateway}/`，集群对象临时删除；不要再依赖 `/tmp/gw-orphans/`（已随重启消失） |
-| 镜像 | 当前三个服务统一 `0.2.5`；config 走 TCR，web/gateway 走 public GHCR |
+| HTTPRoute | 文件在 `deploy/pre/{config,gateway}/`；2026-08-31 已恢复集群对象。不要再依赖 `/tmp/gw-orphans/`（已随重启消失） |
+| 镜像 | 当前三个服务统一为 public GHCR 的 `0.2.5`；config 的 TCR 绕路已撤销 |
 
 ## 2026-08-31 后续收口
 
@@ -162,14 +162,25 @@ CONFIG_CENTER_VM_ENDPOINT=http://metrics.apikv.com \
 - **Consul 注册能力已烟测**：临时最小权限 `service "config-service" {write}` 注册成功，
   catalog/health 有 1 个 passing 实例；随后关闭并删除实例、ACL token/policy 与 K8s Secret。
   dev/pre 默认仍显式 `CONSUL_ENABLED=false`。
-- **HTTPRoute 暂停**：三条集群对象已删除、文件保留，三个公网域名均 404；服务内部健康。
-  因 GitHub Runner 无集群网络，e2e 的 6 小时 schedule 同步暂停，避免慢性红；workflow_dispatch 保留。
-- **镜像统一**：dev/pre 六份 manifest 使用同一 `0.2.5` tag。config 包的 GHCR 仍被 kubelet
-  实测匿名 token 401，故 config 留 TCR；web/gateway 走 public GHCR。
+- **HTTPRoute 已恢复**：三条对象均为 `Accepted=True`、`ResolvedRefs=True`；config Web 根路径、
+  config API `/healthz`、gateway `/healthz` 与 `/readyz` 均返回 200。gateway 根路径按应用契约
+  返回 `404 ROUTE_NOT_FOUND`，不能用作入口探针。工作树已恢复 e2e 的 6 小时 schedule，合入
+  `main` 后生效。
+- **overlay 已收敛**：`deploy/dev` 的 18 个资源通过 API Server dry-run；pre gateway 补齐 Service、
+  config-source Secret 与 Config Center 的 5 个启动键后，已实际滚动到 `DEPLOYMENT_MODE=pre`。
+  公网不再运行 dev 的 insecure/localhost BFF 参数；pre 暂时关闭会话轨，仅保留 legacy bearer。
+  切换后的 `workflow_dispatch` run `33364139018` 全部通过。dev/pre 仍指向同一组 namespace 与对象名，
+  不能当作隔离环境。
+- **镜像统一**：dev/pre 六份 manifest 使用 public GHCR 的同一 `0.2.5` tag。config 包改 public 后，
+  无凭据 OCI manifest 请求返回 200；live config 已从 TCR 滚动到 GHCR，镜像 digest 保持
+  `sha256:aff79b5339364588d6b6e61c4dfec199ebc8dbfec188a0b351d30613d6630774`。
 
 ## 遗留
 
 - **dev 与 pre 共用同一个库**：node3 是单实例，`pre.yaml` 里已标 TODO，拆开前别把 pre 当隔离环境用。
 - **API_\* 三组曲线**：`rpc.server.duration` 只在 RPC **完成时**记样本，而 config 服务当前流量
   几乎全是长连的 `WatchKeys`，所以那三张图要等有短请求才有数据（不是故障）。
-- **`metric-query.apikv.com` 已不再有匹配资源**：访问返回与不存在子域一致的 404；实际查询入口只保留 `http://metrics.apikv.com`。
+- **`metric-query.apikv.com` 的半成品资源已删除**：Pangolin resource 44 当时仍启用，但唯一 target
+  已禁用，所以表现为与不存在子域一致的 404。2026-08-31 经 Pangolin API 删除并核对数据库零残留；
+  删除前备份为 node1 的 `db.sqlite.bak-metric-query-removal-20260831T055059Z`。实际查询入口只保留
+  `http://metrics.apikv.com`（resource 21，target 已启用）。
