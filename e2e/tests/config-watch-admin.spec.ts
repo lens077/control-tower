@@ -1,15 +1,5 @@
-import { Code, ConnectError, createClient } from "@connectrpc/connect";
-import { createConnectTransport } from "@connectrpc/connect-web";
 import { expect, test, type Page } from "@playwright/test";
-import {
-  ConfigService,
-  WatchEventType,
-  type WatchKeysResponse,
-} from "../../web/src/gen/api/config/v1/config_pb";
-import {
-  CONFIG_API_URL,
-  STORAGE_STATE,
-} from "../playwright.config";
+import { CONFIG_API_URL, STORAGE_STATE } from "../playwright.config";
 
 const ADMIN_MUTATIONS_ENABLED = process.env.E2E_ADMIN_MUTATIONS === "true";
 const RUN_ID = Date.now().toString(36);
@@ -22,21 +12,26 @@ const CLIENT_INSTANCE = `playwright-${RUN_ID}`;
 const EDIT_URL = `/edit?ns=${NS}&env=${ENV}&key=${KEY}`;
 const INITIAL_VALUE = "watch: initial";
 const UPDATED_VALUE = "watch: updated";
+const WATCH_SNAPSHOT = "WATCH_EVENT_TYPE_SNAPSHOT";
+const WATCH_PUT = "WATCH_EVENT_TYPE_PUT";
+const END_STREAM_FLAG = 0x02;
 
-const client = createClient(
-  ConfigService,
-  createConnectTransport({
-    baseUrl: CONFIG_API_URL,
-    useBinaryFormat: true,
-  }),
-);
+interface WatchResponse {
+  type: string | number;
+  entry?: { key?: string; value?: string };
+}
+
+interface EndStreamResponse {
+  error?: { code?: string };
+}
 
 let issuedToken = "";
 let watchAbort: AbortController | undefined;
 let watchTask: Promise<void> | undefined;
 let watchDone = false;
 let watchError: unknown;
-const watchEvents: WatchKeysResponse[] = [];
+let watchEndCode = "";
+const watchEvents: WatchResponse[] = [];
 
 function versionChip(page: Page) {
   return page.locator(".MuiChip-label").filter({ hasText: /^(v\d+|新建)$/ });
@@ -107,36 +102,105 @@ async function issueMachineToken(page: Page): Promise<string> {
   return token;
 }
 
-function machineHeaders(token: string): Headers {
-  return new Headers({
+function machineHeaders(token: string): Record<string, string> {
+  return {
     "x-config-center-service-token": token,
     "x-config-center-client-name": CLIENT_NAME,
     "x-config-center-client-instance": CLIENT_INSTANCE,
     "x-config-center-client-version": "playwright-e2e",
-  });
+  };
 }
 
-function startWatch(token: string) {
-  watchAbort = new AbortController();
-  watchTask = (async () => {
-    try {
-      for await (const event of client.watchKeys(
-        { namespace: NS, environment: ENV, keys: [KEY] },
-        { headers: machineHeaders(token), signal: watchAbort.signal },
-      )) {
-        watchEvents.push(event);
+function encodeEnvelope(message: unknown): Uint8Array {
+  const payload = new TextEncoder().encode(JSON.stringify(message));
+  const envelope = new Uint8Array(5 + payload.length);
+  new DataView(envelope.buffer).setUint32(1, payload.length, false);
+  envelope.set(payload, 5);
+  return envelope;
+}
+
+function appendBytes(left: Uint8Array, right: Uint8Array): Uint8Array {
+  const combined = new Uint8Array(left.length + right.length);
+  combined.set(left);
+  combined.set(right, left.length);
+  return combined;
+}
+
+// Connect 的 JSON 服务端流同样使用 5 字节 envelope。解析器放在测试侧，
+// 避免跨 package 根目录导入 Web 生成代码，导致 CI 找不到它的运行时依赖。
+async function consumeWatchBody(stream: ReadableStream<Uint8Array>) {
+  const reader = stream.getReader();
+  const decoder = new TextDecoder();
+  let pending = new Uint8Array();
+
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    pending = appendBytes(pending, value);
+
+    while (pending.length >= 5) {
+      const length = new DataView(pending.buffer, pending.byteOffset + 1, 4).getUint32(0, false);
+      if (pending.length < 5 + length) break;
+
+      const flags = pending[0];
+      const payload = pending.slice(5, 5 + length);
+      pending = pending.slice(5 + length);
+      if (flags === END_STREAM_FLAG) {
+        const end = JSON.parse(decoder.decode(payload)) as EndStreamResponse;
+        watchEndCode = end.error?.code ?? "";
+        return;
       }
-    } catch (error) {
-      if (!watchAbort.signal.aborted) watchError = error;
-    } finally {
-      watchDone = true;
+      if (flags !== 0) throw new Error(`WatchKeys 返回不支持的 Connect envelope flags: ${flags}`);
+      watchEvents.push(JSON.parse(decoder.decode(payload)) as WatchResponse);
     }
-  })();
+  }
+
+  if (pending.length !== 0) throw new Error("WatchKeys 返回了截断的 Connect envelope");
 }
 
-function sawEvent(type: WatchEventType, value: string): boolean {
+async function startWatch(token: string) {
+  const abort = new AbortController();
+  watchAbort = abort;
+  const response = await fetch(`${CONFIG_API_URL}/config.v1.ConfigService/WatchKeys`, {
+    method: "POST",
+    headers: {
+      ...machineHeaders(token),
+      "connect-protocol-version": "1",
+      "content-type": "application/connect+json",
+    },
+    body: encodeEnvelope({ namespace: NS, environment: ENV, keys: [KEY] }),
+    signal: abort.signal,
+  });
+  if (!response.ok || !response.body) {
+    throw new Error(`WatchKeys 建流失败，HTTP ${response.status}`);
+  }
+
+  watchTask = consumeWatchBody(response.body)
+    .catch((error) => {
+      if (!abort.signal.aborted) watchError = error;
+    })
+    .finally(() => {
+      watchDone = true;
+    });
+}
+
+async function getKeyStatus(token: string): Promise<number> {
+  const response = await fetch(`${CONFIG_API_URL}/config.v1.ConfigService/GetKey`, {
+    method: "POST",
+    headers: {
+      ...machineHeaders(token),
+      "connect-protocol-version": "1",
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({ namespace: NS, environment: ENV, key: KEY }),
+  });
+  await response.arrayBuffer();
+  return response.status;
+}
+
+function sawEvent(type: string, numericType: number, value: string): boolean {
   return watchEvents.some((event) => (
-    event.type === type
+    (event.type === type || event.type === numericType)
     && event.entry?.key === KEY
     && event.entry.value === value
   ));
@@ -184,16 +248,16 @@ test.describe("真实 WatchKeys、客户端连接与 token 吊销", () => {
   test("WatchKeys 长流收到真实 SNAPSHOT 与 PUT", async ({ page }) => {
     await createWatchKey(page);
     issuedToken = await issueMachineToken(page);
-    startWatch(issuedToken);
+    await startWatch(issuedToken);
 
     await expect.poll(
-      () => sawEvent(WatchEventType.SNAPSHOT, INITIAL_VALUE),
+      () => sawEvent(WATCH_SNAPSHOT, 1, INITIAL_VALUE),
       { timeout: 30_000, message: "WatchKeys 没有下发初始快照" },
     ).toBe(true);
 
     await updateWatchKey(page);
     await expect.poll(
-      () => sawEvent(WatchEventType.PUT, UPDATED_VALUE),
+      () => sawEvent(WATCH_PUT, 2, UPDATED_VALUE),
       { timeout: 30_000, message: "WatchKeys 没有下发配置更新" },
     ).toBe(true);
     expect(watchDone).toBe(false);
@@ -222,19 +286,9 @@ test.describe("真实 WatchKeys、客户端连接与 token 吊销", () => {
     ).toBe(true);
     await watchTask;
 
-    const streamError = ConnectError.from(watchError);
-    expect(streamError.code).toBe(Code.PermissionDenied);
-
-    let readError: unknown;
-    try {
-      await client.getKey(
-        { namespace: NS, environment: ENV, key: KEY },
-        { headers: machineHeaders(issuedToken) },
-      );
-    } catch (error) {
-      readError = error;
-    }
-    expect(ConnectError.from(readError).code).toBe(Code.Unauthenticated);
+    expect(watchError).toBeUndefined();
+    expect(watchEndCode).toBe("permission_denied");
+    expect(await getKeyStatus(issuedToken)).toBe(401);
 
     await page.goto("/connections");
     const card = connectionCard(page);

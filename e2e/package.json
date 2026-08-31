@@ -11,9 +11,6 @@
     "install-browser": "playwright install chromium"
   },
   "devDependencies": {
-    "@bufbuild/protobuf": "^2.14.0",
-    "@connectrpc/connect": "^2.1.2",
-    "@connectrpc/connect-web": "^2.1.2",
     "@playwright/test": "^1.62.1"
   }
 }
