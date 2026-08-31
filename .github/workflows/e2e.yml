@@ -23,6 +23,10 @@ on:
         description: "网关地址（留空用默认 https://gateway.apikv.com）"
         required: false
         type: string
+      metrics_url:
+        description: "VictoriaMetrics 地址（留空用默认 http://metrics.apikv.com）"
+        required: false
+        type: string
       admin_mutations:
         description: "运行会签发并吊销临时 Machine Token 的管理面功能测试"
         required: false
@@ -81,6 +85,7 @@ jobs:
           E2E_CONFIG_URL: ${{ inputs.config_url }}
           E2E_CONFIG_API_URL: ${{ inputs.config_api_url }}
           E2E_GATEWAY_URL: ${{ inputs.gateway_url }}
+          E2E_METRICS_URL: ${{ inputs.metrics_url }}
           # token 吊销保留审计行，避免每 6 小时累计记录；只在发布后手动验收时显式打开。
           E2E_ADMIN_MUTATIONS: ${{ inputs.admin_mutations }}
           # 额外出一份 JSON,给下面的失败通知抽「具体哪几条挂了」。

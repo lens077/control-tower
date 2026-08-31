@@ -20,6 +20,7 @@ function envOr(name: string, fallback: string): string {
 export const CONFIG_URL = envOr("E2E_CONFIG_URL", "https://config.apikv.com");
 export const CONFIG_API_URL = envOr("E2E_CONFIG_API_URL", "https://config-api.apikv.com");
 export const GATEWAY_URL = envOr("E2E_GATEWAY_URL", "https://gateway.apikv.com");
+export const METRICS_URL = envOr("E2E_METRICS_URL", "http://metrics.apikv.com");
 
 /** 登录态存这里。凭据只从环境变量来，绝不写进仓库（见 AGENTS.md 硬约束 4）。 */
 export const STORAGE_STATE = "./.auth/state.json";

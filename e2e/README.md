@@ -26,6 +26,7 @@ E2E_USERNAME=<账号> E2E_PASSWORD=<口令> pnpm test
 | `E2E_CONFIG_URL` | `https://config.apikv.com` |
 | `E2E_CONFIG_API_URL` | `https://config-api.apikv.com` |
 | `E2E_GATEWAY_URL` | `https://gateway.apikv.com` |
+| `E2E_METRICS_URL` | `http://metrics.apikv.com` |
 | `E2E_ADMIN_MUTATIONS` | `false`；设为 `true` 时运行 Machine Token 签发/吊销测试 |
 
 管理面变更测试需要显式打开：
@@ -43,8 +44,8 @@ E2E_USERNAME=<账号> E2E_PASSWORD=<口令> E2E_ADMIN_MUTATIONS=true \
 
 | 触发 | 用法 |
 |---|---|
-| `workflow_dispatch` | **主用法：每次 `kubectl apply` 之后手动跑一次**。可传 `config_url` / `config_api_url` / `gateway_url` 打别的环境；传 `admin_mutations=true` 时再运行管理面变更测试 |
-| `schedule`（每 6 小时） | 巡检「没人动代码但环境自己坏了」——证书过期、隧道域名改名、上游依赖挂掉；不签发 Machine Token |
+| `workflow_dispatch` | **主用法：每次 `kubectl apply` 之后手动跑一次**。可传 `config_url` / `config_api_url` / `gateway_url` / `metrics_url` 打别的环境；传 `admin_mutations=true` 时再运行管理面变更测试 |
+| `schedule`（每 6 小时） | 巡检「没人动代码但环境自己坏了」——证书过期、隧道域名改名、上游依赖挂掉，并持续检查 legacy token 的 7 天零命中窗口；不签发 Machine Token |
 
 2026-08-31 三条公网 HTTPRoute 已恢复，workflow 中的 6 小时 `schedule` 也已恢复，合入
 `main` 后生效。切换到 pre gateway 后，已用 `workflow_dispatch` 手动跑通一次真实环境验收。
@@ -109,6 +110,7 @@ artifact 上传，保留 7 天。
 | `WatchKeys` 收到 SNAPSHOT 与 PUT | 只测 unary 读写发现不了长流被代理或 `WriteTimeout` 截断，也发现不了 PG 通知链路失效 |
 | `/connections` 显示真实 watching client | 页面能导航不代表 presence 记录、client identity 与目标 key 能正确汇总和展示 |
 | 吊销 token 后断流并拒绝读取 | 只测按钮存在不代表吊销落库、心跳复验和后续 401 真正生效 |
+| `machine_token_legacy_hits` 当前值与 7 天窗口均为零 | 空查询不能证明零命中；指标必须存在，且任何 legacy 请求都会让退役门禁保持失败 |
 | gateway `/healthz` `/readyz` | 网关没部署，或 HTTPRoute 的 backendRef 指向不存在的 Service |
 | 受保护路由 fail-close | 鉴权被绕过（2xx）或网关自身出错（5xx） |
 | `/config.v1.*` 不经网关暴露 | 路由边界被破坏 |
