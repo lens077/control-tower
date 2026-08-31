@@ -276,7 +276,14 @@ type Observability struct {
 	Trace  *Observability_Trace   `protobuf:"bytes,1,opt,name=trace,proto3" json:"trace,omitempty"`
 	Metric *Observability_Metric  `protobuf:"bytes,2,opt,name=metric,proto3" json:"metric,omitempty"`
 	Log    *Observability_Logging `protobuf:"bytes,3,opt,name=log,proto3" json:"log,omitempty"`
-	Enable bool                   `protobuf:"varint,4,opt,name=enable,proto3" json:"enable,omitempty"`
+	// 「推送与埋点」的总开关,只管 trace/metric/log 三个 OTLP exporter 与
+	// 请求埋点(otel 拦截器、sysstat 自采样)。
+	//
+	// ⚠️ 它**不管** metric_query —— 后者是反方向的读取,由自己的 endpoint 自治。
+	// 2026-09-01 之前两者共用本开关,导致「本机开发想消掉连不上 collector 的噪音」
+	// 就得置 false,顺带把明明可达的历史曲线也静默关掉,页面上只剩空图。
+	// 推送不通与查询不通是两件独立的事,开关也必须独立。
+	Enable bool `protobuf:"varint,4,opt,name=enable,proto3" json:"enable,omitempty"`
 	// 指标查询端。上面三项是「往哪推」,这项是「从哪读」——
 	// 控制台的系统信息页要画历史曲线,得反过来查 VictoriaMetrics。
 	//
@@ -284,8 +291,9 @@ type Observability struct {
 	// 推送经 otel collector 中转(otlp 协议),查询直连 VM 的 PromQL HTTP API。
 	// 复用一个字段会逼着代码去猜路径,猜错的表现是查询静默返回空。
 	//
-	// 留空 = 不启用历史曲线。此时页面只显示进程自采样的即时值并说明原因,
-	// 而不是画一排空图 —— 空图和「一切正常但流量为零」长得一模一样。
+	// 自治开关:**留空 = 不启用历史曲线**,与上面的 enable 无关。
+	// 此时页面只显示进程自采样的即时值并说明原因,而不是画一排空图
+	// —— 空图和「一切正常但流量为零」长得一模一样。
 	MetricQuery   *Observability_MetricQuery `protobuf:"bytes,5,opt,name=metric_query,json=metricQuery,proto3" json:"metric_query,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache

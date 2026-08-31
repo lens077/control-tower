@@ -25,9 +25,10 @@ func enabled(endpoint string) *confv1.Observability {
 func TestNew_未配置时返回nil而非错误(t *testing.T) {
 	cases := map[string]*confv1.Observability{
 		"配置为 nil":         nil,
-		"可观测性整体关闭":        {Enable: false, MetricQuery: &confv1.Observability_MetricQuery{Endpoint: "http://vm:8428"}},
 		"没有 metric_query": {Enable: true},
 		"endpoint 为空":     {Enable: true, MetricQuery: &confv1.Observability_MetricQuery{Endpoint: "  "}},
+		// 推送关掉时,只要没给查询端,一样是「不启用历史曲线」。
+		"推送关闭且没有 metric_query": {Enable: false},
 	}
 
 	for name, cfg := range cases {
@@ -37,6 +38,23 @@ func TestNew_未配置时返回nil而非错误(t *testing.T) {
 			assert.Nil(t, client)
 		})
 	}
+}
+
+// metric_query 不受 observability.enable 管辖。
+//
+// 这条用例对应一个真实踩过的坑:本机开发为了消掉「连不上集群内 collector」的
+// 30s 一条噪音而把 enable 置 false(scripts/dev-local.sh 里那句 sed 就是这么干的),
+// 结果把明明可达的 VictoriaMetrics 查询也一起关了,System 页面静默变成一排空图。
+// 推送不通与查询不通是两件独立的事:只要给了 endpoint,查询就该照常工作。
+func TestNew_推送关闭不影响指标查询(t *testing.T) {
+	client, err := New(&confv1.Observability{
+		Enable:      false, // 推送关掉
+		MetricQuery: &confv1.Observability_MetricQuery{Endpoint: "http://vm:8428"},
+	})
+
+	require.NoError(t, err)
+	require.NotNil(t, client, "enable=false 只该关掉推送,不该连带关掉历史曲线")
+	assert.Equal(t, "http://vm:8428", client.base)
 }
 
 // 地址配错要在启动时就失败,而不是等到有人点开页面才发现查不到数据。

@@ -37,8 +37,15 @@ need go
 pgq() { ssh -o BatchMode=yes "$SSH_HOST" "su - postgres -c 'psql -d ecommerce -At'"; }
 
 # 从本地 dev.yaml 派生一份「本地跑」的配置：
-# 只改一处——关掉 observability。它的三个 OTLP 端点是集群内 DNS（*.svc），
-# 在 Mac 上解析不了，开着会每 30s 打一条 "failed to upload metrics: no such host"。
+# 只改一处——把 observability.enable 置 false，消掉 OTLP 推送的噪音。
+# 那三个 OTLP 端点是集群内 DNS（*.svc），在 Mac 上解析不了，开着会每 30s
+# 打一条 "failed to upload metrics: no such host"（不阻断启动，只是吵）。
+#
+# 2026-09-01 起这么做才是安全的：enable 现在只管「推送与埋点」，System 页面的
+# 历史曲线由 metric_query.endpoint 自治，不受它影响。在此之前两者共用一个开关，
+# 下面这句 sed 会连带把明明可达的 VictoriaMetrics 查询也静默关掉，
+# 页面上只剩一排空图。见 promql/client.go 的 New()。
+#
 # 其余（含 PG/Redis 的公网地址与 TLS）逐字沿用，保证「本地跑的就是要部署的」。
 derive_from_dev_config() {
   CFG="$(mktemp -t ct-config)"; chmod 600 "$CFG"

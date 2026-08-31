@@ -54,8 +54,15 @@ type Series struct {
 
 // New 构造客户端。cfg 为 nil 或 endpoint 为空时返回 (nil, nil) ——
 // 表示「没配置指标查询端」,这是合法状态而不是错误,调用方据此关掉历史曲线。
+//
+// ⚠️ 只看 metric_query.endpoint,**不看 observability.enable**。
+// enable 管的是反方向的「推送与埋点」(OTLP exporter + otel 拦截器 + sysstat),
+// 与这里的「读取」无关。两者曾共用一个开关,后果是:本机开发为了消掉连不上
+// 集群内 collector 的噪音而置 enable=false,顺带把可达的 VictoriaMetrics 查询
+// 也静默关了,System 页面只剩一排空图 —— 而空图与「一切正常但流量为零」
+// 长得一模一样,没人看得出来。2026-09-01 拆开。
 func New(cfg *confv1.Observability) (*Client, error) {
-	if cfg == nil || !cfg.GetEnable() {
+	if cfg == nil {
 		return nil, nil
 	}
 	q := cfg.GetMetricQuery()
