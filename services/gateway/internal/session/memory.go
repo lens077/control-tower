@@ -28,7 +28,19 @@ type stateEntry struct {
 
 // NewMemoryStore 构造内存存储。
 func NewMemoryStore(ttl TTL) *MemoryStore {
-	return &MemoryStore{ttl: ttl, now: time.Now, data: map[string]*entry{}}
+	return NewMemoryStoreWithClock(ttl, time.Now)
+}
+
+// NewMemoryStoreWithClock 构造使用指定时钟的内存存储。
+//
+// 生产通常用 NewMemoryStore。需要把认证中间件、token 过期时间与会话存储钉在同一时刻的
+// 单测使用本构造器；否则测试 fixture 用固定时间、Store 却用真实 time.Now，会在 fixture
+// 日期 + TTL.Absolute 那天突然全部 SESSION_INVALID —— 2026-08-30 的 0.2.4 CI 就这么红了。
+func NewMemoryStoreWithClock(ttl TTL, now func() time.Time) *MemoryStore {
+	if now == nil {
+		now = time.Now
+	}
+	return &MemoryStore{ttl: ttl, now: now, data: map[string]*entry{}}
 }
 
 var _ Store = (*MemoryStore)(nil)

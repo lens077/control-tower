@@ -31,6 +31,11 @@ concurrency:
   group: e2e
   cancel-in-progress: false
 
+# 恢复通知要回查上一次运行的结论，需要 actions:read。
+permissions:
+  contents: read
+  actions: read
+
 jobs:
   e2e:
     name: e2e (browser)
@@ -89,6 +94,42 @@ jobs:
             e2e/test-results
           retention-days: 7
           if-no-files-found: ignore
+
+      # 恢复通知：上一次是红的、这一次绿了才发。
+      #
+      # 状态从 GitHub API 现查，不用 actions/cache —— cache 的 key 是不可变的，
+      # 要跨 run 更新同一份状态得靠滚动 key + restore-keys，比这脆得多。
+      # 只发「由红转绿」这一次：每次成功都发等于把恢复通知变成噪音，
+      # 与「告警的价值 = 新信息量」那条规矩相悖。
+      - name: Notify ntfy on recovery
+        if: success()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NTFY_URL: ${{ secrets.NTFY_URL }}
+          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+          NTFY_TOKEN: ${{ secrets.NTFY_TOKEN }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          RUN_ID: ${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          # 取本工作流上一次**已完成**的运行（排除当前这次）的结论。
+          previous=$(gh api "repos/${{ github.repository }}/actions/workflows/e2e.yml/runs?status=completed&per_page=5" \
+            --jq "[.workflow_runs[] | select(.id != ${RUN_ID})] | first | .conclusion" 2>/dev/null || echo "")
+          echo "上一次运行结论: ${previous:-（查不到，可能是首次运行）}"
+          [ "$previous" = "failure" ] || { echo "上一次不是失败，不发恢复通知"; exit 0; }
+
+          payload=$(jq -n --arg topic "$NTFY_TOPIC" --arg url "$RUN_URL" '{
+            topic: $topic,
+            title: "✅ control-tower e2e 已恢复",
+            message: "上一次运行是失败的，这一次全部通过。",
+            priority: 3,
+            tags: ["white_check_mark"],
+            click: $url
+          }')
+          curl -fsS --max-time 20 -X POST "$NTFY_URL" \
+            -H "Authorization: Bearer $NTFY_TOKEN" \
+            -H "Content-Type: application/json" \
+            --data "$payload"
 
       # 失败进 ntfy（与 Gatus/Healthchecks/Alertmanager 同一个私有 topic 与 bearer token）。
       # 放在上传报告之后：通知里给的 run 链接点进去就能直接下 trace。

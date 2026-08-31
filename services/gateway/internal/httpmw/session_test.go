@@ -23,7 +23,10 @@ const (
 // withSessions 给既有 fixture 装上会话轨。
 func withSessions(t *testing.T, f *fixture) session.Store {
 	t.Helper()
-	store := session.NewMemoryStore(session.DefaultTTL())
+	// Auth fixture 与 token 都钉在 testNow；Store 也必须用同一时钟。
+	// 用真实 time.Now 会在 testNow + DefaultTTL().Absolute（7 天）之后把全部 fixture
+	// 判成过期，形成一个与代码无关的日历炸弹。
+	store := session.NewMemoryStoreWithClock(session.DefaultTTL(), func() time.Time { return testNow })
 	f.deps.Sessions = store
 	f.deps.SessionCookie = testCookie
 	f.deps.SessionHeader = testHeader

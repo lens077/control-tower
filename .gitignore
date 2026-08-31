@@ -4,3 +4,7 @@
 bin/
 dist/
 node_modules/
+
+# playwright-cli 的交互探索产物（页面快照/控制台日志），不是测试源码。
+# 2026-08-30 曾误用 git add -A 把 23 个文件提交进仓库。
+.playwright-cli/
