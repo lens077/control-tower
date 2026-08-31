@@ -2,7 +2,7 @@
 
 ## 背景与目标
 
-现状是一把全局共享 token（`CONFIG_CENTER_SERVICE_TOKEN` 环境变量，恒时比较），任何持有者可读全部 namespace×environment 的配置。盘点已标记为短板；终裁 §三-2 采纳升级方案。
+初始状态是一把全局共享 token（`CONFIG_CENTER_SERVICE_TOKEN` 环境变量，恒时比较），任何持有者都能读取全部 namespace×environment 配置。2026-08-31 已将 10 个业务服务和 gateway 的 dev/pre selector 迁移到 per-service token；服务端暂时保留 legacy 回退，用于 7 天零命中烘烤和应急回滚。
 
 目标：
 
@@ -47,7 +47,7 @@ token 明文格式：`ct_` + 32 字节随机数的 base64url（≥43 字符）�
 
 `x-config-center-service-token` 头的校验顺序：
 
-1. **legacy 共享 token**：与 `CONFIG_CENTER_SERVICE_TOKEN` 恒时比较命中 → 按旧语义放行（任意 namespace 只读），记 WARN 日志与 `machine_token_legacy_hits` 指标——「双栈仍开」告警数据源；
+1. **legacy 共享 token**：与 `CONFIG_CENTER_SERVICE_TOKEN` 恒时比较命中 → 按旧语义放行（任意 namespace 只读），记 WARN 日志与 `machine_token_legacy_hits` 可观测量表。量表从进程启动起累计，并始终上报 `0`，避免把「零命中」与「指标未接线」混为一谈；
 2. **per-service token**：SHA-256 查表命中且未吊销 → 主体=(service, environment, namespaces)；强制校验：请求的 `environment` 与 token 相等、`namespace` ∈ 白名单；
 3. 双双未命中 → 401。
 
@@ -55,7 +55,7 @@ token 明文格式：`ct_` + 32 字节随机数的 base64url（≥43 字符）�
 
 **吊销断流**：`WatchKeys` 服务端在每次心跳 tick（沿现有心跳周期）复验 token 状态；吊销后主动结束流。SDK 现有重连逻辑会带着新 Secret 重建流（若已轮换）或收到 401 快速失败。
 
-**共享 token 关闭死线**：10 服务 + gateway + config-seed 全部换发 per-service token 并稳定运行后（P6），移除环境变量并删除 legacy 分支；期间 `machine_token_legacy_hits` 持续非零即为未完成信号。
+**共享 token 关闭死线**：10 个业务服务与 gateway 全部换发 per-service token 后，`machine_token_legacy_hits` 必须连续 7 天为零。满足该条件后，移除环境变量、K8s Secret 字段和 legacy 分支。烘烤期内出现任意非零值时，从最后一次命中重新计算 7 天窗口。
 
 ## 兼容性说明
 

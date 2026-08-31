@@ -20,11 +20,15 @@ import (
 	"time"
 
 	"github.com/lens077/control-tower/constants"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/metric"
 	"go.uber.org/fx"
 	"go.uber.org/zap"
 )
 
 var Module = fx.Module("iam", fx.Provide(NewAuthorizer))
+
+const metricScopeName = "github.com/lens077/control-tower/services/config/internal/iam"
 
 type principalContextKey struct{}
 
@@ -94,6 +98,27 @@ type Authorizer struct {
 // LegacyHits 返回共享 token 命中次数（「双栈仍开」告警数据源）。
 func (a *Authorizer) LegacyHits() int64 { return a.legacyHits.Load() }
 
+// registerLegacyHitMetric 导出从本进程启动起的累计命中数。量表始终上报 0，
+// 避免「没有 legacy 请求」与「指标没有接线」都表现为空序列。
+func registerLegacyHitMetric(authorizer *Authorizer) error {
+	meter := otel.Meter(metricScopeName)
+	gauge, err := meter.Int64ObservableGauge(
+		"machine_token_legacy_hits",
+		metric.WithDescription("本进程命中 legacy 共享 Config Center token 的累计次数"),
+		metric.WithUnit("{hit}"),
+	)
+	if err != nil {
+		return fmt.Errorf("create machine_token_legacy_hits gauge: %w", err)
+	}
+	if _, err := meter.RegisterCallback(func(_ context.Context, observer metric.Observer) error {
+		observer.ObserveInt64(gauge, authorizer.LegacyHits())
+		return nil
+	}, gauge); err != nil {
+		return fmt.Errorf("register machine_token_legacy_hits callback: %w", err)
+	}
+	return nil
+}
+
 type authorizationError struct {
 	status int
 	reason string
@@ -117,6 +142,9 @@ func NewAuthorizer(logger *zap.Logger, tokens TokenStore) (*Authorizer, error) {
 		serviceToken: []byte(os.Getenv(constants.EnvConfigCenterServiceToken)),
 		tokens:       tokens,
 		log:          logger.Named("iam"),
+	}
+	if err := registerLegacyHitMetric(authorizer); err != nil {
+		return nil, err
 	}
 
 	certificateFile := os.Getenv(constants.EnvCasdoorCertificateFile)

@@ -218,7 +218,7 @@ func (s *ConfigService) WatchKeys(
 	targets := watchTargets(ns, env, keys)
 	disconnectReason := "client_closed"
 	s.presence.StartWatch(identity, targets)
-	defer func() { s.presence.StopWatch(identity, disconnectReason) }()
+	defer func() { s.presence.StopWatch(identity, targets, disconnectReason) }()
 
 	// 顺序很重要:先订阅再发快照。反过来的话,「读完快照」到「开始订阅」之间
 	// 发生的变更会两头落空 —— 快照里是旧值,事件也没订上,客户端就此停在旧配置上。

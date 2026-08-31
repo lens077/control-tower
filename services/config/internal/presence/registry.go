@@ -49,7 +49,10 @@ const (
 
 type Registry struct {
 	mu             sync.Mutex
+	persistMu      sync.Mutex
 	clients        map[string]Connection
+	watchStreams   map[string]int
+	watchTargets   map[string]map[Target]int
 	backend        Backend
 	backendTTL     time.Duration
 	backendEnabled bool
@@ -60,7 +63,11 @@ type Registry struct {
 var Module = fx.Module("presence", fx.Provide(NewConfiguredRegistry))
 
 func NewRegistry() *Registry {
-	return &Registry{clients: make(map[string]Connection)}
+	return &Registry{
+		clients:      make(map[string]Connection),
+		watchStreams: make(map[string]int),
+		watchTargets: make(map[string]map[Target]int),
+	}
 }
 
 func NewConfiguredRegistry(settings config.PresenceSettings, client *redis.Client, logger *zap.Logger) *Registry {
@@ -85,69 +92,102 @@ func (r *Registry) RecordRead(identity Identity, target Target) {
 	if !valid(identity) {
 		return
 	}
+	key := identity.key()
 	r.mu.Lock()
-	r.evictIfNeeded(identity.key())
-	item := r.clients[identity.key()]
+	r.evictIfNeeded(key)
+	item := r.clients[key]
 	item.Identity = identity
-	item.Targets = []Target{target}
+	item.Targets = mergeTargets(r.watchTargets[key], target)
 	item.LastReadAt = time.Now()
-	r.clients[identity.key()] = item
+	r.clients[key] = item
 	r.mu.Unlock()
-	r.persist(item)
+	r.persistCurrent(key)
 }
 
 func (r *Registry) StartWatch(identity Identity, targets []Target) {
 	if !valid(identity) {
 		return
 	}
+	key := identity.key()
 	r.mu.Lock()
-	r.evictIfNeeded(identity.key())
+	r.evictIfNeeded(key)
 	now := time.Now()
-	item := r.clients[identity.key()]
+	item := r.clients[key]
 	item.Identity = identity
-	item.Targets = append([]Target(nil), targets...)
+	if r.watchStreams[key] == 0 {
+		item.ConnectedAt = now
+	}
+	r.watchStreams[key]++
+	counts := r.watchTargets[key]
+	if counts == nil {
+		counts = make(map[Target]int)
+		r.watchTargets[key] = counts
+	}
+	for _, target := range targets {
+		counts[target]++
+	}
+	item.Targets = activeTargets(counts)
 	item.Watching = true
-	item.ConnectedAt = now
 	item.LastWatchAt = now
 	item.DisconnectedAt = time.Time{}
 	item.LastDisconnectReason = ""
-	r.clients[identity.key()] = item
+	r.clients[key] = item
 	r.mu.Unlock()
-	r.persist(item)
+	r.persistCurrent(key)
 }
 
 func (r *Registry) TouchWatch(identity Identity) {
 	if !valid(identity) {
 		return
 	}
+	key := identity.key()
 	r.mu.Lock()
-	item, ok := r.clients[identity.key()]
+	item, ok := r.clients[key]
 	if !ok || !item.Watching {
 		r.mu.Unlock()
 		return
 	}
 	item.LastWatchAt = time.Now()
-	r.clients[identity.key()] = item
+	r.clients[key] = item
 	r.mu.Unlock()
-	r.persist(item)
+	r.persistCurrent(key)
 }
 
-func (r *Registry) StopWatch(identity Identity, reason string) {
+func (r *Registry) StopWatch(identity Identity, targets []Target, reason string) {
 	if !valid(identity) {
 		return
 	}
+	key := identity.key()
 	r.mu.Lock()
-	item, ok := r.clients[identity.key()]
-	if !ok {
+	item, ok := r.clients[key]
+	if !ok || r.watchStreams[key] == 0 {
 		r.mu.Unlock()
 		return
 	}
-	item.Watching = false
-	item.DisconnectedAt = time.Now()
-	item.LastDisconnectReason = reason
-	r.clients[identity.key()] = item
+	counts := r.watchTargets[key]
+	for _, target := range targets {
+		if counts[target] <= 1 {
+			delete(counts, target)
+		} else {
+			counts[target]--
+		}
+	}
+	r.watchStreams[key]--
+	if r.watchStreams[key] > 0 {
+		item.Targets = activeTargets(counts)
+		item.Watching = true
+		item.DisconnectedAt = time.Time{}
+		item.LastDisconnectReason = ""
+	} else {
+		delete(r.watchStreams, key)
+		delete(r.watchTargets, key)
+		item.Watching = false
+		item.DisconnectedAt = time.Now()
+		item.LastDisconnectReason = reason
+	}
+	r.clients[key] = item
 	r.mu.Unlock()
-	r.persist(item)
+	r.persistCurrent(key)
 }
 
 func (r *Registry) List() []Connection {
@@ -197,8 +237,46 @@ func sortConnections(items []Connection) {
 	})
 }
 
-func (r *Registry) persist(item Connection) {
+func activeTargets(counts map[Target]int) []Target {
+	targets := make([]Target, 0, len(counts))
+	for target, count := range counts {
+		if count > 0 {
+			targets = append(targets, target)
+		}
+	}
+	sort.Slice(targets, func(i, j int) bool {
+		if targets[i].Namespace != targets[j].Namespace {
+			return targets[i].Namespace < targets[j].Namespace
+		}
+		if targets[i].Environment != targets[j].Environment {
+			return targets[i].Environment < targets[j].Environment
+		}
+		return targets[i].Key < targets[j].Key
+	})
+	return targets
+}
+
+func mergeTargets(watches map[Target]int, read Target) []Target {
+	counts := make(map[Target]int, len(watches)+1)
+	for target, count := range watches {
+		counts[target] = count
+	}
+	counts[read]++
+	return activeTargets(counts)
+}
+
+func (r *Registry) persistCurrent(key string) {
 	if !r.backendEnabled {
+		return
+	}
+	// 同一进程里的并发 Watch 会连续更新同一客户端。串行后再读取当前快照，
+	// 避免较早的 Store 晚到，把已经合并的 targets 覆盖回旧值。
+	r.persistMu.Lock()
+	defer r.persistMu.Unlock()
+	r.mu.Lock()
+	item, ok := r.clients[key]
+	r.mu.Unlock()
+	if !ok {
 		return
 	}
 	ctx, cancel := contextWithTimeout()
@@ -250,5 +328,7 @@ func (r *Registry) evictIfNeeded(keep string) {
 	}
 	if oldestKey != keep {
 		delete(r.clients, oldestKey)
+		delete(r.watchStreams, oldestKey)
+		delete(r.watchTargets, oldestKey)
 	}
 }

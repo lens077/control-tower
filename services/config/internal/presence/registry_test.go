@@ -57,10 +57,40 @@ func TestRegistryTracksReadWatchAndDisconnect(t *testing.T) {
 		t.Fatalf("targets = %#v, want %#v", connection.Targets, target)
 	}
 
-	r.StopWatch(identity, "heartbeat_failed")
+	r.StopWatch(identity, []Target{target}, "heartbeat_failed")
 	connection = r.List()[0]
 	if connection.Watching || connection.DisconnectedAt.IsZero() || connection.LastDisconnectReason != "heartbeat_failed" {
 		t.Fatalf("connection after disconnect = %#v", connection)
+	}
+}
+
+func TestRegistryMergesConcurrentWatchTargets(t *testing.T) {
+	r := NewRegistry()
+	identity := Identity{Name: "control-tower-gateway", Instance: "gateway-1", Version: "0.2.7"}
+	routes := Target{Namespace: "gateway", Environment: "pre", Key: "routes.yaml"}
+	policies := Target{Namespace: "gateway", Environment: "pre", Key: "policies/policies.csv"}
+
+	r.StartWatch(identity, []Target{routes})
+	r.StartWatch(identity, []Target{policies})
+
+	connection := r.List()[0]
+	if !connection.Watching || len(connection.Targets) != 2 {
+		t.Fatalf("connection = %#v, want both active Watch targets", connection)
+	}
+
+	r.StopWatch(identity, []Target{routes}, "client_closed")
+	connection = r.List()[0]
+	if !connection.Watching || len(connection.Targets) != 1 || connection.Targets[0] != policies {
+		t.Fatalf("connection after one stream stops = %#v, want remaining Watch target", connection)
+	}
+	if !connection.DisconnectedAt.IsZero() || connection.LastDisconnectReason != "" {
+		t.Fatalf("partial disconnect marked whole client disconnected: %#v", connection)
+	}
+
+	r.StopWatch(identity, []Target{policies}, "heartbeat_failed")
+	connection = r.List()[0]
+	if connection.Watching || connection.DisconnectedAt.IsZero() || connection.LastDisconnectReason != "heartbeat_failed" {
+		t.Fatalf("connection after final stream stops = %#v, want disconnected client", connection)
 	}
 }
 

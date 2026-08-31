@@ -9,6 +9,9 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.opentelemetry.io/otel"
+	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
+	"go.opentelemetry.io/otel/sdk/metric/metricdata"
 	"go.uber.org/zap"
 )
 
@@ -62,6 +65,37 @@ func TestLegacySharedTokenStillWorksAndCounts(t *testing.T) {
 	assert.EqualValues(t, 1, a.LegacyHits())
 	// legacy 范围=任意 namespace 只读。
 	assert.True(t, p.Scope.AllowsRead("anything", "anywhere"))
+}
+
+func TestLegacySharedTokenPublishesHitGauge(t *testing.T) {
+	reader := sdkmetric.NewManualReader()
+	provider := sdkmetric.NewMeterProvider(sdkmetric.WithReader(reader))
+	previous := otel.GetMeterProvider()
+	otel.SetMeterProvider(provider)
+	t.Cleanup(func() {
+		otel.SetMeterProvider(previous)
+		require.NoError(t, provider.Shutdown(context.Background()))
+	})
+
+	a := &Authorizer{serviceToken: []byte("legacy-shared"), log: zap.NewNop()}
+	require.NoError(t, registerLegacyHitMetric(a))
+	doAuth(t, a, "legacy-shared", "/config.v1.ConfigService/GetKey")
+
+	var resourceMetrics metricdata.ResourceMetrics
+	require.NoError(t, reader.Collect(context.Background(), &resourceMetrics))
+	for _, scopeMetrics := range resourceMetrics.ScopeMetrics {
+		for _, metric := range scopeMetrics.Metrics {
+			if metric.Name != "machine_token_legacy_hits" {
+				continue
+			}
+			gauge, ok := metric.Data.(metricdata.Gauge[int64])
+			require.True(t, ok)
+			require.Len(t, gauge.DataPoints, 1)
+			assert.EqualValues(t, 1, gauge.DataPoints[0].Value)
+			return
+		}
+	}
+	t.Fatal("machine_token_legacy_hits metric was not collected")
 }
 
 // 双栈第二段：per-service token 查表命中，范围收窄。
