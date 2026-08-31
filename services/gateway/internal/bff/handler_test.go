@@ -59,7 +59,7 @@ func newHarness(t *testing.T, tokenHandler http.HandlerFunc) *harness {
 	cas := httptest.NewServer(tokenHandler)
 	t.Cleanup(cas.Close)
 
-	store := session.NewMemoryStore(session.DefaultTTL())
+	store := session.NewMemoryStoreWithClock(session.DefaultTTL(), func() time.Time { return now })
 	h := &Handler{
 		Store:            store,
 		Casdoor:          NewCasdoorClient(cas.URL, "cid", "csecret"),
