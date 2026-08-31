@@ -1,17 +1,18 @@
 package service
 
 import (
+	"context"
 	"fmt"
 	"testing"
 	"time"
 
 	"connectrpc.com/connect"
-	"context"
 	v1 "github.com/lens077/control-tower/api/config/v1"
 	"github.com/lens077/control-tower/services/config/internal/biz"
 	"github.com/lens077/control-tower/services/config/internal/presence"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/zap"
 )
 
 // 历史版本存的是写入当时的明文。GetKey 把密钥打成 ****** 而 ListRevisions/GetRevision
@@ -83,4 +84,76 @@ func TestToErr_MapsSchemaViolationToInvalidArgument(t *testing.T) {
 	service := &ConfigService{}
 	err := service.toErr(fmt.Errorf("%w: schema: invalid configuration at /search", biz.ErrInvalidFormat))
 	assert.Equal(t, connect.CodeInvalidArgument, connect.CodeOf(err))
+}
+
+type putTrackingRepo struct {
+	putCount int
+}
+
+func (*putTrackingRepo) ListNamespaces(context.Context) ([]*biz.NamespaceInfo, error) {
+	return nil, nil
+}
+
+func (*putTrackingRepo) ListEntries(context.Context, string, string, string) ([]*biz.ConfigEntry, error) {
+	return nil, nil
+}
+
+func (*putTrackingRepo) GetEntry(context.Context, string, string, string) (*biz.ConfigEntry, error) {
+	return nil, biz.ErrKeyNotFound
+}
+
+func (r *putTrackingRepo) PutEntry(_ context.Context, in biz.PutParams) (*biz.ConfigEntry, error) {
+	r.putCount++
+	return &biz.ConfigEntry{
+		Namespace: in.Namespace, Environment: in.Environment, Key: in.Key,
+		Format: in.Format, Value: in.Value, IsSecret: in.IsSecret,
+	}, nil
+}
+
+func (*putTrackingRepo) DeleteEntry(context.Context, string, string, string) (bool, error) {
+	return false, nil
+}
+
+func (*putTrackingRepo) ListRevisions(context.Context, string, string, string) ([]*biz.ConfigRevision, error) {
+	return nil, nil
+}
+
+func (*putTrackingRepo) GetRevision(context.Context, string, string, string, int32) (*biz.ConfigRevision, error) {
+	return nil, biz.ErrRevisionNotFound
+}
+
+func TestPutKeyRejectsMaskedSecretBeforePersistence(t *testing.T) {
+	repo := &putTrackingRepo{}
+	service := &ConfigService{uc: biz.NewConfigUseCase(repo, nil, nil, zap.NewNop())}
+
+	_, err := service.PutKey(context.Background(), connect.NewRequest(&v1.PutKeyRequest{
+		Namespace:   "gateway",
+		Environment: "pre",
+		Key:         "credentials.txt",
+		Format:      v1.ConfigFormat_CONFIG_FORMAT_PLAINTEXT,
+		Value:       maskedValue,
+		IsSecret:    true,
+	}))
+
+	require.Error(t, err)
+	assert.Equal(t, connect.CodeInvalidArgument, connect.CodeOf(err))
+	assert.Equal(t, 0, repo.putCount)
+}
+
+func TestPutKeyCannotBypassMaskedPlaceholderGuardByClearingSecretFlag(t *testing.T) {
+	repo := &putTrackingRepo{}
+	service := &ConfigService{uc: biz.NewConfigUseCase(repo, nil, nil, zap.NewNop())}
+
+	_, err := service.PutKey(context.Background(), connect.NewRequest(&v1.PutKeyRequest{
+		Namespace:   "gateway",
+		Environment: "pre",
+		Key:         "credentials.txt",
+		Format:      v1.ConfigFormat_CONFIG_FORMAT_PLAINTEXT,
+		Value:       maskedValue,
+		IsSecret:    false,
+	}))
+
+	require.Error(t, err)
+	assert.Equal(t, connect.CodeInvalidArgument, connect.CodeOf(err))
+	assert.Equal(t, 0, repo.putCount)
 }

@@ -21,6 +21,8 @@ var _ configv1connect.ConfigServiceHandler = (*ConfigService)(nil)
 // 免得两条读路径各写各的、其中一条忘了脱敏。
 const maskedValue = "******"
 
+var errMaskedSecretPlaceholder = errors.New("masked secret placeholder cannot be saved; provide a new secret value")
+
 type ConfigService struct {
 	uc            *biz.ConfigUseCase
 	machineTokens *biz.MachineTokenUseCase
@@ -140,6 +142,10 @@ func (s *ConfigService) GetKey(ctx context.Context, c *connect.Request[v1.GetKey
 }
 
 func (s *ConfigService) PutKey(ctx context.Context, c *connect.Request[v1.PutKeyRequest]) (*connect.Response[v1.PutKeyResponse], error) {
+	// 读接口用该保留值脱敏；即使清掉 is_secret 也不能把它写回数据库。
+	if c.Msg.Value == maskedValue {
+		return nil, connect.NewError(connect.CodeInvalidArgument, errMaskedSecretPlaceholder)
+	}
 	e, err := s.uc.PutKey(ctx, biz.PutParams{
 		Namespace:   c.Msg.Namespace,
 		Environment: c.Msg.Environment,

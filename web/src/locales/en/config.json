@@ -148,7 +148,7 @@
     "comment": "Change note",
     "secret": "Secret",
     "saveFailed": "Failed to save: {{message}}",
-    "secretWarning": "This entry is a secret; its value is masked as {{masked}}. Saving as-is will overwrite the real value."
+    "secretWarning": "This entry is a secret; its value is masked as {{masked}}. Enter a new value before saving; the server rejects the masked placeholder."
   },
   "history": {
     "title": "Version history",

@@ -148,7 +148,7 @@
     "comment": "变更备注",
     "secret": "密钥",
     "saveFailed": "保存失败:{{message}}",
-    "secretWarning": "该项为密钥,值已脱敏显示为 {{masked}} ;直接保存会覆盖真实值。"
+    "secretWarning": "该项为密钥，值已脱敏显示为 {{masked}}。保存前必须输入新值；服务端会拒绝脱敏占位值。"
   },
   "history": {
     "title": "版本历史",
