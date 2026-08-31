@@ -151,7 +151,7 @@ CONFIG_CENTER_VM_ENDPOINT=http://metrics.apikv.com \
 | node3 PG 证书 | 初次补域名：`server.crt.bak-20260829-220415`；再补入口 IP：`server.crt.bak-20260830-181443` + `pg_reload_conf()` |
 | node3 VM 参数 | `/etc/default/vmetrics.bak-20260829-234102` |
 | HTTPRoute | 文件在 `deploy/pre/{config,gateway}/`；2026-08-31 已恢复集群对象。不要再依赖 `/tmp/gw-orphans/`（已随重启消失） |
-| 镜像 | 当前三个服务统一为 public GHCR 的 `0.2.5`；config 的 TCR 绕路已撤销 |
+| 镜像 | config 与 config web 为 public GHCR `0.2.6`，gateway 为 `0.2.5`；config 的 TCR 绕路已撤销 |
 
 ## 2026-08-31 后续收口
 
@@ -171,9 +171,11 @@ CONFIG_CENTER_VM_ENDPOINT=http://metrics.apikv.com \
   公网不再运行 dev 的 insecure/localhost BFF 参数；pre 暂时关闭会话轨，仅保留 legacy bearer。
   切换后的 `workflow_dispatch` run `33364139018` 全部通过。dev/pre 仍指向同一组 namespace 与对象名，
   不能当作隔离环境。
-- **镜像统一**：dev/pre 六份 manifest 使用 public GHCR 的同一 `0.2.5` tag。config 包改 public 后，
-  无凭据 OCI manifest 请求返回 200；live config 已从 TCR 滚动到 GHCR，镜像 digest 保持
-  `sha256:aff79b5339364588d6b6e61c4dfec199ebc8dbfec188a0b351d30613d6630774`。
+- **镜像发布与滚动**：先将 dev/pre 六份 manifest 统一到 public GHCR `0.2.5`，再从提交
+  `5658312` 发布裸 tag `0.2.6`。CI 的质量门禁和三个多架构镜像 job 全部通过。config 与 config web
+  已滚动到 `0.2.6`，对应 digest 为 `sha256:f5f3e7348dd364691ada8abe729571e1b57432111831d148efd51f11529cb146`
+  与 `sha256:a480e08a675e10d11367250dc71b188e0a978880c2db295308ee3a8c7440b9e1`；gateway 仍运行 `0.2.5`。
+  三个 `0.2.6` 包的无凭据 OCI manifest 请求均返回 200。
 
 ## 遗留
 

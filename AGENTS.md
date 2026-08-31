@@ -6,9 +6,10 @@
 
 集群 2026-08-21 前后重建过，`postgresql` ns 已不存在。`config-center` ns 于 2026-08-29
 按 `deploy/pre/config/` 重建，gateway 于 2026-08-30 重新拉起，**两个服务都在跑**。
-2026-08-31 三个服务镜像统一到 public GHCR 的 `0.2.5`，dev/pre 六份 manifest 使用同一版本 tag。
-`control-tower-config` 改为 public 后，已用无凭据 OCI 请求与集群滚动拉取双重验证；三个包的
-匿名拉取路径一致。不要只用本机 `docker manifest inspect` 判断可见性（Keychain 会偷偷带凭据）。
+2026-08-31 发布裸 tag `0.2.6` 后，config 与 config web 已从 public GHCR 的 `0.2.5`
+滚动到 `0.2.6`；gateway 仍为 `0.2.5`。dev/pre 的四份 config manifest 已同步为 `0.2.6`，
+gateway manifest 保持 `0.2.5`。三个 `0.2.6` 包均已通过无凭据 OCI 请求验证，config 与 config web
+还完成了集群滚动拉取。不要只用本机 `docker manifest inspect` 判断可见性（Keychain 会偷偷带凭据）。
 
 **公网入口已恢复**：三条 HTTPRoute 均为 `Accepted=True`、`ResolvedRefs=True`。
 `config.apikv.com/` 返回 200，`config-api.apikv.com/healthz`、
@@ -17,8 +18,8 @@
 
 | 服务 | 集群状态 | 备注 |
 |---|---|---|
-| config | `config-center/config-center` **运行中**（`0.2.5`） | `config-center.config-center.svc:30010`，镜像走 GHCR |
-| config web | `config-center/config-center-web` **运行中**（`0.2.5`） | `config-center-web.config-center.svc:80`，镜像走 GHCR |
+| config | `config-center/config-center` **运行中**（`0.2.6`） | `config-center.config-center.svc:30010`，镜像走 GHCR |
+| config web | `config-center/config-center-web` **运行中**（`0.2.6`） | `config-center-web.config-center.svc:80`，镜像走 GHCR |
 | gateway | `ecommerce/control-tower-gateway` **运行中**（`0.2.5`，2 副本） | `ecommerce-gateway-service.ecommerce.svc:8080`，镜像走 GHCR；`/healthz`、`/readyz` 均 200 |
 
 重新收敛公网入口：

@@ -18,7 +18,7 @@ spec:
     spec:
       containers:
         - name: config-center
-          image: ghcr.io/lens077/control-tower-config:0.2.5
+          image: ghcr.io/lens077/control-tower-config:0.2.6
           imagePullPolicy: Always
           env:
             # 关闭应用内的 Log 导出器，只保留 Trace 和 Metric。
