@@ -6,10 +6,15 @@
 
 集群 2026-08-21 前后重建过，`postgresql` ns 已不存在。`config-center` ns 于 2026-08-29
 按 `deploy/pre/config/` 重建，gateway 于 2026-08-30 重新拉起，**两个服务都在跑**。
-2026-08-31 发布裸 tag `0.2.6` 后，config 与 config web 已从 public GHCR 的 `0.2.5`
-滚动到 `0.2.6`；gateway 仍为 `0.2.5`。dev/pre 的四份 config manifest 已同步为 `0.2.6`，
-gateway manifest 保持 `0.2.5`。三个 `0.2.6` 包均已通过无凭据 OCI 请求验证，config 与 config web
-还完成了集群滚动拉取。不要只用本机 `docker manifest inspect` 判断可见性（Keychain 会偷偷带凭据）。
+2026-08-31 发布裸 tag `0.2.8` 后，config 已从 public GHCR `0.2.6` 滚动到 `0.2.8`；
+config web 仍为 `0.2.6`，gateway 仍为 `0.2.5`。dev/pre 的两份 config 后端 manifest 已同步为
+`0.2.8`。三个 `0.2.8` 包均已通过无凭据 OCI 请求验证；config 实际运行 digest
+`sha256:5bc686d90670d2acede3ff0d69ba2ae334113e94be58303f7352b336c439d6c2`。
+节点 containerd 的 `NO_PROXY` 已加入 `ghcr.io,.githubusercontent.com`，避免请求误走已下线的
+`192.168.3.220:7890`。不要只用本机 `docker manifest inspect` 判断可见性（Keychain 会偷偷带凭据）。
+12 个 consumer selector 已换成 scoped Machine Token；legacy 回退仍在 7 天烘烤期。
+`machine_token_legacy_hits` 的零命中窗口从 `2026-08-31T16:05:03Z` 起算，最早于
+`2026-09-07T16:05:03Z` 删除回退；任何非零命中都会重置窗口。
 
 **公网入口已恢复**：三条 HTTPRoute 均为 `Accepted=True`、`ResolvedRefs=True`。
 `config.apikv.com/` 返回 200，`config-api.apikv.com/healthz`、
@@ -18,7 +23,7 @@ gateway manifest 保持 `0.2.5`。三个 `0.2.6` 包均已通过无凭据 OCI �
 
 | 服务 | 集群状态 | 备注 |
 |---|---|---|
-| config | `config-center/config-center` **运行中**（`0.2.6`） | `config-center.config-center.svc:30010`，镜像走 GHCR |
+| config | `config-center/config-center` **运行中**（`0.2.8`） | `config-center.config-center.svc:30010`，镜像走 GHCR |
 | config web | `config-center/config-center-web` **运行中**（`0.2.6`） | `config-center-web.config-center.svc:80`，镜像走 GHCR |
 | gateway | `ecommerce/control-tower-gateway` **运行中**（`0.2.5`，2 副本） | `ecommerce-gateway-service.ecommerce.svc:8080`，镜像走 GHCR；`/healthz`、`/readyz` 均 200 |
 

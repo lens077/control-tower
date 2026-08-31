@@ -151,7 +151,8 @@ CONFIG_CENTER_VM_ENDPOINT=http://metrics.apikv.com \
 | node3 PG 证书 | 初次补域名：`server.crt.bak-20260829-220415`；再补入口 IP：`server.crt.bak-20260830-181443` + `pg_reload_conf()` |
 | node3 VM 参数 | `/etc/default/vmetrics.bak-20260829-234102` |
 | HTTPRoute | 文件在 `deploy/pre/{config,gateway}/`；2026-08-31 已恢复集群对象。不要再依赖 `/tmp/gw-orphans/`（已随重启消失） |
-| 镜像 | config 与 config web 为 public GHCR `0.2.6`，gateway 为 `0.2.5`；config 的 TCR 绕路已撤销 |
+| 镜像 | config 为 public GHCR `0.2.8`，config web 为 `0.2.6`，gateway 为 `0.2.5`；config 回滚到 `0.2.6` 时同步回退 dev/pre deployment |
+| 节点 containerd 代理 | 三节点备份 `/etc/systemd/system/containerd.service.d/http-proxy.conf.before-ghcr-no-proxy-20260831T160900Z`；回滚后需 `systemctl daemon-reload && systemctl restart containerd` |
 
 ## 2026-08-31 后续收口
 
@@ -171,14 +172,45 @@ CONFIG_CENTER_VM_ENDPOINT=http://metrics.apikv.com \
   公网不再运行 dev 的 insecure/localhost BFF 参数；pre 暂时关闭会话轨，仅保留 legacy bearer。
   切换后的 `workflow_dispatch` run `33364139018` 全部通过。dev/pre 仍指向同一组 namespace 与对象名，
   不能当作隔离环境。
-- **镜像发布与滚动**：先将 dev/pre 六份 manifest 统一到 public GHCR `0.2.5`，再从提交
-  `5658312` 发布裸 tag `0.2.6`。CI 的质量门禁和三个多架构镜像 job 全部通过。config 与 config web
-  已滚动到 `0.2.6`，对应 digest 为 `sha256:f5f3e7348dd364691ada8abe729571e1b57432111831d148efd51f11529cb146`
-  与 `sha256:a480e08a675e10d11367250dc71b188e0a978880c2db295308ee3a8c7440b9e1`；gateway 仍运行 `0.2.5`。
-  三个 `0.2.6` 包的无凭据 OCI manifest 请求均返回 200。
+- **`0.2.6` 镜像发布与滚动**：先将 dev/pre 六份 manifest 统一到 public GHCR `0.2.5`，
+  再从提交 `5658312` 发布裸 tag `0.2.6`。config 与 config web 已滚动到 `0.2.6`；gateway
+  保持 `0.2.5`。三个包的无凭据 OCI manifest 请求均返回 200。
+- **scoped Machine Token 已切流**：线上 10 个 dev 业务 selector，以及 gateway dev 回滚
+  Secret 与 gateway pre 线上 Secret，共 12 个 selector 均换成 environment×namespace 最小作用域
+  token。业务 Deployment 通过
+  `secret.items` 只投射自身 `{service}.yaml`；共享 Secret 只作为运维打包对象。12 枚 token 均有
+  最近使用时间，10 个业务 Pod 与 2 个 gateway Pod 全部 Ready、零重启；错误 namespace 请求返回 403。
+- **`0.2.8` 发布与滚动**：`0.2.7` 虽完成三个镜像构建，但对抗复审发现 Presence 仍会跨
+  Config Center 副本互相覆盖，因此没有部署。修复后从 `bf2354f` 发布 `0.2.8`；CI run
+  `33396801545` 的质量门禁与三个镜像 job 全部通过。config/config-web/gateway 的无凭据 OCI digest
+  分别为 `sha256:5bc686d90670d2acede3ff0d69ba2ae334113e94be58303f7352b336c439d6c2`、
+  `sha256:0b02eeef4b2b7705a42b50dec0992b11b2569a155ba608ff752017530f32a00c`、
+  `sha256:b5937a0e4332575162bd6b07b78ff241a827f2fafd2903c1ebd02f5cf706cb8d`。
+  只滚动 config；config web 保持 `0.2.6`，gateway 保持 `0.2.5`。
+- **滚动故障与恢复**：三节点 containerd 把 GHCR 请求送往已下线的
+  `192.168.3.220:7890`，先后表现为 `EOF` 与 `proxyconnect ... connection refused`。
+  应急排查时曾用 JSON Merge Patch 只传 `containers[].name/image`；该 patch 会替换整个数组，连同
+  env、卷挂载与 readinessProbe 一起删除。Deployment 因探针消失而提前判定 Ready，旧 Pod 退出后，
+  新进程以 `open /app/config/config.yaml: no such file or directory` 崩溃，造成一次短暂不可用。
+  随即用完整 pre manifest 通过同 digest TCR 镜像恢复服务，再把三节点 containerd 的 `NO_PROXY`
+  加入 `ghcr.io,.githubusercontent.com`，依次重启并确认三节点 Ready，最后切回 public GHCR。
+  以后改容器镜像只能用 `kubectl set image`、Strategic Merge Patch 或完整 manifest，不能用
+  JSON Merge Patch 局部覆盖 `containers` 数组。
+- **GHCR 直连实测**：三节点分别在 60 秒观察窗内开始下载，最终直拉 27.8 MB 的 config-web
+  镜像耗时 108～117 秒，即 237～257 kB/s，超过 100 kB/s 门槛。节点 drop-in 备份名见回滚表。
+- **退役烘烤与实机验收**：`machine_token_legacy_hits` 当前值与 7 天窗口于
+  `2026-08-31T16:05:03Z` 首次同时为零，最早删除时间为 `2026-09-07T16:05:03Z`。
+  `/connections` 显示 10 个业务客户端各自唯一 target，2 个 gateway 客户端各自完整显示 5 个 target。
+  首次 workflow_dispatch run `33412267335` 在 global setup 遇到公网连接拒绝而失败；公网恢复后
+  run `33412969992` 的 16 条用例全部通过，其中包含指标存在性、WatchKeys、连接聚合与真实吊销，
+  并成功发送 failure→success 恢复通知。
 
 ## 遗留
 
+- **legacy 共享 token 仍处于安全烘烤期**：最早在 `2026-09-07T16:05:03Z` 且 7 天窗口持续为零时删除；
+  期间任何非零命中都从最后一次命中重新起算。
+- **containerd 常驻代理地址仍指向已下线节点**：TCR 与 GHCR 已通过 `NO_PROXY` 直连；其他未命中
+  certs.d mirror/`NO_PROXY` 的仓库仍可能失败。新增直连域名前先按本次方法实测吞吐，不要凭感觉扩名单。
 - **dev 与 pre 共用同一个库**：node3 是单实例，`pre.yaml` 里已标 TODO，拆开前别把 pre 当隔离环境用。
 - **API_\* 三组曲线**：`rpc.server.duration` 只在 RPC **完成时**记样本，而 config 服务当前流量
   几乎全是长连的 `WatchKeys`，所以那三张图要等有短请求才有数据（不是故障）。

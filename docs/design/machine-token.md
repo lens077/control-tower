@@ -57,6 +57,11 @@ token 明文格式：`ct_` + 32 字节随机数的 base64url（≥43 字符）�
 
 **共享 token 关闭死线**：10 个业务服务与 gateway 全部换发 per-service token 后，`machine_token_legacy_hits` 必须连续 7 天为零。满足该条件后，移除环境变量、K8s Secret 字段和 legacy 分支。烘烤期内出现任意非零值时，从最后一次命中重新计算 7 天窗口。
 
+**当前烘烤窗口**：VictoriaMetrics 于 `2026-08-31T16:05:03Z` 首次确认当前值与
+`max_over_time(machine_token_legacy_hits[7d])` 均为 `0`；最早删除时间为
+`2026-09-07T16:05:03Z`。每 6 小时 e2e 同时断言「时序存在」「当前值为零」「7 天窗口为零」；
+空结果或任意非零值都会让巡检失败并重置退役窗口。
+
 ## 兼容性说明
 
 - SDK 与请求头名不变——旧 SDK v0.1.0 与新 SDK 都按原样工作（wire 冻结）。
