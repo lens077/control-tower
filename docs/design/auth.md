@@ -5,6 +5,7 @@
 ## 结论摘要
 
 - IdP 保持 Casdoor；授权引擎保持 Casbin（网关进程内粗闸）。
+- Casdoor 粗粒度角色固定为 `admin` / `merchant` / `customer`；`consumer` 只表示 C 端应用或 OAuth client，不是角色名。网关不得做角色别名映射，策略必须与 Casdoor 原值一致。
 - Access token 短 TTL（dev 实测 900 秒生效）。**角色不在 claims 里**——2026-08-24 真 token 实测本部署 Casdoor 不嵌 `roles`，已按下文回退分支启用 `CasdoorRoleSource`（get-user + 5 分钟进程内缓存）。
 - 撤权走「配置中心撤销名单键 + Casdoor 侧操作」的混合通道，生效时间约等于 Watch 推送延迟（秒级）。
 - 高危路由可标注 `online_check`，命中时实时调 Casdoor 校验，错误按 fail-close 处理（只收窄授权，不放大）。

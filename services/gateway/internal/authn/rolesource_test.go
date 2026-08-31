@@ -17,7 +17,7 @@ func TestRoleSourceFetchAndCache(t *testing.T) {
 		if r.URL.Path != "/api/get-user" || r.URL.Query().Get("id") != "lens/alice" {
 			t.Errorf("unexpected request %s?%s", r.URL.Path, r.URL.RawQuery)
 		}
-		fmt.Fprint(w, `{"status":"ok","data":{"name":"alice","roles":[{"owner":"lens","name":"consumer"},{"owner":"lens","name":"vip"}]}}`)
+		fmt.Fprint(w, `{"status":"ok","data":{"name":"alice","roles":[{"owner":"lens","name":"customer"},{"owner":"lens","name":"vip"}]}}`)
 	}))
 	defer srv.Close()
 
@@ -26,7 +26,7 @@ func TestRoleSourceFetchAndCache(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(roles) != 2 || roles[0] != "consumer" || roles[1] != "vip" {
+	if len(roles) != 2 || roles[0] != "customer" || roles[1] != "vip" {
 		t.Fatalf("roles=%v", roles)
 	}
 	// 缓存命中：不再回源。
@@ -65,7 +65,7 @@ func TestRoleSourceStaleOnError(t *testing.T) {
 			w.WriteHeader(500)
 			return
 		}
-		fmt.Fprint(w, `{"status":"ok","data":{"roles":[{"name":"consumer"}]}}`)
+		fmt.Fprint(w, `{"status":"ok","data":{"roles":[{"name":"customer"}]}}`)
 	}))
 	defer srv.Close()
 
@@ -79,7 +79,7 @@ func TestRoleSourceStaleOnError(t *testing.T) {
 	if err != nil {
 		t.Fatalf("stale fallback must serve: %v", err)
 	}
-	if len(roles) != 1 || roles[0] != "consumer" {
+	if len(roles) != 1 || roles[0] != "customer" {
 		t.Fatalf("roles=%v", roles)
 	}
 	if s.StaleServedCount() == 0 {

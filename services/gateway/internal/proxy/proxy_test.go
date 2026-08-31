@@ -46,7 +46,7 @@ func claims(sub string) *authn.Claims {
 	return &authn.Claims{
 		Owner: "lens",
 		Name:  "alice",
-		Roles: []authn.Role{{Name: "consumer"}},
+		Roles: []authn.Role{{Name: "customer"}},
 		RegisteredClaims: jwt.RegisteredClaims{
 			Subject: sub,
 		},
@@ -92,7 +92,7 @@ func TestProxyForwardsAndInjectsIdentity(t *testing.T) {
 	if rec.Code != 200 || rec.Header().Get("X-Backend") != "ok" {
 		t.Fatalf("status=%d headers=%v", rec.Code, rec.Header())
 	}
-	if got.Get(identity.HeaderUserID) != "u-alice" || got.Get(identity.HeaderRole) != "consumer" {
+	if got.Get(identity.HeaderUserID) != "u-alice" || got.Get(identity.HeaderRole) != "customer" {
 		t.Fatalf("identity not injected: %v", got)
 	}
 	if got.Get("X-Forwarded-For") == "" || got.Get("X-Forwarded-Proto") == "" {

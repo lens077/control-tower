@@ -31,7 +31,7 @@ e = some(where (p.eft == allow)) && !some(where (p.eft == deny))
 m = g(r.sub, p.sub) && keyMatch2(r.obj, p.obj) && regexMatch(r.act, p.act)
 `
 
-const miniPolicies = "p, consumer, /user.v1.UserService/*, POST, allow\n"
+const miniPolicies = "p, customer, /user.v1.UserService/*, POST, allow\n"
 
 func newState(t *testing.T) *State {
 	t.Helper()

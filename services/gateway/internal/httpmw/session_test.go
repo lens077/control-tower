@@ -71,7 +71,7 @@ func (f *fixture) doSession(t *testing.T, path, id string, cookie bool, origin, 
 func TestSessionCookieAuthenticates(t *testing.T) {
 	f := newFixture(t)
 	store := withSessions(t, f)
-	liveSession(t, store, []string{"consumer"})
+	liveSession(t, store, []string{"customer"})
 	// 若走了回退源就说明没用会话里的角色——这里故意让它爆。
 	f.deps.Roles = roleSourceFunc(func(context.Context, string, string) ([]string, error) {
 		t.Fatal("session track must not hit the role source on the hot path")
@@ -95,7 +95,7 @@ func TestSessionCookieAuthenticates(t *testing.T) {
 func TestSessionHeaderAuthenticates(t *testing.T) {
 	f := newFixture(t)
 	store := withSessions(t, f)
-	liveSession(t, store, []string{"consumer"})
+	liveSession(t, store, []string{"customer"})
 
 	rec := f.doSession(t, "/user.v1.UserService/GetProfile", "sid-1", false, "", http.MethodPost)
 	if rec.Code != 200 {
@@ -107,7 +107,7 @@ func TestSessionHeaderAuthenticates(t *testing.T) {
 func TestCookieTrackRejectsBadOrigin(t *testing.T) {
 	f := newFixture(t)
 	store := withSessions(t, f)
-	liveSession(t, store, []string{"consumer"})
+	liveSession(t, store, []string{"customer"})
 
 	rec := f.doSession(t, "/user.v1.UserService/GetProfile", "sid-1", true, "https://evil.example", http.MethodPost)
 	if rec.Code != 403 || reason(rec) != "CSRF_ORIGIN_REJECTED" {
@@ -124,7 +124,7 @@ func TestCookieTrackRejectsBadOrigin(t *testing.T) {
 func TestHeaderTrackIgnoresOrigin(t *testing.T) {
 	f := newFixture(t)
 	store := withSessions(t, f)
-	liveSession(t, store, []string{"consumer"})
+	liveSession(t, store, []string{"customer"})
 
 	rec := f.doSession(t, "/user.v1.UserService/GetProfile", "sid-1", false, "https://evil.example", http.MethodPost)
 	if rec.Code != 200 {
@@ -136,7 +136,7 @@ func TestHeaderTrackIgnoresOrigin(t *testing.T) {
 func TestDeletedSessionRejected(t *testing.T) {
 	f := newFixture(t)
 	store := withSessions(t, f)
-	liveSession(t, store, []string{"consumer"})
+	liveSession(t, store, []string{"customer"})
 	if err := store.Delete(context.Background(), "sid-1"); err != nil {
 		t.Fatal(err)
 	}
@@ -156,7 +156,7 @@ func (fn refresherFunc) Refresh(ctx context.Context, rt string) (string, string,
 func TestServerSideRefresh(t *testing.T) {
 	f := newFixture(t)
 	store := withSessions(t, f)
-	s := liveSession(t, store, []string{"consumer"})
+	s := liveSession(t, store, []string{"customer"})
 	s.AccessExpiry = testNow.Add(10 * time.Second) // 进入提前续期窗
 	if err := store.Save(context.Background(), s); err != nil {
 		t.Fatal(err)
@@ -181,7 +181,7 @@ func TestServerSideRefresh(t *testing.T) {
 func TestRefreshRejectionRevokesSession(t *testing.T) {
 	f := newFixture(t)
 	store := withSessions(t, f)
-	s := liveSession(t, store, []string{"consumer"})
+	s := liveSession(t, store, []string{"customer"})
 	s.AccessExpiry = testNow.Add(-time.Minute) // 已过期
 	if err := store.Save(context.Background(), s); err != nil {
 		t.Fatal(err)

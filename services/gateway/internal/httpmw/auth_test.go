@@ -69,7 +69,7 @@ e = some(where (p.eft == allow)) && !some(where (p.eft == deny))
 [matchers]
 m = g(r.sub, p.sub) && keyMatch2(r.obj, p.obj) && regexMatch(r.act, p.act)
 `
-	if err := az.SetPolicies(model, "p, consumer, /user.v1.UserService/*, POST, allow\np, admin, /payment.v1.PaymentService/Refund, POST, allow\n"); err != nil {
+	if err := az.SetPolicies(model, "p, customer, /user.v1.UserService/*, POST, allow\np, admin, /payment.v1.PaymentService/Refund, POST, allow\n"); err != nil {
 		t.Fatal(err)
 	}
 
@@ -108,7 +108,7 @@ func (f *fixture) token(t *testing.T, mut ...func(*authn.Claims)) string {
 		Owner:     "lens",
 		Name:      "alice",
 		TokenType: authn.TokenTypeAccess,
-		Roles:     []authn.Role{{Name: "consumer"}},
+		Roles:     []authn.Role{{Name: "customer"}},
 		RegisteredClaims: jwt.RegisteredClaims{
 			Issuer:    issuer,
 			Audience:  jwt.ClaimStrings{aud},
@@ -222,7 +222,7 @@ revocations:
 
 func TestRBACDenied(t *testing.T) {
 	f := newFixture(t)
-	// consumer 角色打 payment.Refund：策略只给 admin。
+	// customer 角色打 payment.Refund：策略只给 admin。
 	tok := f.token(t)
 	rec := f.do(t, "/payment.v1.PaymentService/Refund", tok)
 	// Refund 同时是 online_check 路由，Disabled introspector 先 fail-close。
@@ -242,7 +242,7 @@ func TestOnlineCheckPassThenRBAC(t *testing.T) {
 		t.Fatalf("status=%d reason=%s", rec.Code, reason(rec))
 	}
 
-	// consumer 角色 + introspect 放行 → RBAC 拒绝。
+	// customer 角色 + introspect 放行 → RBAC 拒绝。
 	rec = f.do(t, "/payment.v1.PaymentService/Refund", f.token(t))
 	if rec.Code != 403 || reason(rec) != "RBAC_DENIED" {
 		t.Fatalf("status=%d reason=%s", rec.Code, reason(rec))
@@ -302,7 +302,7 @@ func TestRoleSourceFallback(t *testing.T) {
 		if owner != "lens" || name != "alice" {
 			t.Errorf("unexpected identity %s/%s", owner, name)
 		}
-		return []string{"consumer"}, nil
+		return []string{"customer"}, nil
 	})
 	// token 不带任何角色。
 	tok := f.token(t, func(c *authn.Claims) { c.Roles = nil })
@@ -312,7 +312,7 @@ func TestRoleSourceFallback(t *testing.T) {
 	}
 	// 回填进 claims：下游身份头与授权口径一致。
 	c := gwctx.Claims(f.captured.Context())
-	if len(c.RoleNames()) != 1 || c.RoleNames()[0] != "consumer" {
+	if len(c.RoleNames()) != 1 || c.RoleNames()[0] != "customer" {
 		t.Fatalf("claims roles=%v", c.RoleNames())
 	}
 }

@@ -41,7 +41,7 @@ func mintToken(t *testing.T, key *rsa.PrivateKey, opts ...tokenOpt) string {
 		Owner:     "lens",
 		Name:      "alice",
 		TokenType: TokenTypeAccess,
-		Roles:     []Role{{Owner: "lens", Name: "consumer"}},
+		Roles:     []Role{{Owner: "lens", Name: "customer"}},
 		RegisteredClaims: jwt.RegisteredClaims{
 			Issuer:    testIssuer,
 			Audience:  jwt.ClaimStrings{testAud},
@@ -80,7 +80,7 @@ func TestVerifyValidAccessToken(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if c.UserID() != "u-alice" || len(c.RoleNames()) != 1 || c.RoleNames()[0] != "consumer" {
+	if c.UserID() != "u-alice" || len(c.RoleNames()) != 1 || c.RoleNames()[0] != "customer" {
 		t.Fatalf("claims=%+v", c)
 	}
 }

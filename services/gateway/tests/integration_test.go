@@ -98,7 +98,7 @@ e = some(where (p.eft == allow)) && !some(where (p.eft == deny))
 [matchers]
 m = g(r.sub, p.sub) && keyMatch2(r.obj, p.obj) && regexMatch(r.act, p.act)
 `)
-	writeFile("policies.csv", "p, consumer, /echo.v1.EchoService/*, POST, allow\n")
+	writeFile("policies.csv", "p, customer, /echo.v1.EchoService/*, POST, allow\n")
 
 	// 装配（与 main 相同的 BuildHandler）。
 	verifier, err := authn.New(issuer, []string{aud})
@@ -140,7 +140,7 @@ func (e *env) token(t *testing.T, mut ...func(*authn.Claims)) string {
 		Owner:     "lens",
 		Name:      "alice",
 		TokenType: authn.TokenTypeAccess,
-		Roles:     []authn.Role{{Name: "consumer"}},
+		Roles:     []authn.Role{{Name: "customer"}},
 		RegisteredClaims: jwt.RegisteredClaims{
 			Issuer:    issuer,
 			Audience:  jwt.ClaimStrings{aud},
@@ -227,7 +227,7 @@ func TestProtectedWithTokenProxiesIdentity(t *testing.T) {
 	if e.lastBackendHeaders.Get("x-md-global-user-id") != "u-alice" {
 		t.Fatalf("identity not injected: %v", e.lastBackendHeaders)
 	}
-	if e.lastBackendHeaders.Get("x-md-global-role") != "consumer" {
+	if e.lastBackendHeaders.Get("x-md-global-role") != "customer" {
 		t.Fatalf("role not injected: %v", e.lastBackendHeaders)
 	}
 }

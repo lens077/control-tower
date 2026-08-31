@@ -33,7 +33,7 @@ func TestInject(t *testing.T) {
 	c := &authn.Claims{
 		Owner: "lens",
 		Name:  "alice",
-		Roles: []authn.Role{{Name: "consumer"}, {Name: "vip"}},
+		Roles: []authn.Role{{Name: "customer"}, {Name: "vip"}},
 		RegisteredClaims: jwt.RegisteredClaims{
 			Subject: "u-alice",
 		},
@@ -44,8 +44,8 @@ func TestInject(t *testing.T) {
 	if h.Get(HeaderUserID) != "u-alice" || h.Get(HeaderName) != "alice" || h.Get(HeaderOwner) != "lens" {
 		t.Fatalf("identity headers wrong: %v", h)
 	}
-	if h.Get(HeaderRole) != "consumer,vip" {
-		t.Fatalf("role header=%q want consumer,vip", h.Get(HeaderRole))
+	if h.Get(HeaderRole) != "customer,vip" {
+		t.Fatalf("role header=%q want customer,vip", h.Get(HeaderRole))
 	}
 }
 

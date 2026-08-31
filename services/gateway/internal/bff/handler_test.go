@@ -164,7 +164,7 @@ func TestCallbackCreatesSession(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 		fmt.Fprintf(w, `{"access_token":%q,"refresh_token":"rt","expires_in":900}`, hs.mintToken(t))
 	})
-	hs.h.Roles = roleSourceFunc(func(owner, name string) []string { return []string{"consumer"} })
+	hs.h.Roles = roleSourceFunc(func(owner, name string) []string { return []string{"customer"} })
 
 	// 先 login 拿 state cookie。
 	loginRec := httptest.NewRecorder()
@@ -224,7 +224,7 @@ func TestMeAndLogout(t *testing.T) {
 	hs := newHarness(t, func(http.ResponseWriter, *http.Request) {})
 	_ = hs.store.Create(t.Context(), &session.Session{
 		ID: "sid", Sub: "u-alice", Owner: "lens", Name: "alice",
-		Roles: []string{"consumer"}, CreatedAt: now,
+		Roles: []string{"customer"}, CreatedAt: now,
 	})
 
 	// 未认证
@@ -273,7 +273,7 @@ func TestNativeCallbackReturnsSessionViaLoopback(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 		fmt.Fprintf(w, `{"access_token":%q,"refresh_token":"rt","expires_in":900}`, hs.mintToken(t))
 	})
-	hs.h.Roles = roleSourceFunc(func(string, string) []string { return []string{"consumer"} })
+	hs.h.Roles = roleSourceFunc(func(string, string) []string { return []string{"customer"} })
 
 	loopback := "http://127.0.0.1:54321/oauth/callback"
 	loginRec := httptest.NewRecorder()
@@ -343,7 +343,7 @@ func TestNativeCallbackWorksWithoutStateCookie(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 		fmt.Fprintf(w, `{"access_token":%q,"refresh_token":"rt","expires_in":900}`, hs.mintToken(t))
 	})
-	hs.h.Roles = roleSourceFunc(func(string, string) []string { return []string{"consumer"} })
+	hs.h.Roles = roleSourceFunc(func(string, string) []string { return []string{"customer"} })
 
 	loopback := "http://127.0.0.1:54321/oauth/callback"
 	loginRec := httptest.NewRecorder()
@@ -384,7 +384,7 @@ func TestSessionHeaderWorksForMeAndLogout(t *testing.T) {
 	hs := newHarness(t, func(http.ResponseWriter, *http.Request) {})
 	_ = hs.store.Create(t.Context(), &session.Session{
 		ID: "sid-native", Sub: "u-alice", Owner: "lens", Name: "alice",
-		Roles: []string{"consumer"}, CreatedAt: now,
+		Roles: []string{"customer"}, CreatedAt: now,
 	})
 
 	req := httptest.NewRequest(http.MethodGet, "/auth/me", nil)

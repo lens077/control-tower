@@ -7,7 +7,7 @@ import (
 )
 
 func newSess(id, sub string, created time.Time) *Session {
-	return &Session{ID: id, Sub: sub, Owner: "lens", Name: "alice", Roles: []string{"consumer"}, CreatedAt: created}
+	return &Session{ID: id, Sub: sub, Owner: "lens", Name: "alice", Roles: []string{"customer"}, CreatedAt: created}
 }
 
 func TestMemoryCRUD(t *testing.T) {
