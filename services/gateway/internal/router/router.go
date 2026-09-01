@@ -33,6 +33,7 @@ type Route struct {
 type Table struct {
 	byPackage map[string]Route
 	anonymous map[string]struct{}
+	guest     map[string]struct{}
 	online    map[string]struct{}
 }
 
@@ -45,6 +46,7 @@ func Build(cfg *confv1.RouteConfig) (*Table, error) {
 	t := &Table{
 		byPackage: make(map[string]Route, len(cfg.GetRoutes())),
 		anonymous: make(map[string]struct{}, len(cfg.GetAnonymous())),
+		guest:     make(map[string]struct{}, len(cfg.GetGuest())),
 		online:    make(map[string]struct{}),
 	}
 	for _, r := range cfg.GetRoutes() {
@@ -60,6 +62,14 @@ func Build(cfg *confv1.RouteConfig) (*Table, error) {
 	}
 	for _, p := range cfg.GetAnonymous() {
 		t.anonymous[p] = struct{}{}
+	}
+	for _, p := range cfg.GetGuest() {
+		// 同一路径同时进两个清单是配置矛盾：anonymous 表示「完全无身份」，
+		// guest 表示「有访客身份」，取哪个都会让另一半配置静默失效。报错而非猜。
+		if _, dup := t.anonymous[p]; dup {
+			return nil, fmt.Errorf("router: procedure %q is in both anonymous and guest lists", p)
+		}
+		t.guest[p] = struct{}{}
 	}
 	for _, p := range cfg.GetAuth().GetOnlineCheckProcedures() {
 		t.online[p] = struct{}{}
@@ -80,6 +90,12 @@ func (t *Table) Resolve(path string) (Route, bool) {
 // IsAnonymous 按完整 procedure 路径判定是否在匿名清单（authn 与 authz 共用）。
 func (t *Table) IsAnonymous(procedure string) bool {
 	_, ok := t.anonymous[procedure]
+	return ok
+}
+
+// IsGuest 判定 procedure 是否属访客清单（B 级：不验 JWT，但注入访客身份）。
+func (t *Table) IsGuest(procedure string) bool {
+	_, ok := t.guest[procedure]
 	return ok
 }
 

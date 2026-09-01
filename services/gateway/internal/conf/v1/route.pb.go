@@ -39,7 +39,14 @@ type RouteConfig struct {
 	// 匿名清单：authn 跳过 + authz 跳过共用的单一真相源。
 	// 条目是完整 Connect procedure 路径，如 /user.v1.UserService/SignIn。
 	Anonymous []string `protobuf:"bytes,3,rep,name=anonymous,proto3" json:"anonymous,omitempty"`
-	Auth      *Auth    `protobuf:"bytes,4,opt,name=auth,proto3" json:"auth,omitempty"`
+	// 访客清单（匿名购物 B 级）：不验 JWT，但网关会签发/识别访客 cookie 并注入
+	// x-md-global-user-id + x-md-global-anonymous=true，下游据此提供「访客也能有」的
+	// 资源（当前仅购物车）。与 anonymous 的区别：anonymous 完全无身份，guest 有一个
+	// 稳定但非注册用户的身份。设计依据见 ecommerce docs/design/platform/anonymous-shopping.md。
+	// ⚠️ 下游服务判定「必须登录」的 C 级 RPC 时必须检查 x-md-global-anonymous，
+	// 不能只看 user-id 是否非空——访客也有 user-id。
+	Guest []string `protobuf:"bytes,6,rep,name=guest,proto3" json:"guest,omitempty"`
+	Auth  *Auth    `protobuf:"bytes,4,opt,name=auth,proto3" json:"auth,omitempty"`
 	// CORS 必填：网关是浏览器流量入口，漏配 CORS 等于对前端不可用。
 	Cors          *Cors `protobuf:"bytes,5,opt,name=cors,proto3" json:"cors,omitempty"`
 	unknownFields protoimpl.UnknownFields
@@ -93,6 +100,13 @@ func (x *RouteConfig) GetRoutes() []*Route {
 func (x *RouteConfig) GetAnonymous() []string {
 	if x != nil {
 		return x.Anonymous
+	}
+	return nil
+}
+
+func (x *RouteConfig) GetGuest() []string {
+	if x != nil {
+		return x.Guest
 	}
 	return nil
 }
@@ -297,13 +311,15 @@ var File_services_gateway_internal_conf_v1_route_proto protoreflect.FileDescript
 
 const file_services_gateway_internal_conf_v1_route_proto_rawDesc = "" +
 	"\n" +
-	"-services/gateway/internal/conf/v1/route.proto\x12\x0fgateway.conf.v1\x1a\x1egoogle/protobuf/duration.proto\x1a#third_party/validate/validate.proto\"\x81\x02\n" +
+	"-services/gateway/internal/conf/v1/route.proto\x12\x0fgateway.conf.v1\x1a\x1egoogle/protobuf/duration.proto\x1a#third_party/validate/validate.proto\"\xae\x02\n" +
 	"\vRouteConfig\x12#\n" +
 	"\aversion\x18\x01 \x01(\tB\t\xbaH\x06r\x04R\x02v2R\aversion\x12:\n" +
 	"\x06routes\x18\x02 \x03(\v2\x16.gateway.conf.v1.RouteB\n" +
 	"\xbaH\a\x92\x01\x04\b\x01\x10@R\x06routes\x123\n" +
 	"\tanonymous\x18\x03 \x03(\tB\x15\xbaH\x12\x92\x01\x0f\x10\x80\x01\"\n" +
-	"r\b\x10\x03\x18\x80\x02:\x01/R\tanonymous\x12)\n" +
+	"r\b\x10\x03\x18\x80\x02:\x01/R\tanonymous\x12+\n" +
+	"\x05guest\x18\x06 \x03(\tB\x15\xbaH\x12\x92\x01\x0f\x10\x80\x01\"\n" +
+	"r\b\x10\x03\x18\x80\x02:\x01/R\x05guest\x12)\n" +
 	"\x04auth\x18\x04 \x01(\v2\x15.gateway.conf.v1.AuthR\x04auth\x121\n" +
 	"\x04cors\x18\x05 \x01(\v2\x15.gateway.conf.v1.CorsB\x06\xbaH\x03\xc8\x01\x01R\x04cors\"\xdb\x01\n" +
 	"\x05Route\x126\n" +

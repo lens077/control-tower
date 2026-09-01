@@ -32,6 +32,19 @@ message RouteConfig {
     }
   }];
 
+  // 访客清单（匿名购物 B 级）：不验 JWT，但网关会签发/识别访客 cookie 并注入
+  // x-md-global-user-id + x-md-global-anonymous=true，下游据此提供「访客也能有」的
+  // 资源（当前仅购物车）。与 anonymous 的区别：anonymous 完全无身份，guest 有一个
+  // 稳定但非注册用户的身份。设计依据见 ecommerce docs/design/platform/anonymous-shopping.md。
+  // ⚠️ 下游服务判定「必须登录」的 C 级 RPC 时必须检查 x-md-global-anonymous，
+  // 不能只看 user-id 是否非空——访客也有 user-id。
+  repeated string guest = 6 [(buf.validate.field).repeated = {
+    max_items: 128,
+    items: {
+      string: {min_len: 3, max_len: 256, prefix: "/"}
+    }
+  }];
+
   Auth auth = 4;
 
   // CORS 必填：网关是浏览器流量入口，漏配 CORS 等于对前端不可用。

@@ -11,6 +11,7 @@ import (
 
 type routeKey struct{}
 type claimsKey struct{}
+type guestKey struct{}
 type upstreamKey struct{}
 
 // Upstream 是 transport 回填的转发落点信息（ctx 值向下传递、内容可变的持有器）。
@@ -39,6 +40,17 @@ func WithClaims(ctx context.Context, c *authn.Claims) context.Context {
 func Claims(ctx context.Context) *authn.Claims {
 	c, _ := ctx.Value(claimsKey{}).(*authn.Claims)
 	return c
+}
+
+// WithGuestID 挂载访客身份（仅 B 级路径；与 Claims 互斥——已登录就不该再有访客身份）。
+func WithGuestID(ctx context.Context, id string) context.Context {
+	return context.WithValue(ctx, guestKey{}, id)
+}
+
+// GuestID 取出访客 id；非访客请求返回空串。
+func GuestID(ctx context.Context) string {
+	id, _ := ctx.Value(guestKey{}).(string)
+	return id
 }
 
 // WithUpstream 挂载空的落点持有器（accesslog 中间件负责挂载并读取）。

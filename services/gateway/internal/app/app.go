@@ -6,6 +6,7 @@ import (
 
 	"github.com/lens077/control-tower/services/gateway/internal/authn"
 	"github.com/lens077/control-tower/services/gateway/internal/bff"
+	"github.com/lens077/control-tower/services/gateway/internal/guest"
 	"github.com/lens077/control-tower/services/gateway/internal/gwerrors"
 	"github.com/lens077/control-tower/services/gateway/internal/httpmw"
 	"github.com/lens077/control-tower/services/gateway/internal/loader"
@@ -37,6 +38,10 @@ type Deps struct {
 	SessionCookie string
 	SessionHeader string
 	Refresher     httpmw.SessionRefresher
+
+	// GuestCookie 开启匿名购物访客轨（B 级 RPC）。nil=整轨关闭，
+	// guest 清单里的路径退化为需要登录（与上线前行为一致）。
+	GuestCookie *guest.CookieConfig
 }
 
 // BuildHandler 构造业务端口的完整处理器：
@@ -70,6 +75,7 @@ func BuildHandler(d Deps) http.Handler {
 			SessionHeader: d.SessionHeader,
 			Refresher:     d.Refresher,
 			OriginAllowed: d.Cors.OriginAllowed,
+			GuestCookie:   d.GuestCookie,
 		}),
 	)
 

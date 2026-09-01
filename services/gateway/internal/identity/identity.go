@@ -20,6 +20,12 @@ const (
 	HeaderRole   = "x-md-global-role"
 	HeaderOwner  = "x-md-global-owner"
 
+	// HeaderAnonymous 标记「本请求的 user-id 属于访客而非注册用户」。
+	// ⚠️ 下游服务判定「必须登录」的 RPC 时**必须**检查这个头——访客也有 user-id，
+	// 只看它非空会把访客放进下单/支付链路。
+	// 它同属 x-md- 前缀，故与其他身份头一样被 Strip 无条件剥离，客户端伪造不了。
+	HeaderAnonymous = "x-md-global-anonymous"
+
 	// prefix 覆盖全部保留身份头命名空间。
 	prefix = "x-md-"
 )
@@ -31,6 +37,19 @@ func Strip(h http.Header) {
 			delete(h, name)
 		}
 	}
+}
+
+// InjectGuest 注入访客身份：只有 user-id 与匿名标记，没有名字/角色/租户。
+// guestID 由网关签发（128 位随机不透明 ID，与会话 id 同一强度模型）。
+//
+// 显式清掉 name/role/owner：这些字段对访客无意义，留下残值会让下游把访客
+// 误判成「有角色的用户」——RBAC 是按角色判的，漏一个 Del 就是越权。
+func InjectGuest(h http.Header, guestID string) {
+	h.Set(HeaderUserID, guestID)
+	h.Set(HeaderAnonymous, "true")
+	h.Del(HeaderName)
+	h.Del(HeaderRole)
+	h.Del(HeaderOwner)
 }
 
 // Inject 按已验签的 claims 注入可信身份头。

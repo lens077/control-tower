@@ -13,6 +13,7 @@ import (
 	"github.com/lens077/control-tower/services/gateway/internal/authn"
 	"github.com/lens077/control-tower/services/gateway/internal/authz"
 	"github.com/lens077/control-tower/services/gateway/internal/gwctx"
+	"github.com/lens077/control-tower/services/gateway/internal/guest"
 	"github.com/lens077/control-tower/services/gateway/internal/gwerrors"
 	"github.com/lens077/control-tower/services/gateway/internal/identity"
 	"github.com/lens077/control-tower/services/gateway/internal/router"
@@ -51,6 +52,11 @@ type AuthDeps struct {
 	// OriginAllowed 判定 Origin 是否可信。cookie 轨的状态变更请求必须通过它——
 	// 这是 CSRF 的第一道防线（第二道是 Connect 协议头天然触发预检，见 ADR-0002）。
 	OriginAllowed func(origin string) bool
+
+	// ── 匿名购物访客轨（B 级 RPC）。GuestCookie 为 nil 时整轨关闭：
+	// 访客清单里的路径会退化成「需要登录」，与本特性上线前行为一致。
+	// 设计见 ecommerce docs/design/platform/anonymous-shopping.md。
+	GuestCookie *guest.CookieConfig
 }
 
 // SessionRefresher 抽象「用 refresh token 换新令牌」，避免 httpmw 依赖 bff 包。
@@ -91,6 +97,28 @@ func Auth(d AuthDeps) func(http.Handler) http.Handler {
 				return
 			}
 			ctx := gwctx.WithRoute(r.Context(), route)
+
+			// 访客轨（B 级）：不验 JWT、不进 RBAC，但保证有一个稳定身份。
+			// 顺序上先于登录判定：已登录用户访问 B 级路径时，下面的 authenticate
+			// 分支不会执行，但 proxy 注入处以 claims 优先，故不会被降级成访客。
+			//
+			// GuestCookie 为 nil = 整轨关闭，此时 guest 清单里的路径落回下面的
+			// 登录判定（与本特性上线前行为一致，便于回滚）。
+			if d.GuestCookie != nil && t.IsGuest(path) {
+				gid := d.GuestCookie.FromRequest(r)
+				if gid == "" {
+					newID, err := guest.NewID()
+					if err != nil {
+						// CSPRNG 失败极罕见，但绝不能退化成「用可预测值当身份」。
+						d.Errors.Write(w, r, connect.CodeInternal, "GUEST_ID_FAILED", "failed to issue guest identity")
+						return
+					}
+					gid = newID
+					d.GuestCookie.Issue(w, gid)
+				}
+				next.ServeHTTP(w, r.WithContext(gwctx.WithGuestID(ctx, gid)))
+				return
+			}
 
 			if !t.IsAnonymous(path) {
 				res, ok := d.authenticate(w, r, ctx, now())

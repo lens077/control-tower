@@ -72,8 +72,11 @@ func New(res resolver.Resolver, ew *gwerrors.Writer, log *zap.Logger, inner http
 			// 凭据不进内网；将来有服务要消费原始 JWT 时再按 decisions.md 触发条款恢复。
 			pr.Out.Header.Del("Authorization")
 			// 可信身份注入（入站 x-md-* 已在链路早段剥离）。
+			// 登录态优先：已验签 claims 存在时不看访客身份，两者不会同时注入。
 			if c := gwctx.Claims(pr.In.Context()); c != nil {
 				identity.Inject(pr.Out.Header, c)
+			} else if gid := gwctx.GuestID(pr.In.Context()); gid != "" {
+				identity.InjectGuest(pr.Out.Header, gid)
 			}
 			// scheme/host 由 pickingTransport 决定；这里先占位为入站 host。
 			pr.Out.URL.Scheme = "http"
