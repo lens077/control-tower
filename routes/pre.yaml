@@ -67,6 +67,17 @@ anonymous:
   # 行政区划是公开只读字典：未登录也要能在地址表单选省市区。
   - /address.v1.RegionService/ListRegions
 
+# 访客清单（匿名购物 B 级）：不验 JWT，但网关签发/识别访客 cookie 并注入
+# x-md-global-user-id + x-md-global-anonymous=true。与 anonymous 的区别是
+# 「有一个稳定但非注册用户的身份」，因此能拥有属于自己的购物车。
+# 设计见 ecommerce docs/design/platform/anonymous-shopping.md。
+# ⚠️ 只放购物车：下单/支付/地址簿必须登录（C 级，不进本清单）。
+guest:
+  - /cart.v1.CartService/GetCart
+  - /cart.v1.CartService/AddProductToCart
+  - /cart.v1.CartService/RemoveCartItem
+  - /cart.v1.CartService/UpdateCartItemQuantity
+
 auth:
   # 高危路由实时在线校验（fail-close），初始为空；候选见 docs/design/auth.md。
   online_check_procedures: []
