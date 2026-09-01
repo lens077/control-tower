@@ -21,6 +21,7 @@ import (
 	"github.com/lens077/control-tower/services/gateway/internal/authn"
 	"github.com/lens077/control-tower/services/gateway/internal/authz"
 	"github.com/lens077/control-tower/services/gateway/internal/bff"
+	"github.com/lens077/control-tower/services/gateway/internal/guest"
 	"github.com/lens077/control-tower/services/gateway/internal/gwerrors"
 	"github.com/lens077/control-tower/services/gateway/internal/httpmw"
 	"github.com/lens077/control-tower/services/gateway/internal/loader"
@@ -269,6 +270,25 @@ func run(lc fx.Lifecycle, log *zap.Logger) error {
 		res = noResolver{}
 	}
 
+	// ── 匿名购物访客轨（B 级 RPC）。
+	// GUEST_ENABLED=false 可整轨关闭（guest 清单里的路径退化为需要登录，
+	// 与本特性上线前行为一致，用于快速回滚）。
+	// Secure/Name 的 dev 降级与会话 cookie 同源：SESSION_COOKIE_INSECURE=true 时
+	// 一并放宽——两者在同一浏览器、同一站点下，安全属性不一致只会制造困惑。
+	var guestCookie *guest.CookieConfig
+	if envOr("GUEST_ENABLED", "true") != "false" {
+		gc := guest.DefaultCookieConfig()
+		gc.Domain = os.Getenv("SESSION_COOKIE_DOMAIN")
+		if envOr("SESSION_COOKIE_INSECURE", "false") == "true" {
+			gc.Secure = false
+			gc.Name = strings.TrimPrefix(gc.Name, "__Secure-")
+		}
+		guestCookie = &gc
+		log.Info("匿名购物访客轨已启用", zap.String("cookie", gc.Name), zap.Duration("ttl", guest.TTL))
+	} else {
+		log.Info("匿名购物访客轨被 GUEST_ENABLED=false 显式关闭")
+	}
+
 	// ── 请求链装配（healthz/readyz 先于包路由，见 internal/app）。
 	handler := app.BuildHandler(app.Deps{
 		State:         state,
@@ -283,6 +303,7 @@ func run(lc fx.Lifecycle, log *zap.Logger) error {
 		SessionCookie: bffCookieName(bffHandler),
 		SessionHeader: envOr("SESSION_HEADER", "X-CT-Session"),
 		Refresher:     refresher,
+		GuestCookie:   guestCookie,
 	})
 
 	srv := &http.Server{
