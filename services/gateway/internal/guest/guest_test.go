@@ -4,6 +4,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"github.com/google/uuid"
 )
 
 // 访客 id 必须每次不同且足够长——它是身份凭据，可预测即可冒用他人购物车。
@@ -14,9 +16,10 @@ func TestNewID_UniqueAndLongEnough(t *testing.T) {
 		if err != nil {
 			t.Fatalf("NewID: %v", err)
 		}
-		// 32 字节 base64url 无填充 = 43 字符
-		if len(id) < 43 {
-			t.Fatalf("id 太短(%d)，随机性不足以抗猜测: %q", len(id), id)
+		// 必须是合法 UUID：cart 服务会 uuid.Parse 后写进 UUID 列，
+		// 形态不对会让访客加购在数据层直接失败。
+		if _, err := uuid.Parse(id); err != nil {
+			t.Fatalf("id 不是合法 UUID(%q): %v——cart 侧 uuid.Parse 会失败", id, err)
 		}
 		if _, dup := seen[id]; dup {
 			t.Fatalf("NewID 产生重复值 %q——CSPRNG 装配错误", id)

@@ -12,10 +12,10 @@
 package guest
 
 import (
-	"crypto/rand"
-	"encoding/base64"
 	"net/http"
 	"time"
+
+	"github.com/google/uuid"
 )
 
 // TTL 是访客 cookie 的有效期。30 天与「购物车留存」的产品预期一致：
@@ -43,13 +43,21 @@ func DefaultCookieConfig() CookieConfig {
 	}
 }
 
-// NewID 生成 32 字节随机访客 id（与 session.NewID 同强度）。
+// NewID 生成访客 id，形态是 **UUID v4**。
+//
+// 刻意用 UUID 而非 session.NewID 那样的 base64 随机串：下游 cart 服务把
+// x-md-global-user-id 直接 uuid.Parse 后写进 cart_item.user_id（UUID NOT NULL 列）。
+// 用 UUID 形态意味着**数据库零改动、cart 的解析逻辑零改动**——访客 ID 天然落得进去。
+// v4 是 122 位 CSPRNG 随机，不可猜性对「只解锁自己购物车」这个用途绰绰有余。
+//
+// ⚠️ 因此该列里会同时存在真实用户 ID 与访客 ID，两者靠 x-md-global-anonymous
+// 头区分，而不是靠值的形状——不要试图从 UUID 本身反推身份类型。
 func NewID() (string, error) {
-	b := make([]byte, 32)
-	if _, err := rand.Read(b); err != nil {
+	id, err := uuid.NewRandom()
+	if err != nil {
 		return "", err
 	}
-	return base64.RawURLEncoding.EncodeToString(b), nil
+	return id.String(), nil
 }
 
 // FromRequest 读取请求里的访客 id；没有或为空返回空串。
