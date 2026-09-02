@@ -6,10 +6,10 @@
 
 集群 2026-08-21 前后重建过，`postgresql` ns 已不存在。`config-center` ns 于 2026-08-29
 按 `deploy/pre/config/` 重建，gateway 于 2026-08-30 重新拉起，**两个服务都在跑**。
-2026-08-31 发布裸 tag `0.2.8` 后，config 已从 public GHCR `0.2.6` 滚动到 `0.2.8`；
-config web 仍为 `0.2.6`，gateway 仍为 `0.2.5`。dev/pre 的两份 config 后端 manifest 已同步为
-`0.2.8`。三个 `0.2.8` 包均已通过无凭据 OCI 请求验证；config 实际运行 digest
-`sha256:5bc686d90670d2acede3ff0d69ba2ae334113e94be58303f7352b336c439d6c2`。
+2026-09-02 发布裸 tag `0.2.10`（同步 ecommerce search catalog Schema，`0.2.9` 已被 dae4d86 占用）
+并已滚动到集群：config 现运行 `0.2.10`，dev/pre 的两份 config 后端 manifest 已同步为 `0.2.10`；
+config web 仍为 `0.2.6`，gateway 仍为 `0.2.5`。滚动后 `config-api.apikv.com/healthz` 200，
+并用管理员 JWT 完成 `search/dev/bootstrap.yaml` 的 catalog 形态 PutKey（v5）实测放行。
 节点 containerd 的 `NO_PROXY` 已加入 `ghcr.io,.githubusercontent.com`，避免请求误走已下线的
 `192.168.3.220:7890`。不要只用本机 `docker manifest inspect` 判断可见性（Keychain 会偷偷带凭据）。
 12 个 consumer selector 已换成 scoped Machine Token；legacy 回退仍在 7 天烘烤期。
@@ -23,7 +23,7 @@ config web 仍为 `0.2.6`，gateway 仍为 `0.2.5`。dev/pre 的两份 config �
 
 | 服务 | 集群状态 | 备注 |
 |---|---|---|
-| config | `config-center/config-center` **运行中**（`0.2.8`） | `config-center.config-center.svc:30010`，镜像走 GHCR |
+| config | `config-center/config-center` **运行中**（`0.2.10`） | `config-center.config-center.svc:30010`，镜像走 GHCR |
 | config web | `config-center/config-center-web` **运行中**（`0.2.6`） | `config-center-web.config-center.svc:80`，镜像走 GHCR |
 | gateway | `ecommerce/control-tower-gateway` **运行中**（`0.2.5`，2 副本） | `ecommerce-gateway-service.ecommerce.svc:8080`，镜像走 GHCR；`/healthz`、`/readyz` 均 200 |
 
