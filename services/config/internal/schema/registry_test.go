@@ -31,7 +31,7 @@ func minimalBootstrap(namespace string) string {
 		builder.WriteString(": {}\n")
 	}
 	if namespace == "search" {
-		builder.WriteString("search:\n  meilisearch: {}\n")
+		builder.WriteString("search:\n  catalog:\n    endpoint: http://127.0.0.1:9200\n    index: ecommerce_catalog_products\n")
 	}
 	return builder.String()
 }

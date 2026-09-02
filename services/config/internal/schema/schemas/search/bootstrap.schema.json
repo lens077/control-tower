@@ -824,27 +824,27 @@
       "title": "Observability",
       "type": "object"
     },
-    "conf.v1.Search.Meilisearch.schema.json": {
+    "conf.v1.Search.ElasticsearchCatalog.schema.json": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "additionalProperties": false,
       "patternProperties": {
         "^(apiKey)$": {
           "default": "",
-          "maxLength": 512,
-          "minLength": 16,
+          "maxLength": 4096,
           "type": "string"
         }
       },
       "properties": {
         "api_key": {
           "default": "",
-          "maxLength": 512,
-          "minLength": 16,
+          "maxLength": 4096,
           "type": "string"
         },
-        "host": {
+        "endpoint": {
           "default": "",
-          "pattern": "^(?:(?:[a-zA-Z][a-zA-Z\\d+\\-.]*):)?(?://(?:[A-Za-z0-9\\-\\.]+(?::\\d+)?))?(/[^\\?#]*)?(?:\\?([^\\#]*))?(?:\\#(.*))?$",
+          "maxLength": 2048,
+          "minLength": 1,
+          "pattern": "^https?://",
           "type": "string"
         },
         "index": {
@@ -853,21 +853,32 @@
           "minLength": 1,
           "pattern": "^[a-z0-9][a-z0-9._-]*$",
           "type": "string"
+        },
+        "password": {
+          "default": "",
+          "maxLength": 1024,
+          "type": "string"
+        },
+        "username": {
+          "default": "",
+          "maxLength": 256,
+          "type": "string"
         }
       },
-      "title": "Meilisearch",
+      "title": "Elasticsearch Catalog",
       "type": "object"
     },
     "conf.v1.Search.schema.json": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "additionalProperties": false,
       "properties": {
-        "meilisearch": {
-          "$ref": "#/$defs/conf.v1.Search.Meilisearch.schema.json"
+        "catalog": {
+          "$ref": "#/$defs/conf.v1.Search.ElasticsearchCatalog.schema.json",
+          "description": "新字段名避开已 reserved 的 elastic_search / elasticsearch；catalog 表达能力边界。"
         }
       },
       "required": [
-        "meilisearch"
+        "catalog"
       ],
       "title": "Search",
       "type": "object"
