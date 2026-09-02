@@ -20,7 +20,9 @@ COPY . .
 RUN --mount=type=cache,target=/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
     GOOS=$TARGETOS GOARCH=$TARGETARCH CGO_ENABLED=$CGO_ENABLED \
-    go build -ldflags="-s -w -X main.Version=$VERSION" \
+    # Keep this full -X target in sync with go-connect-kit/meta.Version (external module).
+    # The Go linker silently ignores a missing symbol, so a typo disables version injection.
+    go build -ldflags="-s -w -X github.com/lens077/go-connect-kit/meta.Version=$VERSION" \
     -o /app/service ./services/config/cmd/server && \
     chmod +x /app/service
 

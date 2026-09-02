@@ -14,9 +14,7 @@ import (
 	"github.com/lens077/control-tower/services/config/internal/data"
 	"github.com/lens077/control-tower/services/config/internal/iam"
 	"github.com/lens077/control-tower/services/config/internal/pkg/config"
-	"github.com/lens077/control-tower/services/config/internal/pkg/env"
 	logger "github.com/lens077/control-tower/services/config/internal/pkg/log"
-	"github.com/lens077/control-tower/services/config/internal/pkg/meta"
 	"github.com/lens077/control-tower/services/config/internal/pkg/otel"
 	"github.com/lens077/control-tower/services/config/internal/pkg/promql"
 	"github.com/lens077/control-tower/services/config/internal/pkg/registry"
@@ -25,6 +23,8 @@ import (
 	"github.com/lens077/control-tower/services/config/internal/schema"
 	"github.com/lens077/control-tower/services/config/internal/server"
 	"github.com/lens077/control-tower/services/config/internal/service"
+	"github.com/lens077/go-connect-kit/env"
+	"github.com/lens077/go-connect-kit/meta"
 
 	"github.com/google/uuid"
 	"go.uber.org/fx"

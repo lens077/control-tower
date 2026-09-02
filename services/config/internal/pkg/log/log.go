@@ -5,7 +5,7 @@ import (
 
 	"github.com/lens077/control-tower/constants"
 	confv1 "github.com/lens077/control-tower/services/config/internal/conf/v1"
-	"github.com/lens077/control-tower/services/config/internal/pkg/meta"
+	"github.com/lens077/go-connect-kit/meta"
 	"go.opentelemetry.io/contrib/bridges/otelzap"
 	"go.opentelemetry.io/otel/log/global"
 	"go.uber.org/fx/fxevent"

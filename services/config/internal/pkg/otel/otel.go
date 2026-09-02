@@ -9,7 +9,7 @@ import (
 	"time"
 
 	confv1 "github.com/lens077/control-tower/services/config/internal/conf/v1"
-	"github.com/lens077/control-tower/services/config/internal/pkg/meta"
+	"github.com/lens077/go-connect-kit/meta"
 
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"

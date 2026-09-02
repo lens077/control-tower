@@ -127,9 +127,15 @@ message DependencyStatus {
 
 message BuildInfo {
   string service_name = 1;
+  // API 契约版本(形如 v1),来自 SERVICE_VERSION。会进 Consul 服务标签与 OTel
+  // service.version;它回答「这个进程讲哪一版协议」,不回答「它由哪次构建产生」。
   string version = 2;
   string environment = 3;
   string go_version = 4;
+  // 构建制品版本:镜像 tag 或 commit,由 ldflags 注入 go-connect-kit/meta.Version。
+  // 与 version 是两个概念,不要合并——合并后就无法区分「v1 契约」和「哪次构建」。
+  // 本地构建没有注入时为 "dev"。响应字段不校验:它只是回显,没有输入可拒绝。
+  string build_version = 5;
 }
 
 message QueryMetricsRequest {

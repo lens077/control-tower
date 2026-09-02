@@ -3,7 +3,7 @@ package otel
 import (
 	"testing"
 
-	"github.com/lens077/control-tower/services/config/internal/pkg/meta"
+	"github.com/lens077/go-connect-kit/meta"
 	"github.com/stretchr/testify/require"
 	semconv "go.opentelemetry.io/otel/semconv/v1.41.0"
 )

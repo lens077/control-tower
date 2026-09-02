@@ -18,6 +18,7 @@ import (
 	"github.com/lens077/control-tower/services/config/internal/data"
 	"github.com/lens077/control-tower/services/config/internal/iam"
 	"github.com/lens077/control-tower/services/config/internal/presence"
+	"github.com/lens077/go-connect-kit/meta"
 	"github.com/rs/cors"
 	"go.uber.org/fx"
 	"go.uber.org/zap"
@@ -41,6 +42,7 @@ func NewHTTPServer(
 	connectOptions []connect.HandlerOption,
 	deps *data.Data, // 基础设施依赖
 	authorizer *iam.Authorizer,
+	info meta.AppInfo, // /healthz 回显 API 契约版本;构建版本直接读 meta.Version
 ) (*http.Server, error) {
 
 	mux := http.NewServeMux()
@@ -66,7 +68,7 @@ func NewHTTPServer(
 
 	// 应用本身的健康检查
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
-		status := healthStatus(r.Context(), deps)
+		status := healthStatus(r.Context(), deps, info)
 		w.Header().Set("Content-Type", "application/json")
 		if !status.Healthy {
 			w.WriteHeader(http.StatusServiceUnavailable)

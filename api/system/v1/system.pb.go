@@ -520,11 +520,17 @@ func (x *DependencyStatus) GetDetail() string {
 }
 
 type BuildInfo struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	ServiceName   string                 `protobuf:"bytes,1,opt,name=service_name,json=serviceName,proto3" json:"service_name,omitempty"`
-	Version       string                 `protobuf:"bytes,2,opt,name=version,proto3" json:"version,omitempty"`
-	Environment   string                 `protobuf:"bytes,3,opt,name=environment,proto3" json:"environment,omitempty"`
-	GoVersion     string                 `protobuf:"bytes,4,opt,name=go_version,json=goVersion,proto3" json:"go_version,omitempty"`
+	state       protoimpl.MessageState `protogen:"open.v1"`
+	ServiceName string                 `protobuf:"bytes,1,opt,name=service_name,json=serviceName,proto3" json:"service_name,omitempty"`
+	// API 契约版本(形如 v1),来自 SERVICE_VERSION。会进 Consul 服务标签与 OTel
+	// service.version;它回答「这个进程讲哪一版协议」,不回答「它由哪次构建产生」。
+	Version     string `protobuf:"bytes,2,opt,name=version,proto3" json:"version,omitempty"`
+	Environment string `protobuf:"bytes,3,opt,name=environment,proto3" json:"environment,omitempty"`
+	GoVersion   string `protobuf:"bytes,4,opt,name=go_version,json=goVersion,proto3" json:"go_version,omitempty"`
+	// 构建制品版本:镜像 tag 或 commit,由 ldflags 注入 go-connect-kit/meta.Version。
+	// 与 version 是两个概念,不要合并——合并后就无法区分「v1 契约」和「哪次构建」。
+	// 本地构建没有注入时为 "dev"。响应字段不校验:它只是回显,没有输入可拒绝。
+	BuildVersion  string `protobuf:"bytes,5,opt,name=build_version,json=buildVersion,proto3" json:"build_version,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -583,6 +589,13 @@ func (x *BuildInfo) GetEnvironment() string {
 func (x *BuildInfo) GetGoVersion() string {
 	if x != nil {
 		return x.GoVersion
+	}
+	return ""
+}
+
+func (x *BuildInfo) GetBuildVersion() string {
+	if x != nil {
+		return x.BuildVersion
 	}
 	return ""
 }
@@ -916,13 +929,14 @@ const file_api_system_v1_system_proto_rawDesc = "" +
 	"\x10DependencyStatus\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x18\n" +
 	"\ahealthy\x18\x02 \x01(\bR\ahealthy\x12\x16\n" +
-	"\x06detail\x18\x03 \x01(\tR\x06detail\"\x89\x01\n" +
+	"\x06detail\x18\x03 \x01(\tR\x06detail\"\xae\x01\n" +
 	"\tBuildInfo\x12!\n" +
 	"\fservice_name\x18\x01 \x01(\tR\vserviceName\x12\x18\n" +
 	"\aversion\x18\x02 \x01(\tR\aversion\x12 \n" +
 	"\venvironment\x18\x03 \x01(\tR\venvironment\x12\x1d\n" +
 	"\n" +
-	"go_version\x18\x04 \x01(\tR\tgoVersion\"\xd5\x01\n" +
+	"go_version\x18\x04 \x01(\tR\tgoVersion\x12#\n" +
+	"\rbuild_version\x18\x05 \x01(\tR\fbuildVersion\"\xd5\x01\n" +
 	"\x13QueryMetricsRequest\x12F\n" +
 	"\x06series\x18\x01 \x03(\x0e2\x17.system.v1.MetricSeriesB\x15\xbaH\x12\x92\x01\x0f\b\x01\x10\b\x18\x01\"\a\x82\x01\x04\x10\x01 \x00R\x06series\x12G\n" +
 	"\x06window\x18\x02 \x01(\v2\x19.google.protobuf.DurationB\x14\xbaH\x11\xc8\x01\x01\xaa\x01\v\"\x04\b\x80\xa3\x052\x03\b\xac\x02R\x06window\x12-\n" +

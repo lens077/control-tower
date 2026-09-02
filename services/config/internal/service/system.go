@@ -11,9 +11,9 @@ import (
 	v1 "github.com/lens077/control-tower/api/system/v1"
 	"github.com/lens077/control-tower/api/system/v1/systemv1connect"
 	"github.com/lens077/control-tower/services/config/internal/data"
-	"github.com/lens077/control-tower/services/config/internal/pkg/meta"
 	"github.com/lens077/control-tower/services/config/internal/pkg/promql"
 	"github.com/lens077/control-tower/services/config/internal/pkg/sysstat"
+	"github.com/lens077/go-connect-kit/meta"
 	"go.uber.org/zap"
 	"google.golang.org/protobuf/types/known/durationpb"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -79,10 +79,11 @@ func (s *SystemService) GetSystemStatus(
 		},
 		Dependencies: s.dependencies(ctx),
 		Build: &v1.BuildInfo{
-			ServiceName: s.info.Name,
-			Version:     s.info.Version,
-			Environment: s.info.Environment,
-			GoVersion:   runtime.Version(),
+			ServiceName:  s.info.Name,
+			Version:      s.info.Version, // API 契约版本
+			Environment:  s.info.Environment,
+			GoVersion:    runtime.Version(),
+			BuildVersion: meta.Version, // 构建制品版本,ldflags 注入
 		},
 		MetricsBackendAvailable: s.metrics != nil,
 	}), nil
