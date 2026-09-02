@@ -7,6 +7,7 @@ import (
 	"encoding/pem"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -67,11 +68,12 @@ func TestEmbeddedTemplatesAreValid(t *testing.T) {
 		if tbl == nil {
 			t.Fatal("table not stored")
 		}
-		// 抽查关键路由与匿名清单。
-		if r, ok := tbl.Resolve("/user.v1.UserService/SignIn"); !ok || r.Target != "discovery:///user-identity" {
+		// 抽查关键路由与匿名清单。target 允许两种形态：discovery:///<consul 注册名>
+		// 或 direct://<k8s Service>（dev 自 2026-09-03 关闭 Consul 注册后改用后者）。
+		if r, ok := tbl.Resolve("/user.v1.UserService/SignIn"); !ok || !targetPointsTo(r.Target, "user-identity", "ecommerce-user-service") {
 			t.Fatalf("user route wrong: %+v ok=%v", r, ok)
 		}
-		if r, ok := tbl.Resolve("/telemetry.v1.TelemetryService/CollectWebVitals"); !ok || r.Target != "discovery:///behavior-service" {
+		if r, ok := tbl.Resolve("/telemetry.v1.TelemetryService/CollectWebVitals"); !ok || !targetPointsTo(r.Target, "behavior-service", "ecommerce-behavior-service") {
 			t.Fatalf("telemetry route wrong: %+v ok=%v", r, ok)
 		}
 		if _, ok := tbl.Resolve("/config.v1.ConfigService/GetKey"); ok {
@@ -219,4 +221,11 @@ func TestRunFileDir(t *testing.T) {
 	if !s.Ready() {
 		t.Fatal("file mode must reach ready")
 	}
+}
+
+// targetPointsTo 判断路由 target 指向同一个上游：discovery 形态比对 Consul 注册名，
+// direct 形态比对 k8s Service 名前缀。
+func targetPointsTo(target, consulName, k8sService string) bool {
+	return target == "discovery:///"+consulName ||
+		strings.HasPrefix(target, "direct://"+k8sService+".")
 }

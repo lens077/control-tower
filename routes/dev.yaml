@@ -8,44 +8,48 @@
 # - 重试默认关闭（旧配置的 attempts/conditions 不迁，见 decisions.md「两层重试」）；
 # - anonymous 是 JWT 与 RBAC 共用的单一清单（旧配置两份 router_filter 的并集，10 条程序名逐字迁移）；
 # - 网关对 HTTP method 透明（不按 method 过滤，由后端裁决），故不再保留 methods 维度。
+# - 2026-09-03 起 target 全部改为 direct://<k8s Service>.ecommerce.svc:<port>：业务服务已关闭
+#   Consul 注册（各 deployment CONSUL_ENABLED=false，当前不需要服务发现），discovery:/// 会因
+#   catalog 为空而 504。将来重开注册时把 target 改回 discovery:///<consul 服务名> 即可，
+#   两种写法网关都支持（proxy.go 的 discoveryPrefix / directPrefix）。
 version: v2
 
 routes:
   - package: user
-    target: discovery:///user-identity
+    target: direct://ecommerce-user-service.ecommerce.svc:30001
     timeout: 4s
   - package: search
-    target: discovery:///search-product
+    target: direct://ecommerce-search-service.ecommerce.svc:30002
     timeout: 4s
   # 行为埋点是高频旁路：上报异步入队、毫秒级返回，超时短、快速失败。
   - package: behavior
-    target: discovery:///behavior-service
+    target: direct://ecommerce-behavior-service.ecommerce.svc:30011
     timeout: 2s
   # 前端性能上报（telemetry.v1）由 behavior 进程顺带实现——域是分开的，
   # 将来搬去 analytics 服务只改这里的 target。
   - package: telemetry
-    target: discovery:///behavior-service
+    target: direct://ecommerce-behavior-service.ecommerce.svc:30011
     timeout: 2s
   - package: product
-    target: discovery:///product-service
+    target: direct://ecommerce-product-service.ecommerce.svc:30003
     timeout: 4s
   - package: cart
-    target: discovery:///cart-service
+    target: direct://ecommerce-cart-service.ecommerce.svc:30006
     timeout: 4s
   - package: address
-    target: discovery:///address-service
+    target: direct://ecommerce-address-service.ecommerce.svc:30009
     timeout: 4s
   - package: order
-    target: discovery:///order-service
+    target: direct://ecommerce-order-service.ecommerce.svc:30004
     timeout: 4s
   - package: inventory
-    target: discovery:///inventory-service
+    target: direct://ecommerce-inventory-service.ecommerce.svc:30005
     timeout: 4s
   - package: merchant
-    target: discovery:///merchant-service
+    target: direct://ecommerce-merchant-service.ecommerce.svc:30007
     timeout: 4s
   - package: payment
-    target: discovery:///payment-service
+    target: direct://ecommerce-payment-service.ecommerce.svc:30008
     timeout: 8s
 
 # 匿名清单（authn 跳过 + authz 跳过共用；进入后端前仍会剥离并不注入身份头）。
@@ -89,6 +93,8 @@ cors:
     - http://localhost:3000
     - http://localhost:3005
     - http://192.168.3.118:30080
+    # 2026-09-03 从 Config Center 线上值回填：仓库模板此前漏了这一条。
+    - http://192.168.3.220:3000
     # 正式站点（经 Pangolin 暴露）。Casdoor 侧跨域由 Casdoor 管，与此无关。
     - https://shop.apikv.com
   allow_headers:

@@ -37,7 +37,7 @@ func Envs() []string {
 type Entry struct {
 	// Package 是一级 proto 包名。
 	Package string `yaml:"package"`
-	// Target 形如 discovery:///<consul 注册名>。
+	// Target 形如 discovery:///<consul 注册名> 或 direct://<host:port>。
 	Target string `yaml:"target"`
 }
 
@@ -71,4 +71,19 @@ func (e Entry) DiscoveryTarget() string {
 		return e.Target[len(prefix):]
 	}
 	return ""
+}
+
+// DirectHost 返回 direct:// 目标的主机名（去掉端口）；非 direct 目标返回空串。
+// 2026-09-03 起 dev 关闭 Consul 注册，路由 target 改为 direct://<k8s Service>.<ns>.svc:<port>，
+// ecommerce structcheck 用它把主机名反推回 .service-matrix.yaml 的服务名做双向核对。
+func (e Entry) DirectHost() string {
+	const prefix = "direct://"
+	if !strings.HasPrefix(e.Target, prefix) {
+		return ""
+	}
+	hostPort := e.Target[len(prefix):]
+	if i := strings.LastIndex(hostPort, ":"); i >= 0 {
+		return hostPort[:i]
+	}
+	return hostPort
 }
