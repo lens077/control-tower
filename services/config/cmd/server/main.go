@@ -25,6 +25,7 @@ import (
 	"github.com/lens077/control-tower/services/config/internal/service"
 	"github.com/lens077/go-connect-kit/env"
 	"github.com/lens077/go-connect-kit/meta"
+	kitregistry "github.com/lens077/go-connect-kit/registry"
 
 	"github.com/google/uuid"
 	"go.uber.org/fx"
@@ -121,7 +122,7 @@ func NewApp(serviceName, deploymentMode, serviceVersion string) *fx.App {
 		// 配置验证和初始化
 		fx.Invoke(
 			// 启动之前初始化 Consul 注册中心
-			func(reg *registry.ConsulRegistry, logger *zap.Logger) {
+			func(reg *kitregistry.ConsulRegistry, logger *zap.Logger) {
 				if reg != nil {
 					logger.Info("consul service discovery component lifecycle successfully initialized")
 				}

@@ -15,7 +15,7 @@ import (
 	"github.com/lens077/control-tower/services/config/internal/biz"
 	conf "github.com/lens077/control-tower/services/config/internal/conf/v1"
 	"github.com/lens077/control-tower/services/config/internal/iam"
-	"github.com/lens077/control-tower/services/config/internal/pkg/dbutil"
+	"github.com/lens077/go-connect-kit/dbutil"
 	"github.com/redis/go-redis/v9"
 	"go.uber.org/fx"
 	"go.uber.org/zap"

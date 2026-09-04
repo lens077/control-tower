@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/lens077/control-tower/constants"
-	confv1 "github.com/lens077/control-tower/services/config/internal/conf/v1"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -45,13 +44,6 @@ func writeConfig(t *testing.T, contents string) string {
 	return path
 }
 
-func TestDecodeConfig(t *testing.T) {
-	raw := map[string]any{"server": map[string]any{"addr": "0.0.0.0:30010"}}
-	got := &confv1.Bootstrap{}
-	require.NoError(t, decodeConfig(raw, got))
-	assert.Equal(t, "0.0.0.0:30010", got.GetServer().GetAddr())
-}
-
 func TestInitReadsLocalFile(t *testing.T) {
 	t.Setenv(constants.EnvConfigFile, writeConfig(t, testBootstrapYAML))
 	got, err := Init(context.Background())
@@ -76,6 +68,13 @@ func TestInitReadsOptionalRedisPresenceSettings(t *testing.T) {
 	assert.True(t, settings.RedisEnabled)
 	assert.Equal(t, "gray:presence", settings.RedisKeyPrefix)
 	assert.Equal(t, 2*time.Minute, settings.RedisTTL)
+}
+
+func TestInitPreservesPermissiveSelfBootstrap(t *testing.T) {
+	t.Setenv(constants.EnvConfigFile, writeConfig(t, "future_section:\n  enabled: true\n"))
+	got, err := Init(context.Background())
+	require.NoError(t, err)
+	assert.Nil(t, got.GetServer(), "control-tower self-bootstrap intentionally skips required-field validation")
 }
 
 func TestInitRejectsInvalidLocalYAML(t *testing.T) {

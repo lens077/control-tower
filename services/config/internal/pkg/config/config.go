@@ -1,117 +1,126 @@
 package config
 
 import (
-	"bytes"
 	"context"
-	"fmt"
-	"os"
-	"reflect"
 	"sync"
 	"time"
 
 	"github.com/lens077/control-tower/constants"
 	confv1 "github.com/lens077/control-tower/services/config/internal/conf/v1"
+	kitconfig "github.com/lens077/go-connect-kit/config"
 	"github.com/lens077/go-connect-kit/env"
-	"github.com/mitchellh/mapstructure"
 	"github.com/spf13/viper"
 	"go.uber.org/fx"
-	"google.golang.org/protobuf/types/known/durationpb"
 )
+
+// Live is the control plane's concrete go-connect-kit configuration value.
+type Live = kitconfig.Live[*confv1.Bootstrap]
 
 var (
 	confMu   sync.RWMutex
 	conf     = &confv1.Bootstrap{}
-	presence = PresenceSettings{RedisKeyPrefix: "config-center:presence", RedisTTL: 90 * time.Second}
+	presence = defaultPresenceSettings()
 
-	Module = fx.Module("config",
-		fx.Provide(func(lc fx.Lifecycle) (*confv1.Bootstrap, error) {
+	Module = fx.Module("config-adapter",
+		fx.Provide(func(lc fx.Lifecycle) (*Live, error) {
 			ctx, cancel := context.WithCancel(context.Background())
 			lc.Append(fx.Hook{OnStop: func(context.Context) error {
 				cancel()
 				return nil
 			}})
-			return Init(ctx)
+
+			live, settings, err := load(ctx)
+			if err != nil {
+				return nil, err
+			}
+			publish(live.Get(), settings)
+			return live, nil
 		}),
-		fx.Provide(func(_ *confv1.Bootstrap) PresenceSettings {
-			return GetPresenceSettings()
-		}),
+		fx.Provide(func(live *Live) *confv1.Bootstrap { return live.Get() }),
+		fx.Provide(func(_ *confv1.Bootstrap) PresenceSettings { return GetPresenceSettings() }),
 	)
 )
 
-// PresenceSettings is deliberately separate from the generated service
-// bootstrap: it configures optional, ephemeral observability state only.
-// Redis remains a required cache dependency, but this feature does not write
-// presence data unless explicitly enabled in the local configuration file.
+// PresenceSettings configures optional, ephemeral client-presence state.
 type PresenceSettings struct {
 	RedisEnabled   bool
 	RedisKeyPrefix string
 	RedisTTL       time.Duration
 }
 
-func decodeConfig(data map[string]any, target any) error {
-	v := viper.New()
-	v.SetConfigType(constants.ConfigFileFormat)
-	for key, value := range data {
-		v.Set(key, value)
-	}
-
-	stringToProtoDurationHook := func(from, to reflect.Type, value any) (any, error) {
-		if from.Kind() != reflect.String || to != reflect.TypeOf(&durationpb.Duration{}) {
-			return value, nil
-		}
-		duration, err := time.ParseDuration(value.(string))
-		if err != nil {
-			return nil, err
-		}
-		return durationpb.New(duration), nil
-	}
-
-	decoder, err := mapstructure.NewDecoder(&mapstructure.DecoderConfig{
-		TagName:    "json",
-		DecodeHook: mapstructure.ComposeDecodeHookFunc(stringToProtoDurationHook),
-		Result:     target,
-	})
-	if err != nil {
-		return err
-	}
-	return decoder.Decode(v.AllSettings())
+type snapshotSource struct {
+	name string
+	raw  map[string]any
 }
 
-// Init loads this control plane's bootstrap configuration from a local file.
-// Keeping this bootstrap outside ConfigService prevents a self-hosting cycle.
-func Init(context.Context) (*confv1.Bootstrap, error) {
-	path := env.GetEnvString(constants.EnvConfigFile, constants.ConfigFilePath)
-	contents, err := os.ReadFile(path)
+func (source snapshotSource) Name() string { return source.name }
+func (source snapshotSource) Load(context.Context) (map[string]any, error) {
+	return source.raw, nil
+}
+
+// Init loads the control plane's local self-bootstrap file.
+func Init(ctx context.Context) (*confv1.Bootstrap, error) {
+	live, settings, err := load(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("read local config %q: %w", path, err)
+		return nil, err
+	}
+	bootstrap := live.Get()
+	publish(bootstrap, settings)
+	return bootstrap, nil
+}
+
+func load(ctx context.Context) (*Live, PresenceSettings, error) {
+	path := env.GetEnvString(constants.EnvConfigFile, constants.ConfigFilePath)
+	source, err := kitconfig.NewFileSource(path)
+	if err != nil {
+		return nil, PresenceSettings{}, err
+	}
+	raw, err := source.Load(ctx)
+	if err != nil {
+		return nil, PresenceSettings{}, err
 	}
 
+	live, err := kitconfig.NewWithOptions[*confv1.Bootstrap](ctx, snapshotSource{
+		name: source.Name(),
+		raw:  raw,
+	}, kitconfig.LoadOptions{
+		AllowUnknownFields: true,
+		// The self-bootstrap schema predates strict startup validation. Preserve
+		// that behavior until its live configuration has been audited.
+		SkipValidation: true,
+	})
+	if err != nil {
+		return nil, PresenceSettings{}, err
+	}
+	return live, presenceFromRaw(raw), nil
+}
+
+func presenceFromRaw(raw map[string]any) PresenceSettings {
 	v := viper.New()
-	v.SetConfigType(constants.ConfigFileFormat)
-	if err := v.ReadConfig(bytes.NewReader(contents)); err != nil {
-		return nil, fmt.Errorf("parse local config %q: %w", path, err)
-	}
-
-	bootstrap := &confv1.Bootstrap{}
-	if err := decodeConfig(v.AllSettings(), bootstrap); err != nil {
-		return nil, fmt.Errorf("decode local config %q: %w", path, err)
-	}
-
-	confMu.Lock()
-	conf = bootstrap
-	presence = PresenceSettings{
+	_ = v.MergeConfigMap(raw)
+	settings := PresenceSettings{
 		RedisEnabled:   v.GetBool("data.cache.redis.presence.enabled"),
 		RedisKeyPrefix: v.GetString("data.cache.redis.presence.key_prefix"),
 		RedisTTL:       v.GetDuration("data.cache.redis.presence.ttl"),
 	}
-	if presence.RedisKeyPrefix == "" {
-		presence.RedisKeyPrefix = "config-center:presence"
+	if settings.RedisKeyPrefix == "" {
+		settings.RedisKeyPrefix = "config-center:presence"
 	}
-	if presence.RedisTTL <= 0 {
-		presence.RedisTTL = 90 * time.Second
+	if settings.RedisTTL <= 0 {
+		settings.RedisTTL = 90 * time.Second
 	}
+	return settings
+}
+
+func defaultPresenceSettings() PresenceSettings {
+	return PresenceSettings{RedisKeyPrefix: "config-center:presence", RedisTTL: 90 * time.Second}
+}
+
+func publish(bootstrap *confv1.Bootstrap, settings PresenceSettings) {
+	confMu.Lock()
+	conf = bootstrap
+	presence = settings
 	confMu.Unlock()
-	return bootstrap, nil
 }
 
 func GetPresenceSettings() PresenceSettings {

@@ -3,16 +3,27 @@ package otel
 import (
 	"testing"
 
-	"github.com/lens077/go-connect-kit/meta"
+	confv1 "github.com/lens077/control-tower/services/config/internal/conf/v1"
 	"github.com/stretchr/testify/require"
-	semconv "go.opentelemetry.io/otel/semconv/v1.41.0"
 )
 
-func TestNewResource_UsesConfigCenterNamespace(t *testing.T) {
-	res, err := newResource(meta.AppInfo{Name: "config-service"})
-	require.NoError(t, err)
+func TestOptionsFromBootstrapUsesConfigCenterNamespace(t *testing.T) {
+	options := optionsFromBootstrap(&confv1.Bootstrap{Observability: &confv1.Observability{
+		Enable: true,
+		Trace:  &confv1.Observability_Trace{},
+		Metric: &confv1.Observability_Metric{},
+		Log:    &confv1.Observability_Logging{},
+	}})
 
-	value, ok := res.Set().Value(semconv.ServiceNamespaceKey)
-	require.True(t, ok)
-	require.Equal(t, "config-center", value.AsString())
+	require.Equal(t, "config-center", options.ServiceNamespace)
+	require.NotNil(t, options.Trace)
+	require.NotNil(t, options.Metric)
+	require.NotNil(t, options.Logging)
+}
+
+func TestOptionsFromBootstrapDisablesAllSignals(t *testing.T) {
+	options := optionsFromBootstrap(&confv1.Bootstrap{})
+	require.Nil(t, options.Trace)
+	require.Nil(t, options.Metric)
+	require.Nil(t, options.Logging)
 }
