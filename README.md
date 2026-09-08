@@ -58,3 +58,12 @@ web 控制台：`cd web && pnpm install && pnpm dev`（端口 3005，已在上�
 ## 发布
 
 CI 由裸 semver tag（`X.Y.Z`）触发：质量门禁 + 三镜像（gateway/config/config-web）推 GHCR（配置 TCR Secrets 后双推）。PR 只跑质量门禁；push main 不构建。部署清单在 `deploy/{dev,pre}`，切流手顺见 `docs/design/cutover.md`。
+
+## 许可
+
+本项目采用 **[CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/)**
+（署名—非商业性使用—相同方式共享）授权，详见 [`LICENSE`](LICENSE)：
+
+- 可用于个人学习、技术交流与非营利研究；衍生作品须以相同或更严格的协议开源，并注明出处。
+- **任何商业使用**（直接售卖、SaaS 集成、含付费内容或广告的平台等）须事先获得书面授权。
+- 商业授权或闭源例外请联系版权方：<https://github.com/lens077>
