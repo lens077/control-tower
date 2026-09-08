@@ -134,20 +134,24 @@ func (h *Handler) login(w http.ResponseWriter, r *http.Request) {
 	}
 
 	payload, _ := json.Marshal(statePayload{State: state, Redirect: redirect, Native: native})
-	if native {
-		// 原生客户端：state 必须存服务端，不能依赖登录子窗口的 cookie——
-		// Tauri 子窗口是独立 WebView，回写的 cookie 在回调时拿不到
-		// （2026-08-24 真机实测：missing oauth state）。
-		// 安全性由「state 不可猜 + 单次使用 + 回调必须回环」共同保证。
-		if err := h.Store.PutState(r.Context(), state, payload, stateTTL); err != nil {
-			h.Log.Error("put oauth state failed", zap.Error(err))
-			http.Error(w, "internal error", http.StatusInternalServerError)
-			return
-		}
+	// state 载荷一律存服务端（两条轨统一），取出即删。
+	//
+	// ⚠️ 早期版本只有 native 轨存服务端，浏览器轨把载荷 base64 后塞进 cookie 由
+	// 客户端携带。那样一来，redirect 与 native 这两个**只在本函数里校验过一次**
+	// 的字段就变成了客户端可改的输入：伪造一份 {r:"https://evil.example", n:true}
+	// 的 cookie 直接打 /auth/callback，state 两边都由攻击者写、比对必然通过，
+	// 回调就会把新建的会话 id 拼进 URL 送去攻击者域名。
+	// 载荷不出服务端，这条路径才真正关死。
+	if err := h.Store.PutState(r.Context(), state, payload, stateTTL); err != nil {
+		h.Log.Error("put oauth state failed", zap.Error(err))
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
 	}
+	// cookie 只放不可猜的 state 本身，作用是把回调绑定到发起登录的那个浏览器。
+	// 原生轨收不到 cookie，改由「回调必须回环」兜底（见 callback）。
 	http.SetCookie(w, &http.Cookie{
 		Name:     stateCookieName,
-		Value:    base64.RawURLEncoding.EncodeToString(payload),
+		Value:    state,
 		Path:     "/auth",
 		Domain:   h.Cookie.Domain,
 		MaxAge:   int(stateTTL.Seconds()),
@@ -161,27 +165,19 @@ func (h *Handler) login(w http.ResponseWriter, r *http.Request) {
 // callback 校验 state → 换令牌 → 取角色 → 建会话 → 下发 cookie → 跳回前端。
 func (h *Handler) callback(w http.ResponseWriter, r *http.Request) {
 	queryState := r.URL.Query().Get("state")
-	var sp statePayload
-	if c, cerr := r.Cookie(stateCookieName); cerr == nil {
-		// 浏览器流程：state 在 httpOnly cookie 里，天然与本浏览器绑定。
-		rawPayload, derr := base64.RawURLEncoding.DecodeString(c.Value)
-		if derr != nil || json.Unmarshal(rawPayload, &sp) != nil {
-			http.Error(w, "bad oauth state", http.StatusBadRequest)
-			return
-		}
-	} else if queryState != "" {
-		// 原生流程：回落到服务端 state（取出即删，单次使用）。
-		raw, serr := h.Store.TakeState(r.Context(), queryState)
-		if serr != nil {
-			http.Error(w, "missing oauth state", http.StatusBadRequest)
-			return
-		}
-		if json.Unmarshal(raw, &sp) != nil {
-			http.Error(w, "bad oauth state", http.StatusBadRequest)
-			return
-		}
-	} else {
+	if queryState == "" {
 		http.Error(w, "missing oauth state", http.StatusBadRequest)
+		return
+	}
+	// 载荷只从服务端取，取出即删（单次使用，防重放）。两条轨走同一条路径。
+	raw, serr := h.Store.TakeState(r.Context(), queryState)
+	if serr != nil {
+		http.Error(w, "missing oauth state", http.StatusBadRequest)
+		return
+	}
+	var sp statePayload
+	if json.Unmarshal(raw, &sp) != nil {
+		http.Error(w, "bad oauth state", http.StatusBadRequest)
 		return
 	}
 	// 恒时比较，避免 state 被逐字符试探。
@@ -189,7 +185,29 @@ func (h *Handler) callback(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "oauth state mismatch", http.StatusBadRequest)
 		return
 	}
+	// 浏览器轨必须证明「回调发生在发起登录的同一个浏览器里」——这是 OAuth state
+	// 的本职。原生轨豁免：Tauri 登录子窗口是独立 WebView，拿不到 cookie
+	// （2026-08-24 真机实测：missing oauth state），其绑定靠「回调必须回环」。
+	if !sp.Native {
+		c, cerr := r.Cookie(stateCookieName)
+		if cerr != nil || subtle.ConstantTimeCompare([]byte(c.Value), []byte(queryState)) != 1 {
+			http.Error(w, "oauth state mismatch", http.StatusBadRequest)
+			return
+		}
+	}
 	h.clearCookie(w, stateCookieName, "/auth")
+
+	// 复验重定向目标：**不因为 login 校验过就免检**。
+	// login 与 callback 是两条独立可达的请求，前者做过的校验对后者没有任何约束力；
+	// 「必须先走第 1 步」只是界面上的顺序，不是服务端的保证。
+	if sp.Native {
+		if !isLoopback(sp.Redirect) {
+			http.Error(w, "native mode requires a loopback redirect", http.StatusBadRequest)
+			return
+		}
+	} else if !h.redirectAllowed(sp.Redirect) {
+		sp.Redirect = h.defaultRedirect()
+	}
 
 	code := r.URL.Query().Get("code")
 	if code == "" {

@@ -137,7 +137,11 @@ func TestLoginRejectsOpenRedirect(t *testing.T) {
 	if sc == nil {
 		t.Fatal("no state cookie")
 	}
-	raw, _ := base64Decode(sc.Value)
+	// cookie 只放 state 本身；载荷在服务端。
+	raw, err := hs.store.TakeState(t.Context(), sc.Value)
+	if err != nil {
+		t.Fatalf("state 未落到服务端: %v", err)
+	}
 	var sp statePayload
 	if err := json.Unmarshal(raw, &sp); err != nil {
 		t.Fatal(err)
@@ -145,10 +149,6 @@ func TestLoginRejectsOpenRedirect(t *testing.T) {
 	if strings.Contains(sp.Redirect, "evil.example") {
 		t.Fatalf("open redirect leaked: %s", sp.Redirect)
 	}
-}
-
-func base64Decode(s string) ([]byte, error) {
-	return base64.RawURLEncoding.DecodeString(s)
 }
 
 func TestCallbackCreatesSession(t *testing.T) {
@@ -175,11 +175,8 @@ func TestCallbackCreatesSession(t *testing.T) {
 			stateCookie = c
 		}
 	}
-	raw, _ := base64Decode(stateCookie.Value)
-	var sp statePayload
-	_ = json.Unmarshal(raw, &sp)
-
-	req := httptest.NewRequest(http.MethodGet, "/auth/callback?code=abc&state="+url.QueryEscape(sp.State), nil)
+	// cookie 里就是 state 本身（载荷在服务端，客户端携带不到）。
+	req := httptest.NewRequest(http.MethodGet, "/auth/callback?code=abc&state="+url.QueryEscape(stateCookie.Value), nil)
 	req.AddCookie(stateCookie)
 	rec := httptest.NewRecorder()
 	hs.mux.ServeHTTP(rec, req)
@@ -210,13 +207,81 @@ func TestCallbackRejectsStateMismatch(t *testing.T) {
 	hs := newHarness(t, func(http.ResponseWriter, *http.Request) {
 		t.Error("state 不匹配时不应该去换令牌")
 	})
-	payload, _ := json.Marshal(statePayload{State: "expected", Redirect: "/"})
+	// 正常发起登录，但回调时 query 里换成另一个 state。
+	loginRec := httptest.NewRecorder()
+	hs.mux.ServeHTTP(loginRec, httptest.NewRequest(http.MethodGet, "/auth/login?redirect=/cart", nil))
+	var sc *http.Cookie
+	for _, c := range loginRec.Result().Cookies() {
+		if c.Name == stateCookieName {
+			sc = c
+		}
+	}
 	req := httptest.NewRequest(http.MethodGet, "/auth/callback?code=abc&state=attacker", nil)
-	req.AddCookie(&http.Cookie{Name: stateCookieName, Value: base64.RawURLEncoding.EncodeToString(payload)})
+	req.AddCookie(sc)
 	rec := httptest.NewRecorder()
 	hs.mux.ServeHTTP(rec, req)
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("status=%d", rec.Code)
+	}
+}
+
+// 安全回归：/auth/callback 不接受客户端自带的 state 载荷。
+//
+// 背景（2026-09-08 审计）：早期版本把 {state,redirect,native} base64 后放进
+// cookie 由客户端携带，而 redirect/native 只在 /auth/login 里校验过一次。
+// 攻击者跳过第 1 步、自造一份载荷，就能让第 2 步把新建会话 id 拼进 URL
+// 送去站外域名——「必须先走第 1 步」只是界面顺序，不是服务端保证。
+func TestCallbackRejectsForgedStatePayload(t *testing.T) {
+	hs := newHarness(t, func(http.ResponseWriter, *http.Request) {
+		t.Error("伪造的 state 载荷不该走到换令牌这一步")
+	})
+	forged := statePayload{
+		State:    "attacker-chosen-state",
+		Redirect: "https://evil.example/steal",
+		Native:   true, // 想诱使回调把会话 id 拼进 URL
+	}
+	payload, _ := json.Marshal(forged)
+
+	// 两种携带姿势都试：旧格式（base64 载荷）与直接把 state 当 cookie 值。
+	for name, cookieValue := range map[string]string{
+		"旧格式载荷 cookie": base64.RawURLEncoding.EncodeToString(payload),
+		"仅 state 值":    forged.State,
+	} {
+		t.Run(name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet,
+				"/auth/callback?code=abc&state="+url.QueryEscape(forged.State), nil)
+			req.AddCookie(&http.Cookie{Name: stateCookieName, Value: cookieValue})
+			rec := httptest.NewRecorder()
+			hs.mux.ServeHTTP(rec, req)
+
+			if rec.Code != http.StatusBadRequest {
+				t.Fatalf("status=%d loc=%s（未经 /auth/login 的 state 必须拒绝）",
+					rec.Code, rec.Header().Get("Location"))
+			}
+			if loc := rec.Header().Get("Location"); strings.Contains(loc, "evil.example") {
+				t.Fatalf("会话 id 被送往站外: %s", loc)
+			}
+		})
+	}
+}
+
+// 浏览器轨必须带 state cookie：否则攻击者可拿自己诱出的 code 在别的浏览器里完成回调。
+// 原生轨的豁免由 TestNativeCallbackWorksWithoutStateCookie 单独覆盖。
+func TestCallbackRequiresStateCookieForBrowserFlow(t *testing.T) {
+	hs := newHarness(t, func(http.ResponseWriter, *http.Request) {
+		t.Error("缺少 state cookie 时不应该去换令牌")
+	})
+	loginRec := httptest.NewRecorder()
+	hs.mux.ServeHTTP(loginRec, httptest.NewRequest(http.MethodGet, "/auth/login?redirect=/cart", nil))
+	authURL, _ := url.Parse(loginRec.Header().Get("Location"))
+	state := authURL.Query().Get("state")
+
+	req := httptest.NewRequest(http.MethodGet, "/auth/callback?code=abc&state="+url.QueryEscape(state), nil)
+	// 刻意不带 cookie
+	rec := httptest.NewRecorder()
+	hs.mux.ServeHTTP(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status=%d（浏览器轨缺 state cookie 必须拒绝）", rec.Code)
 	}
 }
 
@@ -288,14 +353,7 @@ func TestNativeCallbackReturnsSessionViaLoopback(t *testing.T) {
 			stateCookie = c
 		}
 	}
-	raw, _ := base64Decode(stateCookie.Value)
-	var sp statePayload
-	_ = json.Unmarshal(raw, &sp)
-	if !sp.Native || sp.Redirect != loopback {
-		t.Fatalf("state payload=%+v", sp)
-	}
-
-	req := httptest.NewRequest(http.MethodGet, "/auth/callback?code=abc&state="+url.QueryEscape(sp.State), nil)
+	req := httptest.NewRequest(http.MethodGet, "/auth/callback?code=abc&state="+url.QueryEscape(stateCookie.Value), nil)
 	req.AddCookie(stateCookie)
 	rec := httptest.NewRecorder()
 	hs.mux.ServeHTTP(rec, req)
@@ -308,7 +366,7 @@ func TestNativeCallbackReturnsSessionViaLoopback(t *testing.T) {
 		t.Fatal(err)
 	}
 	sid := loc.Query().Get("code")
-	if sid == "" || loc.Query().Get("state") != sp.State {
+	if sid == "" || loc.Query().Get("state") != stateCookie.Value {
 		t.Fatalf("loopback callback missing session/state: %s", loc)
 	}
 	// 会话必须真的建出来，且 id 与回调里给的一致。

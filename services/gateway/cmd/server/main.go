@@ -4,6 +4,8 @@ package main
 
 import (
 	"context"
+	"crypto/hmac"
+	"crypto/sha256"
 	"crypto/tls"
 	"crypto/x509"
 	"errors"
@@ -50,6 +52,26 @@ func envOr(key, fallback string) string {
 		return v
 	}
 	return fallback
+}
+
+// guestSigningKey 取访客 cookie 的签名密钥。
+//
+// 优先用显式配置的 GUEST_COOKIE_SECRET；缺省时从 CASDOOR_CLIENT_SECRET 派生，
+// 这样既不新增一项必填部署配置，也不与该密钥的其他用途共用同一取值
+// （HMAC 的 message 做了域分隔）。两者都没有则返回 nil，调用方据此关闭访客轨。
+//
+// ⚠️ 轮换 CASDOOR_CLIENT_SECRET 会让在途的访客 cookie 全部失效，
+// 表现为匿名购物车清空一次。要避免就显式配置 GUEST_COOKIE_SECRET。
+func guestSigningKey() []byte {
+	if s := os.Getenv("GUEST_COOKIE_SECRET"); s != "" {
+		return []byte(s)
+	}
+	if s := os.Getenv("CASDOOR_CLIENT_SECRET"); s != "" {
+		mac := hmac.New(sha256.New, []byte(s))
+		mac.Write([]byte("control-tower/guest-cookie/v1"))
+		return mac.Sum(nil)
+	}
+	return nil
 }
 
 func main() {
@@ -283,8 +305,15 @@ func run(lc fx.Lifecycle, log *zap.Logger) error {
 			gc.Secure = false
 			gc.Name = strings.TrimPrefix(gc.Name, "__Secure-")
 		}
-		guestCookie = &gc
-		log.Info("匿名购物访客轨已启用", zap.String("cookie", gc.Name), zap.Duration("ttl", guest.TTL))
+		gc.Key = guestSigningKey()
+		if len(gc.Key) == 0 {
+			// fail closed：没有密钥就无法分辨「本网关签发的访客 ID」与「客户端自己编的值」，
+			// 此时开着访客轨等于接受任意身份（含伪造成他人用户 ID）。
+			log.Warn("匿名购物访客轨未启用：缺少签名密钥，请设置 GUEST_COOKIE_SECRET 或 CASDOOR_CLIENT_SECRET")
+		} else {
+			guestCookie = &gc
+			log.Info("匿名购物访客轨已启用", zap.String("cookie", gc.Name), zap.Duration("ttl", guest.TTL))
+		}
 	} else {
 		log.Info("匿名购物访客轨被 GUEST_ENABLED=false 显式关闭")
 	}

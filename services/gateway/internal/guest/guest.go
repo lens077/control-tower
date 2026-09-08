@@ -2,17 +2,29 @@
 //
 // 设计依据：ecommerce docs/design/platform/anonymous-shopping.md。
 //
-// 身份模型刻意与 BFF 会话同构：**128 位以上随机不透明 ID**，不做 HMAC 签名。
-// 理由是签名在这里买不到额外安全性——访客 ID 唯一能解锁的资源是它自己的购物车，
-// 既无 PII 也无资金，而 32 字节 CSPRNG 的不可猜性已经等价于会话 id 的强度模型。
-// 引入签名反而要新增密钥管理与轮换面。若将来访客身份要承载更多资源，再回头加签。
+// 身份模型与 BFF 会话同构：**128 位以上随机不透明 ID**，并额外带 HMAC 签名。
+//
+// ⚠️ 签名是后补的，理由值得记下来。最初的判断是「签名买不到额外安全性——访客 ID
+// 唯一能解锁的资源是它自己的购物车」。这个推理有一个隐含前提：访客 ID 只能指向
+// 访客自己。而它不成立，因为访客 ID 刻意采用了 UUID 形态（见 NewID 的注释：
+// 为了让下游 cart 服务零改动地 uuid.Parse 后写进 UUID 列），于是它与**真实用户
+// ID 共用同一个取值空间**。两个各自合理的决定叠在一起，结果是：任何人把
+// cookie 改成受害者的用户 UUID，网关就会把「受害者」当作访客身份注入下游，
+// 从而读写受害者的购物车（横向越权）。
+//
+// 因此现在的规则是：cookie 值必须是「<uuid>.<HMAC>」，只有本网关签发过的
+// ID 才被接受，未签名或签名不符的一律当作没有并重新签发。
 //
 // 边界：本包只负责「发/读 cookie」与「生成 ID」，不决定哪些路径需要访客身份——
 // 那是路由表（router.Table.IsGuest）的职责。
 package guest
 
 import (
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/base64"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -31,6 +43,12 @@ type CookieConfig struct {
 	Path     string
 	Secure   bool
 	SameSite http.SameSite
+
+	// Key 是访客 cookie 的签名密钥。**必须非空**，且同一部署的所有副本必须一致，
+	// 否则副本之间会互相不认对方签发的访客身份（表现为购物车随机丢失）。
+	// 为空时 FromRequest 一律返回空串（fail closed）——宁可让访客身份失效，
+	// 也不接受未经验证的客户端取值。
+	Key []byte
 }
 
 // DefaultCookieConfig 返回生产缺省值。
@@ -60,13 +78,42 @@ func NewID() (string, error) {
 	return id.String(), nil
 }
 
-// FromRequest 读取请求里的访客 id；没有或为空返回空串。
+// sign 返回 cookie 的携带形态「<id>.<base64url(HMAC-SHA256(key, id))>」。
+func (c CookieConfig) sign(id string) string {
+	mac := hmac.New(sha256.New, c.Key)
+	mac.Write([]byte(id))
+	return id + "." + base64.RawURLEncoding.EncodeToString(mac.Sum(nil))
+}
+
+// FromRequest 读取并**验证**请求里的访客 id。
+//
+// 任何一项不满足都返回空串（调用方据此重新签发一个全新访客身份）：
+// cookie 不存在、形态不对、id 不是合法 UUID、签名不符、密钥未配置。
+//
+// 返回值是裸 id（不含签名），因为下游拿到的 x-md-global-user-id 必须能直接
+// uuid.Parse。签名只用于证明「这个 id 是本网关签发的」，不出网关。
 func (c CookieConfig) FromRequest(r *http.Request) string {
+	if len(c.Key) == 0 {
+		return "" // 未配置密钥：无法验证，一律不认。
+	}
 	ck, err := r.Cookie(c.Name)
 	if err != nil || ck.Value == "" {
 		return ""
 	}
-	return ck.Value
+	// 用最后一个「.」分隔：UUID 本身不含「.」，但这样对将来的 id 形态更宽容。
+	dot := strings.LastIndexByte(ck.Value, '.')
+	if dot <= 0 {
+		return "" // 无签名的历史 cookie 落在这里，按「没有」处理。
+	}
+	id := ck.Value[:dot]
+	if _, perr := uuid.Parse(id); perr != nil {
+		return ""
+	}
+	// 恒时比较，避免签名被逐字节试探。
+	if !hmac.Equal([]byte(ck.Value), []byte(c.sign(id))) {
+		return ""
+	}
+	return id
 }
 
 // Issue 把访客 id 写入响应 cookie。
@@ -76,7 +123,7 @@ func (c CookieConfig) FromRequest(r *http.Request) string {
 func (c CookieConfig) Issue(w http.ResponseWriter, id string) {
 	http.SetCookie(w, &http.Cookie{
 		Name:     c.Name,
-		Value:    id,
+		Value:    c.sign(id),
 		Path:     c.Path,
 		Domain:   c.Domain,
 		Secure:   c.Secure,
