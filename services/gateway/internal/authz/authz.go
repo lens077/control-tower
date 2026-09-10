@@ -9,6 +9,13 @@
 //
 // 热更新：SetPolicies 整体重建 enforcer 后原子替换；非法模型/策略保留旧 enforcer
 // （last-known-good——旧网关同语义，历史上防住过坏策略下发）。
+//
+// 方法列门禁：p 行的 act 列只认字面 POST。model 用 regexMatch 匹配 act，
+// 一条图省事写成 `.*` 或 `(GET)|(POST)` 的策略会让「换 HTTP 方法绕授权」
+// 只剩 Connect 的 405 兜底——而 Connect 对标了 NO_SIDE_EFFECTS 的方法是放 GET 的。
+// 全部下游 procedure 都是 POST（本仓没有任何 RPC 标 NO_SIDE_EFFECTS），
+// 所以这里不需要表达力，只需要收窄；将来真要放行 GET，先改这条常量并同步
+// ecommerce context/team/proto-design.md 的评审规则。
 package authz
 
 import (
@@ -23,6 +30,13 @@ import (
 
 // ErrNotReady 表示策略尚未加载；readyz 就绪条件之一。
 var ErrNotReady = errors.New("authz: policies not loaded")
+
+// allowedAct 是 p 行 act 列唯一合法的字面值。Connect procedure 一律 POST。
+const allowedAct = "POST"
+
+// pFieldCount 是 p 行去掉 ptype 后的列数：sub, obj, act, eft（与 model.conf 的
+// policy_definition 对齐；列数不对 casbin 也会报，但报错信息不指向具体列）。
+const pFieldCount = 4
 
 // Enforcer 是可热更新的授权判定器。
 type Enforcer struct {
@@ -77,6 +91,7 @@ func (a *Enforcer) Allowed(roles []string, procedure, method string) (bool, erro
 
 // loadCSV 解析 policies.csv（casbin CSV 方言：p/g/g2 行、# 注释、空行）。
 // 未知行类型报错——静默跳过会让策略「看似下发实则没生效」。
+// p 行经 validatePolicyRow 做列值校验；任一行不合法整表拒绝加载（调用方保留旧表）。
 func loadCSV(e *casbin.Enforcer, csv string) error {
 	for i, raw := range strings.Split(csv, "\n") {
 		line := strings.TrimSpace(raw)
@@ -91,6 +106,9 @@ func loadCSV(e *casbin.Enforcer, csv string) error {
 		var err error
 		switch ptype {
 		case "p":
+			if err = validatePolicyRow(fields[1:]); err != nil {
+				return fmt.Errorf("authz: policies.csv line %d: %w", i+1, err)
+			}
 			_, err = e.AddNamedPolicy("p", rest...)
 		case "g":
 			_, err = e.AddNamedGroupingPolicy("g", rest...)
@@ -102,6 +120,21 @@ func loadCSV(e *casbin.Enforcer, csv string) error {
 		if err != nil {
 			return fmt.Errorf("authz: policies.csv line %d: %w", i+1, err)
 		}
+	}
+	return nil
+}
+
+// validatePolicyRow 校验 p 行（不含 ptype）：列数固定 4，act 列只认字面 POST。
+//
+// 拒绝的不只是 `.*`：`GET|POST`、`(GET)|(POST)`、`POST.*`、小写 `post`、
+// 单独的 `GET` 全部拒绝——regexMatch 下这些都不是「恰好 POST」，而任何比
+// POST 更宽的匹配都会让授权层与执行层对「这是什么操作」的理解分叉。
+func validatePolicyRow(fields []string) error {
+	if len(fields) != pFieldCount {
+		return fmt.Errorf("p row must have %d fields (sub, obj, act, eft), got %d", pFieldCount, len(fields))
+	}
+	if act := fields[2]; act != allowedAct {
+		return fmt.Errorf("p row act column must be literally %q, got %q (wildcards and method alternations are refused)", allowedAct, act)
 	}
 	return nil
 }

@@ -142,6 +142,38 @@ func TestInvalidPolicyKeepsOld(t *testing.T) {
 	}
 }
 
+// TestActColumnMustBeLiteralPOST 复现「换 HTTP 方法绕授权」的策略侧成因：
+// act 列一旦写成通配/交替，regexMatch 就会对 GET/HEAD/PUT 放行；门禁要求整表拒载并保留旧表。
+func TestActColumnMustBeLiteralPOST(t *testing.T) {
+	a := newEnforcer(t)
+	bad := []string{
+		"p, admin, /user.v1.UserService/UpdateRole, .*, allow",
+		"p, admin, /user.v1.UserService/UpdateRole, (GET)|(POST), allow",
+		"p, admin, /user.v1.UserService/UpdateRole, GET|POST, allow",
+		"p, admin, /user.v1.UserService/UpdateRole, POST.*, allow",
+		"p, admin, /user.v1.UserService/UpdateRole, GET, allow",
+		"p, admin, /user.v1.UserService/UpdateRole, post, allow",
+		"p, admin, /user.v1.UserService/UpdateRole, allow", // 少一列：act 位被 eft 顶上
+	}
+	for _, row := range bad {
+		if err := a.SetPolicies(modelText, row); err == nil {
+			t.Errorf("row %q must be refused", row)
+		}
+	}
+	// 旧策略仍然生效（last-known-good）。
+	ok, err := a.Allowed([]string{"customer"}, "/cart.v1.CartService/AddItem", "POST")
+	if err != nil || !ok {
+		t.Fatalf("old enforcer must keep working: ok=%v err=%v", ok, err)
+	}
+	// 反向：字面 POST 正常加载，且对 GET 仍然默认拒绝（model 无匹配即拒）。
+	if err := a.SetPolicies(modelText, "p, admin, /user.v1.UserService/UpdateRole, POST, allow"); err != nil {
+		t.Fatalf("literal POST must load: %v", err)
+	}
+	if ok, _ := a.Allowed([]string{"admin"}, "/user.v1.UserService/UpdateRole", "GET"); ok {
+		t.Fatal("GET must not match a POST-only rule")
+	}
+}
+
 func TestInvalidModelKeepsOld(t *testing.T) {
 	a := newEnforcer(t)
 	if err := a.SetPolicies("not a model", policiesCSV); err == nil {
