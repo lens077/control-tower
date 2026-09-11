@@ -165,6 +165,6 @@ metadata:
 data:
   # 逗号分隔的 Casdoor client id 白名单：consumer/merchant/admin/desktop。
   # 占位值，P5 切流前以实际 client id 填充（非机密）。
-  JWT_AUDIENCES: "a36e6718e392099b7915"
+  JWT_AUDIENCES: "baxf6718e392099b7915"
   # OTLP 三种信号统一交给 collector 分流；Jaeger 只接 trace，指标发过去会持续 404。
   OTEL_EXPORTER_OTLP_ENDPOINT: "otel-opentelemetry-collector.opentelemetry.svc:4318"

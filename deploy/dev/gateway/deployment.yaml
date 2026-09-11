@@ -56,7 +56,7 @@ spec:
       containers:
         - name: gateway
           # 禁 latest；使用发布 semver tag，发布后不得覆写同名 tag。
-          image: ghcr.io/lens077/control-tower-gateway:0.2.5
+          image: ghcr.io/lens077/control-tower-gateway:0.2.10
           imagePullPolicy: IfNotPresent
           ports:
             - name: http
@@ -219,7 +219,7 @@ metadata:
 data:
   # 逗号分隔的 Casdoor client id 白名单：consumer/merchant/admin/desktop。
   # 占位值，P5 切流前以实际 client id 填充（非机密）。
-  JWT_AUDIENCES: "a36e6718e392099b7915"
+  JWT_AUDIENCES: "baxf6718e392099b7915"
   # 2026-08-24 修正：原值是 jaeger.observability.svc:4318 —— 网关把**指标**也发到了
   # Jaeger 的 OTLP 端口，而 Jaeger 只收 trace，日志里一直在刷
   #   failed to send metrics to http://jaeger.observability.svc:4318/v1/metrics: 404

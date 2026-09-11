@@ -47,7 +47,7 @@ spec:
             - name: CASDOOR_ISSUER
               value: "https://casdoor.apikv.com"
             - name: CASDOOR_AUDIENCE
-              value: "a36e6718e392099b7915"
+              value: "baxf6718e392099b7915"
             - name: CONFIG_CENTER_SERVICE_TOKEN
               valueFrom:
                 secretKeyRef:

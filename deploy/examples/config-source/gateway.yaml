@@ -1,0 +1,16 @@
+# 示例：control-tower-gateway 连接 Config Center 的自举 selector。
+# 本文件不是 config 服务的启动配置，也不是 gateway 的动态路由配置。
+# 填入 Machine Token 后，将其创建为 ecommerce namespace 下的
+# control-tower-config-source-<env> Secret；真实凭据不得提交仓库。
+# service_token 为占位值：真值用 config 管理台 /tokens 给 service_name=gateway 签发
+#（allowed_namespaces 留空即默认 gateway 自身）。
+type: config_center
+config_center:
+  # 集群内走 Service DNS；本机调试改 config-api 域名。
+#  address: http://config-center.config-center.svc:30010
+  address: http://config-center.config-center.svc:30010
+  namespace: gateway
+  environment: dev # 按环境改：dev / pre
+  key: routes.yaml # 主键固定为 routes.yaml（loader 校验，其余四键同 namespace 派生）
+  service_token: REPLACE_WITH_ISSUED_TOKEN
+  client_name: control-tower-gateway

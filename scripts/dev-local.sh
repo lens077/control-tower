@@ -171,7 +171,7 @@ SQL
     cd "$ROOT"
     CONFIG_SOURCE=file CONFIG_DIR="$DIR" \
     JWT_ISSUER=https://casdoor.apikv.com \
-    JWT_AUDIENCES=a36e6718e392099b7915 \
+    JWT_AUDIENCES=baxf6718e392099b7915 \
     CASDOOR_URL=https://casdoor.apikv.com \
     HTTP_PORT=:8080 LOG_LEVEL=debug \
     go run ./services/gateway/cmd/server

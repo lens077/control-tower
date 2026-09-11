@@ -100,5 +100,3 @@ func toPBMachineToken(t biz.MachineToken) *v1.MachineTokenMeta {
 	}
 	return pb
 }
-
-

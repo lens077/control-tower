@@ -22,7 +22,7 @@ note 写用途。**明文只显示一次**，直接进入下一步的 Secret，�
 
 ## 3. 创建网关 selector Secret
 
-以 `../configs/selector-examples/gateway.yaml` 为模板填入真 token 后：
+以 `examples/config-source/gateway.yaml` 为模板填入真 token 后：
 
 ```bash
 kubectl -n ecommerce create secret generic control-tower-config-source-<env> \
