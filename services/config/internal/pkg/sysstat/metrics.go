@@ -7,12 +7,21 @@ import (
 	confv1 "github.com/lens077/control-tower/services/config/internal/conf/v1"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/metric"
+	"go.uber.org/fx"
 	"go.uber.org/zap"
 )
 
 // scopeName 决定 VM 里的 scope_name 标签,用它能一眼分清哪些序列出自这里,
 // 哪些来自 otelconnect / otelpgx。
 const scopeName = "github.com/lens077/control-tower/services/config/internal/pkg/sysstat"
+
+func registerMetricsOnStart(lc fx.Lifecycle, sampler *Sampler, cfg *confv1.Observability, logger *zap.Logger) {
+	lc.Append(fx.Hook{
+		OnStart: func(context.Context) error {
+			return registerMetrics(sampler, cfg, logger)
+		},
+	})
+}
 
 // registerMetrics 把 Sampler 的快照注册成 OTel 可观测量表(observable gauge)。
 //

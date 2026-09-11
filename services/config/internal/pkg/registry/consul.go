@@ -1,6 +1,9 @@
 package registry
 
 import (
+	"os"
+
+	"github.com/lens077/control-tower/constants"
 	confv1 "github.com/lens077/control-tower/services/config/internal/conf/v1"
 	kitregistry "github.com/lens077/go-connect-kit/registry"
 	"go.uber.org/fx"
@@ -12,12 +15,16 @@ var Module = fx.Module("config-registry-adapter",
 	kitregistry.Module,
 )
 
+func registrationEnabled(address string) bool {
+	return address != "" && os.Getenv(constants.EnvConsulEnabled) != "false"
+}
+
 func optionsFromBootstrap(conf *confv1.Bootstrap) kitregistry.Options {
 	consul := conf.GetDiscovery().GetConsul()
 	check := consul.GetCheck()
 	ttl := check.GetTtl()
 	return kitregistry.Options{
-		Enabled:       consul != nil && consul.GetAddr() != "",
+		Enabled:       consul != nil && registrationEnabled(consul.GetAddr()),
 		Address:       consul.GetAddr(),
 		ServerAddress: conf.GetServer().GetAddr(),
 		TLS: kitregistry.TLSOptions{

@@ -30,17 +30,15 @@ import (
 	"github.com/lens077/control-tower/services/gateway/internal/observability"
 	"github.com/lens077/control-tower/services/gateway/internal/resolver"
 	"github.com/lens077/control-tower/services/gateway/internal/session"
+	kitlog "github.com/lens077/go-connect-kit/log"
+	"github.com/lens077/go-connect-kit/meta"
 
 	"github.com/redis/go-redis/v9"
 	"go.uber.org/fx"
 	"go.uber.org/zap"
-	"go.uber.org/zap/zapcore"
 	"golang.org/x/net/http2"
 	"golang.org/x/net/http2/h2c"
 )
-
-// Version 由 -ldflags 注入。
-var Version = "dev"
 
 var (
 	httpAddr  = flag.String("httpAddr", envOr("HTTP_PORT", ":8080"), "业务端口（HTTP/1.1+h2c）")
@@ -74,6 +72,8 @@ func guestSigningKey() []byte {
 	return nil
 }
 
+type observabilitySetupFunc func(context.Context, observability.Config, *zap.Logger) (func(context.Context) error, error)
+
 func main() {
 	flag.Parse()
 	app := fx.New(
@@ -101,30 +101,56 @@ func main() {
 }
 
 func newLogger() (*zap.Logger, error) {
-	cfg := zap.NewProductionConfig()
-	if lvl, err := zapcore.ParseLevel(envOr("LOG_LEVEL", "info")); err == nil {
-		cfg.Level = zap.NewAtomicLevelAt(lvl)
+	level := envOr("LOG_LEVEL", "info")
+	if _, err := zap.ParseAtomicLevel(level); err != nil {
+		level = "info"
 	}
-	return cfg.Build()
+	return kitlog.NewLogger(kitlog.Options{
+		Level:           level,
+		Format:          kitlog.FormatJSON,
+		StacktraceLevel: "error",
+	}, meta.AppInfo{Name: "control-tower-gateway"}), nil
 }
 
 // run 按依赖顺序完成装配：观测 → 鉴权组件 → 动态配置加载 → resolver → 服务器。
 func run(lc fx.Lifecycle, log *zap.Logger) error {
+	return runWithObservability(lc, log, observability.Setup)
+}
+
+func runWithObservability(lc fx.Lifecycle, log *zap.Logger, setup observabilitySetupFunc) (runErr error) {
 	ctx := context.Background()
 
 	// ── 可观测性（OTEL_EXPORTER_OTLP_ENDPOINT 未设置时 no-op）。
-	ratio, _ := strconv.ParseFloat(envOr("OTEL_TRACES_SAMPLER_RATIO", "1"), 64)
-	otelShutdown, err := observability.Setup(ctx, observability.Config{
+	endpoint := os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT")
+	var sampleRatio *float64
+	if endpoint != "" {
+		ratio, err := strconv.ParseFloat(envOr("OTEL_TRACES_SAMPLER_RATIO", "1"), 64)
+		if err != nil {
+			return fmt.Errorf("invalid OTEL_TRACES_SAMPLER_RATIO: %w", err)
+		}
+		sampleRatio = &ratio
+	}
+	otelShutdown, err := setup(ctx, observability.Config{
 		ServiceName:    "control-tower-gateway",
-		ServiceVersion: Version,
+		ServiceVersion: meta.Version,
 		Environment:    envOr("DEPLOYMENT_MODE", "dev"),
-		Endpoint:       os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT"),
+		Endpoint:       endpoint,
 		Insecure:       envOr("OTEL_EXPORTER_OTLP_INSECURE", "true") == "true",
-		SampleRatio:    ratio,
-	})
+		SampleRatio:    sampleRatio,
+	}, log)
 	if err != nil {
 		return fmt.Errorf("otel setup: %w", err)
 	}
+
+	otelOwnedByLifecycle := false
+	defer func() {
+		if otelOwnedByLifecycle {
+			return
+		}
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		runErr = errors.Join(runErr, otelShutdown(shutdownCtx))
+	}()
 
 	// ── 鉴权组件。issuer=Casdoor origin；audiences=各前端 client id（CSV）。
 	issuer := envOr("JWT_ISSUER", envOr("CASDOOR_URL", ""))
@@ -369,7 +395,7 @@ func run(lc fx.Lifecycle, log *zap.Logger) error {
 			}
 			log.Info("gateway listening",
 				zap.String("addr", srv.Addr),
-				zap.String("version", Version),
+				zap.String("version", meta.Version),
 				zap.Strings("discovery_services", services),
 			)
 			return nil
@@ -390,6 +416,7 @@ func run(lc fx.Lifecycle, log *zap.Logger) error {
 			return err
 		},
 	})
+	otelOwnedByLifecycle = true
 	return nil
 }
 

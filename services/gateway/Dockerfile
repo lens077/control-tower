@@ -22,7 +22,7 @@ COPY . .
 RUN --mount=type=cache,target=/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
     GOOS=$TARGETOS GOARCH=$TARGETARCH CGO_ENABLED=$CGO_ENABLED \
-    go build -ldflags="-s -w -X main.Version=$VERSION" \
+    go build -ldflags="-s -w -X github.com/lens077/go-connect-kit/meta.Version=$VERSION" \
     -o /app/service ./services/gateway/cmd/server && \
     chmod +x /app/service
 

@@ -25,7 +25,6 @@ import (
 	"github.com/lens077/control-tower/services/config/internal/service"
 	"github.com/lens077/go-connect-kit/env"
 	"github.com/lens077/go-connect-kit/meta"
-	kitregistry "github.com/lens077/go-connect-kit/registry"
 
 	"github.com/google/uuid"
 	"go.uber.org/fx"
@@ -87,8 +86,6 @@ func NewApp(serviceName, deploymentMode, serviceVersion string) *fx.App {
 		config.Module,     // 配置
 		logger.FxLogger(), // Fx框架本身的日志控制器
 
-		registry.Module, // 服务注册/发现
-
 		// 可观测性 - 根据配置决定是否启用
 		fx.Provide(func(conf *confv1.Bootstrap) *confv1.Observability {
 			if conf.Observability == nil {
@@ -97,10 +94,10 @@ func NewApp(serviceName, deploymentMode, serviceVersion string) *fx.App {
 			return conf.Observability
 		}),
 		otel.Module,
+		registry.Module, // 服务注册/发现
 
-		// 进程资源自采样。必须排在 otel.Module 之后 —— 它会把采样结果注册成
-		// OTel 可观测量表,而全局 MeterProvider 是在 otel.Module 里设置的,
-		// 早于它注册的话量表会挂在 noop provider 上,表现是「代码在跑但 VM 里没数据」。
+		// 进程资源自采样必须排在 otel.Module 之后:它的指标注册挂在 OnStart,
+		// 需要先由 otel.Module 安装全局 MeterProvider。
 		sysstat.Module,
 		// 反向查询 VictoriaMetrics(控制台的历史曲线)。返回 nil 表示没配置
 		// 查询端,此时页面只显示即时值,这是合法形态而不是故障。
@@ -121,15 +118,8 @@ func NewApp(serviceName, deploymentMode, serviceVersion string) *fx.App {
 
 		// 配置验证和初始化
 		fx.Invoke(
-			// 启动之前初始化 Consul 注册中心
-			func(reg *kitregistry.ConsulRegistry, logger *zap.Logger) {
-				if reg != nil {
-					logger.Info("consul service discovery component lifecycle successfully initialized")
-				}
-			},
-
 			// 初始化并启动核心应用逻辑
-			func(lc fx.Lifecycle, conf *confv1.Bootstrap, d *data.Data, logger *zap.Logger, srv *http.Server, otelShutdown func(context.Context) error) {
+			func(lc fx.Lifecycle, conf *confv1.Bootstrap, d *data.Data, logger *zap.Logger, srv *http.Server) {
 				lc.Append(fx.Hook{
 					// 启动服务时的操作
 					OnStart: func(ctx context.Context) error {
@@ -177,14 +167,6 @@ func NewApp(serviceName, deploymentMode, serviceVersion string) *fx.App {
 						// 关闭transport 维护的空闲 TCP 连接
 						if t, ok := http.DefaultTransport.(*http.Transport); ok {
 							t.CloseIdleConnections()
-						}
-
-						// 关闭otel
-						// 1. trace: 强制将内存中还没发出的 Span（链路数据）通过 HTTP 刷给 Collector
-						// 2. metric: 它会触发最后一次指标收集，并确保数据推送到后端
-						// 3. logging: 确保内存中的日志数据全部持久化
-						if otelShutdown != nil {
-							return otelShutdown(ctx) // 执行聚合后的停止逻辑
 						}
 						return nil
 					},

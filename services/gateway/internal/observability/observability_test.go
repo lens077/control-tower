@@ -4,6 +4,8 @@ import (
 	"context"
 	"testing"
 	"time"
+
+	"go.uber.org/zap"
 )
 
 // 带 endpoint 的完整构建路径必须能成功（semconv 与 SDK resource.Default() 的
@@ -11,14 +13,15 @@ import (
 func TestSetupWithEndpointBuilds(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
+	ratio := 0.5
 	shutdown, err := Setup(ctx, Config{
 		ServiceName:    "t",
 		ServiceVersion: "test",
 		Environment:    "test",
 		Endpoint:       "127.0.0.1:1", // 不会真正连接；导出在后台才发生
 		Insecure:       true,
-		SampleRatio:    0.5,
-	})
+		SampleRatio:    &ratio,
+	}, zap.NewNop())
 	if err != nil {
 		t.Fatalf("Setup must build with endpoint: %v", err)
 	}
@@ -28,7 +31,7 @@ func TestSetupWithEndpointBuilds(t *testing.T) {
 }
 
 func TestSetupNoEndpointNoop(t *testing.T) {
-	shutdown, err := Setup(context.Background(), Config{})
+	shutdown, err := Setup(context.Background(), Config{}, zap.NewNop())
 	if err != nil || shutdown == nil {
 		t.Fatalf("no-op path: err=%v", err)
 	}

@@ -1,96 +1,53 @@
-// Package observability 提供网关的 OTel 装配薄层。
+// Package observability 将网关部署参数映射到 go-connect-kit/otel。
 //
-// 修正旧网关两处口径缺陷（终裁 §四 / 勾选表 11-12 行）：
-//   - 采样 ParentBased(TraceIDRatioBased)，与后端一致（旧网关 AlwaysSample 口径相反）；
-//   - 指标经 OTLP 推送（与后端车队一致），不再依赖脆弱的 /metrics XFF 判断。
-//
-// OTEL_EXPORTER_OTLP_ENDPOINT 未设置时返回 no-op（本地/测试零依赖）。
-// 与 services/config/internal/pkg/otel 的去重合并排在 P6（跨 internal 边界需要搬家）。
+// 网关只启用 trace 与 metric；日志管道和运行时指标保持关闭。Endpoint 为空时走 no-op。
 package observability
 
 import (
 	"context"
 	"time"
 
-	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetrichttp"
-	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
-	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
-	"go.opentelemetry.io/otel/sdk/resource"
-	sdktrace "go.opentelemetry.io/otel/sdk/trace"
-	// 必须与当前 otel SDK 的 resource.Default() schema 同版，否则 resource.Merge
-	// 直接报 conflicting Schema URL（实测在集群里炸过：1.34 vs 1.43）。
-	semconv "go.opentelemetry.io/otel/semconv/v1.43.0"
+	"github.com/lens077/go-connect-kit/meta"
+	kitotel "github.com/lens077/go-connect-kit/otel"
+	"go.uber.org/zap"
 )
 
-// Config 是 OTel 装配参数。
+// Config 保存网关自己负责的 OpenTelemetry 部署参数。
 type Config struct {
 	ServiceName    string
 	ServiceVersion string
 	Environment    string
-	// Endpoint 形如 host:4318；空=禁用（no-op）。
+	// Endpoint 形如 host:4318；空值表示禁用遥测。
 	Endpoint string
 	Insecure bool
-	// SampleRatio 是根 span 采样率（ParentBased 内层）。
-	SampleRatio float64
+	// SampleRatio 是 ParentBased 内的根 span 采样率；nil 使用 kit 默认值，显式 0 表示不采样。
+	SampleRatio *float64
 }
 
-// Setup 安装全局 TracerProvider/MeterProvider，返回聚合 shutdown。
-func Setup(ctx context.Context, cfg Config) (func(context.Context) error, error) {
-	if cfg.Endpoint == "" {
-		return func(context.Context) error { return nil }, nil
+// Setup 将 trace 与 metric 的构造、全局安装和关闭委托给 go-connect-kit。
+func Setup(ctx context.Context, cfg Config, logger *zap.Logger) (func(context.Context) error, error) {
+	if logger == nil {
+		logger = zap.NewNop()
 	}
 
-	res, err := resource.Merge(resource.Default(), resource.NewWithAttributes(
-		semconv.SchemaURL,
-		semconv.ServiceName(cfg.ServiceName),
-		semconv.ServiceVersion(cfg.ServiceVersion),
-		// v1.43.0 没有 DeploymentEnvironmentName 便捷函数,用 Key 直构。
-		semconv.DeploymentEnvironmentNameKey.String(cfg.Environment),
-	))
-	if err != nil {
-		return nil, err
-	}
-
-	traceOpts := []otlptracehttp.Option{otlptracehttp.WithEndpoint(cfg.Endpoint)}
-	metricOpts := []otlpmetrichttp.Option{otlpmetrichttp.WithEndpoint(cfg.Endpoint)}
-	if cfg.Insecure {
-		traceOpts = append(traceOpts, otlptracehttp.WithInsecure())
-		metricOpts = append(metricOpts, otlpmetrichttp.WithInsecure())
-	}
-
-	traceExp, err := otlptracehttp.New(ctx, traceOpts...)
-	if err != nil {
-		return nil, err
-	}
-	metricExp, err := otlpmetrichttp.New(ctx, metricOpts...)
-	if err != nil {
-		return nil, err
-	}
-
-	ratio := cfg.SampleRatio
-	if ratio <= 0 || ratio > 1 {
-		ratio = 1
-	}
-	tp := sdktrace.NewTracerProvider(
-		sdktrace.WithResource(res),
-		// 与后端口径一致：跟随父采样决策，根 span 按比例。
-		sdktrace.WithSampler(sdktrace.ParentBased(sdktrace.TraceIDRatioBased(ratio))),
-		sdktrace.WithBatcher(traceExp),
-	)
-	mp := sdkmetric.NewMeterProvider(
-		sdkmetric.WithResource(res),
-		sdkmetric.WithReader(sdkmetric.NewPeriodicReader(metricExp, sdkmetric.WithInterval(30*time.Second))),
-	)
-	otel.SetTracerProvider(tp)
-	otel.SetMeterProvider(mp)
-
-	return func(ctx context.Context) error {
-		terr := tp.Shutdown(ctx)
-		merr := mp.Shutdown(ctx)
-		if terr != nil {
-			return terr
+	options := kitotel.Options{}
+	if cfg.Endpoint != "" {
+		tls := kitotel.TLSOptions{Enabled: !cfg.Insecure}
+		options.Trace = &kitotel.TraceOptions{
+			Endpoint:    cfg.Endpoint,
+			SampleRatio: cfg.SampleRatio,
+			TLS:         tls,
 		}
-		return merr
-	}, nil
+		options.Metric = &kitotel.MetricOptions{
+			Endpoint:       cfg.Endpoint,
+			ExportInterval: 30 * time.Second,
+			TLS:            tls,
+		}
+	}
+
+	return kitotel.SetupOTelSDK(ctx, meta.AppInfo{
+		Name:        cfg.ServiceName,
+		Version:     cfg.ServiceVersion,
+		Environment: cfg.Environment,
+	}, options, logger)
 }

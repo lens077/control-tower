@@ -96,7 +96,7 @@ type Sampler struct {
 
 var Module = fx.Module("sysstat",
 	fx.Provide(New),
-	fx.Invoke(registerMetrics),
+	fx.Invoke(registerMetricsOnStart),
 )
 
 func New(lc fx.Lifecycle, logger *zap.Logger) (*Sampler, error) {
