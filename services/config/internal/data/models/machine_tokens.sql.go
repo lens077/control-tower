@@ -12,13 +12,13 @@ import (
 )
 
 const GetActiveMachineTokenByHash = `-- name: GetActiveMachineTokenByHash :one
-SELECT id, service_name, environment, token_hash, allowed_namespaces, note, disabled, created_at, revoked_at, last_used_at FROM config.machine_token
+SELECT id, service_name, environment, token_hash, allowed_namespaces, note, disabled, created_at, revoked_at, last_used_at, role FROM config.machine_token
 WHERE token_hash = $1 AND NOT disabled
 `
 
 // GetActiveMachineTokenByHash
 //
-//	SELECT id, service_name, environment, token_hash, allowed_namespaces, note, disabled, created_at, revoked_at, last_used_at FROM config.machine_token
+//	SELECT id, service_name, environment, token_hash, allowed_namespaces, note, disabled, created_at, revoked_at, last_used_at, role FROM config.machine_token
 //	WHERE token_hash = $1 AND NOT disabled
 func (q *Queries) GetActiveMachineTokenByHash(ctx context.Context, tokenHash []byte) (ConfigMachineToken, error) {
 	row := q.db.QueryRow(ctx, GetActiveMachineTokenByHash, tokenHash)
@@ -34,14 +34,41 @@ func (q *Queries) GetActiveMachineTokenByHash(ctx context.Context, tokenHash []b
 		&i.CreatedAt,
 		&i.RevokedAt,
 		&i.LastUsedAt,
+		&i.Role,
+	)
+	return i, err
+}
+
+const GetMachineToken = `-- name: GetMachineToken :one
+SELECT id, service_name, environment, token_hash, allowed_namespaces, note, disabled, created_at, revoked_at, last_used_at, role FROM config.machine_token WHERE id = $1
+`
+
+// GetMachineToken
+//
+//	SELECT id, service_name, environment, token_hash, allowed_namespaces, note, disabled, created_at, revoked_at, last_used_at, role FROM config.machine_token WHERE id = $1
+func (q *Queries) GetMachineToken(ctx context.Context, id uuid.UUID) (ConfigMachineToken, error) {
+	row := q.db.QueryRow(ctx, GetMachineToken, id)
+	var i ConfigMachineToken
+	err := row.Scan(
+		&i.ID,
+		&i.ServiceName,
+		&i.Environment,
+		&i.TokenHash,
+		&i.AllowedNamespaces,
+		&i.Note,
+		&i.Disabled,
+		&i.CreatedAt,
+		&i.RevokedAt,
+		&i.LastUsedAt,
+		&i.Role,
 	)
 	return i, err
 }
 
 const InsertMachineToken = `-- name: InsertMachineToken :one
-INSERT INTO config.machine_token (id, service_name, environment, token_hash, allowed_namespaces, note)
-VALUES ($1, $2, $3, $4, $5, $6)
-RETURNING id, service_name, environment, token_hash, allowed_namespaces, note, disabled, created_at, revoked_at, last_used_at
+INSERT INTO config.machine_token (id, service_name, environment, token_hash, allowed_namespaces, note, role)
+VALUES ($1, $2, $3, $4, $5, $6, $7)
+RETURNING id, service_name, environment, token_hash, allowed_namespaces, note, disabled, created_at, revoked_at, last_used_at, role
 `
 
 type InsertMachineTokenParams struct {
@@ -51,13 +78,14 @@ type InsertMachineTokenParams struct {
 	TokenHash         []byte
 	AllowedNamespaces []string
 	Note              string
+	Role              string
 }
 
 // InsertMachineToken
 //
-//	INSERT INTO config.machine_token (id, service_name, environment, token_hash, allowed_namespaces, note)
-//	VALUES ($1, $2, $3, $4, $5, $6)
-//	RETURNING id, service_name, environment, token_hash, allowed_namespaces, note, disabled, created_at, revoked_at, last_used_at
+//	INSERT INTO config.machine_token (id, service_name, environment, token_hash, allowed_namespaces, note, role)
+//	VALUES ($1, $2, $3, $4, $5, $6, $7)
+//	RETURNING id, service_name, environment, token_hash, allowed_namespaces, note, disabled, created_at, revoked_at, last_used_at, role
 func (q *Queries) InsertMachineToken(ctx context.Context, arg InsertMachineTokenParams) (ConfigMachineToken, error) {
 	row := q.db.QueryRow(ctx, InsertMachineToken,
 		arg.ID,
@@ -66,6 +94,7 @@ func (q *Queries) InsertMachineToken(ctx context.Context, arg InsertMachineToken
 		arg.TokenHash,
 		arg.AllowedNamespaces,
 		arg.Note,
+		arg.Role,
 	)
 	var i ConfigMachineToken
 	err := row.Scan(
@@ -79,6 +108,7 @@ func (q *Queries) InsertMachineToken(ctx context.Context, arg InsertMachineToken
 		&i.CreatedAt,
 		&i.RevokedAt,
 		&i.LastUsedAt,
+		&i.Role,
 	)
 	return i, err
 }
@@ -102,7 +132,7 @@ func (q *Queries) IsMachineTokenActive(ctx context.Context, id uuid.UUID) (bool,
 }
 
 const ListMachineTokens = `-- name: ListMachineTokens :many
-SELECT id, service_name, environment, token_hash, allowed_namespaces, note, disabled, created_at, revoked_at, last_used_at FROM config.machine_token
+SELECT id, service_name, environment, token_hash, allowed_namespaces, note, disabled, created_at, revoked_at, last_used_at, role FROM config.machine_token
 WHERE ($1::text IS NULL OR service_name = $1)
   AND ($2::text IS NULL OR environment = $2)
 ORDER BY service_name, environment, created_at
@@ -115,7 +145,7 @@ type ListMachineTokensParams struct {
 
 // ListMachineTokens
 //
-//	SELECT id, service_name, environment, token_hash, allowed_namespaces, note, disabled, created_at, revoked_at, last_used_at FROM config.machine_token
+//	SELECT id, service_name, environment, token_hash, allowed_namespaces, note, disabled, created_at, revoked_at, last_used_at, role FROM config.machine_token
 //	WHERE ($1::text IS NULL OR service_name = $1)
 //	  AND ($2::text IS NULL OR environment = $2)
 //	ORDER BY service_name, environment, created_at
@@ -139,6 +169,7 @@ func (q *Queries) ListMachineTokens(ctx context.Context, arg ListMachineTokensPa
 			&i.CreatedAt,
 			&i.RevokedAt,
 			&i.LastUsedAt,
+			&i.Role,
 		); err != nil {
 			return nil, err
 		}
@@ -154,7 +185,7 @@ const RevokeMachineToken = `-- name: RevokeMachineToken :one
 UPDATE config.machine_token
 SET disabled = TRUE, revoked_at = now()
 WHERE id = $1 AND NOT disabled
-RETURNING id, service_name, environment, token_hash, allowed_namespaces, note, disabled, created_at, revoked_at, last_used_at
+RETURNING id, service_name, environment, token_hash, allowed_namespaces, note, disabled, created_at, revoked_at, last_used_at, role
 `
 
 // RevokeMachineToken
@@ -162,7 +193,7 @@ RETURNING id, service_name, environment, token_hash, allowed_namespaces, note, d
 //	UPDATE config.machine_token
 //	SET disabled = TRUE, revoked_at = now()
 //	WHERE id = $1 AND NOT disabled
-//	RETURNING id, service_name, environment, token_hash, allowed_namespaces, note, disabled, created_at, revoked_at, last_used_at
+//	RETURNING id, service_name, environment, token_hash, allowed_namespaces, note, disabled, created_at, revoked_at, last_used_at, role
 func (q *Queries) RevokeMachineToken(ctx context.Context, id uuid.UUID) (ConfigMachineToken, error) {
 	row := q.db.QueryRow(ctx, RevokeMachineToken, id)
 	var i ConfigMachineToken
@@ -177,6 +208,7 @@ func (q *Queries) RevokeMachineToken(ctx context.Context, id uuid.UUID) (ConfigM
 		&i.CreatedAt,
 		&i.RevokedAt,
 		&i.LastUsedAt,
+		&i.Role,
 	)
 	return i, err
 }

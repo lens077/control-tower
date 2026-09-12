@@ -52,9 +52,16 @@ type MachineScope struct {
 	Service     string
 	Environment string
 	Namespaces  []string
+	// Operator 表示 role=operator（管理面服务账号）：可在自身 Environment 内
+	// 读写配置并签发/吊销 service token；见 operatorProcedure。
+	Operator bool
 }
 
+// NamespaceWildcard 出现在 Namespaces 中时表示任意 namespace（environment 仍须相等）。
+const NamespaceWildcard = "*"
+
 // AllowsRead 判定该 scope 是否可读 namespace×environment。
+// 名字沿用「读」，但 operator 的写范围也用同一条规则判定。
 func (s *MachineScope) AllowsRead(namespace, environment string) bool {
 	if s == nil {
 		return false
@@ -66,7 +73,7 @@ func (s *MachineScope) AllowsRead(namespace, environment string) bool {
 		return false
 	}
 	for _, ns := range s.Namespaces {
-		if ns == namespace {
+		if ns == namespace || ns == NamespaceWildcard {
 			return true
 		}
 	}
@@ -86,6 +93,11 @@ type TokenStore interface {
 func PrincipalFromContext(ctx context.Context) (Principal, bool) {
 	principal, ok := ctx.Value(principalContextKey{}).(Principal)
 	return principal, ok
+}
+
+// ContextWithPrincipal 把已验证主体放入 ctx（HTTP 中间件与 service 层测试共用）。
+func ContextWithPrincipal(ctx context.Context, principal Principal) context.Context {
+	return context.WithValue(ctx, principalContextKey{}, principal)
 }
 
 type Authorizer struct {
@@ -191,17 +203,18 @@ func (a *Authorizer) HTTP(next http.Handler) http.Handler {
 			http.Error(w, http.StatusText(status), status)
 			return
 		}
-		next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), principalContextKey{}, principal)))
+		next.ServeHTTP(w, r.WithContext(ContextWithPrincipal(r.Context(), principal)))
 	})
 }
 
 func (a *Authorizer) authorize(r *http.Request) (Principal, error) {
 	if candidate := r.Header.Get(constants.ServiceTokenHeader); candidate != "" {
-		if !machineReadProcedure(r.URL.Path) {
-			return Principal{}, forbidden("service token cannot mutate configuration")
-		}
 		// 双栈第一段：legacy 共享 token（关闭死线前保留，命中即告警计数）。
+		// 只允许数据面只读 procedure。
 		if len(a.serviceToken) > 0 && hmac.Equal([]byte(candidate), a.serviceToken) {
+			if !machineReadProcedure(r.URL.Path) {
+				return Principal{}, forbidden("service token cannot mutate configuration")
+			}
 			a.legacyHits.Add(1)
 			a.log.Warn("legacy shared service token used; rotate to per-service machine token",
 				zap.String("path", r.URL.Path),
@@ -209,6 +222,7 @@ func (a *Authorizer) authorize(r *http.Request) (Principal, error) {
 			return Principal{Name: "service", Machine: true, Scope: &MachineScope{Legacy: true}}, nil
 		}
 		// 双栈第二段：per-service token 查表（SHA-256）。
+		// 先查表再判 procedure：operator 与 service 的白名单不同，未知 token 一律 401。
 		if a.tokens != nil {
 			sum := sha256.Sum256([]byte(candidate))
 			scope, ok, err := a.tokens.LookupActiveByHash(r.Context(), sum[:])
@@ -217,9 +231,22 @@ func (a *Authorizer) authorize(r *http.Request) (Principal, error) {
 				return Principal{}, unauthorized("service token verification unavailable")
 			}
 			if ok {
+				if scope.Operator {
+					if !operatorProcedure(r.URL.Path) {
+						return Principal{}, forbidden("operator token cannot call this procedure")
+					}
+					a.tokens.TouchLastUsed(r.Context(), scope.TokenID)
+					return Principal{Name: "operator:" + scope.Service, Machine: true, Scope: &scope}, nil
+				}
+				if !machineReadProcedure(r.URL.Path) {
+					return Principal{}, forbidden("service token cannot mutate configuration")
+				}
 				a.tokens.TouchLastUsed(r.Context(), scope.TokenID)
 				return Principal{Name: "service:" + scope.Service, Machine: true, Scope: &scope}, nil
 			}
+		}
+		if !machineReadProcedure(r.URL.Path) {
+			return Principal{}, forbidden("service token cannot mutate configuration")
 		}
 		return Principal{}, unauthorized("invalid service token")
 	}
@@ -249,9 +276,31 @@ func (a *Authorizer) authorize(r *http.Request) (Principal, error) {
 	return Principal{Name: claimName(claims), Machine: false}, nil
 }
 
+// machineReadProcedure 是 role=service（及 legacy）token 的 procedure 白名单：数据面只读。
 func machineReadProcedure(path string) bool {
 	switch path {
 	case "/config.v1.ConfigService/GetKey", "/config.v1.ConfigService/WatchKeys":
+		return true
+	default:
+		return false
+	}
+}
+
+// operatorProcedure 是 role=operator token 的 procedure 白名单：
+// 数据面读写 + service token 管理。DeleteKey/Rollback/ListClientConnections 仍仅限管理员 JWT；
+// 不能签发/吊销 operator token 的限制在 service 层执行。
+func operatorProcedure(path string) bool {
+	switch path {
+	case "/config.v1.ConfigService/GetKey",
+		"/config.v1.ConfigService/WatchKeys",
+		"/config.v1.ConfigService/ListKeys",
+		"/config.v1.ConfigService/ListNamespaces",
+		"/config.v1.ConfigService/PutKey",
+		"/config.v1.ConfigService/ListRevisions",
+		"/config.v1.ConfigService/GetRevision",
+		"/config.v1.ConfigService/ListMachineTokens",
+		"/config.v1.ConfigService/IssueMachineToken",
+		"/config.v1.ConfigService/RevokeMachineToken":
 		return true
 	default:
 		return false

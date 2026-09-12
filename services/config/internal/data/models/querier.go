@@ -20,7 +20,7 @@ type Querier interface {
 	DeleteEntry(ctx context.Context, arg DeleteEntryParams) (int64, error)
 	//GetActiveMachineTokenByHash
 	//
-	//  SELECT id, service_name, environment, token_hash, allowed_namespaces, note, disabled, created_at, revoked_at, last_used_at FROM config.machine_token
+	//  SELECT id, service_name, environment, token_hash, allowed_namespaces, note, disabled, created_at, revoked_at, last_used_at, role FROM config.machine_token
 	//  WHERE token_hash = $1 AND NOT disabled
 	GetActiveMachineTokenByHash(ctx context.Context, tokenHash []byte) (ConfigMachineToken, error)
 	//GetEntry
@@ -40,6 +40,10 @@ type Querier interface {
 	//    AND key = $3
 	//  FOR UPDATE
 	GetEntryForUpdate(ctx context.Context, arg GetEntryForUpdateParams) (ConfigEntry, error)
+	//GetMachineToken
+	//
+	//  SELECT id, service_name, environment, token_hash, allowed_namespaces, note, disabled, created_at, revoked_at, last_used_at, role FROM config.machine_token WHERE id = $1
+	GetMachineToken(ctx context.Context, id uuid.UUID) (ConfigMachineToken, error)
 	//GetRevisionByVersion
 	//
 	//  SELECT id, entry_id, version, format, value, comment, author, created_at
@@ -55,9 +59,9 @@ type Querier interface {
 	InsertEntry(ctx context.Context, arg InsertEntryParams) (ConfigEntry, error)
 	//InsertMachineToken
 	//
-	//  INSERT INTO config.machine_token (id, service_name, environment, token_hash, allowed_namespaces, note)
-	//  VALUES ($1, $2, $3, $4, $5, $6)
-	//  RETURNING id, service_name, environment, token_hash, allowed_namespaces, note, disabled, created_at, revoked_at, last_used_at
+	//  INSERT INTO config.machine_token (id, service_name, environment, token_hash, allowed_namespaces, note, role)
+	//  VALUES ($1, $2, $3, $4, $5, $6, $7)
+	//  RETURNING id, service_name, environment, token_hash, allowed_namespaces, note, disabled, created_at, revoked_at, last_used_at, role
 	InsertMachineToken(ctx context.Context, arg InsertMachineTokenParams) (ConfigMachineToken, error)
 	//InsertRevision
 	//
@@ -82,7 +86,7 @@ type Querier interface {
 	ListEntries(ctx context.Context, arg ListEntriesParams) ([]ListEntriesRow, error)
 	//ListMachineTokens
 	//
-	//  SELECT id, service_name, environment, token_hash, allowed_namespaces, note, disabled, created_at, revoked_at, last_used_at FROM config.machine_token
+	//  SELECT id, service_name, environment, token_hash, allowed_namespaces, note, disabled, created_at, revoked_at, last_used_at, role FROM config.machine_token
 	//  WHERE ($1::text IS NULL OR service_name = $1)
 	//    AND ($2::text IS NULL OR environment = $2)
 	//  ORDER BY service_name, environment, created_at
@@ -106,7 +110,7 @@ type Querier interface {
 	//  UPDATE config.machine_token
 	//  SET disabled = TRUE, revoked_at = now()
 	//  WHERE id = $1 AND NOT disabled
-	//  RETURNING id, service_name, environment, token_hash, allowed_namespaces, note, disabled, created_at, revoked_at, last_used_at
+	//  RETURNING id, service_name, environment, token_hash, allowed_namespaces, note, disabled, created_at, revoked_at, last_used_at, role
 	RevokeMachineToken(ctx context.Context, id uuid.UUID) (ConfigMachineToken, error)
 	//TouchMachineTokenLastUsed
 	//

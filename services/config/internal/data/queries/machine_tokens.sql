@@ -1,7 +1,10 @@
 -- name: InsertMachineToken :one
-INSERT INTO config.machine_token (id, service_name, environment, token_hash, allowed_namespaces, note)
-VALUES ($1, $2, $3, $4, $5, $6)
+INSERT INTO config.machine_token (id, service_name, environment, token_hash, allowed_namespaces, note, role)
+VALUES ($1, $2, $3, $4, $5, $6, $7)
 RETURNING *;
+
+-- name: GetMachineToken :one
+SELECT * FROM config.machine_token WHERE id = $1;
 
 -- name: ListMachineTokens :many
 SELECT * FROM config.machine_token

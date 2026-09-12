@@ -146,6 +146,10 @@ func (s *ConfigService) PutKey(ctx context.Context, c *connect.Request[v1.PutKey
 	if c.Msg.Value == maskedValue {
 		return nil, connect.NewError(connect.CodeInvalidArgument, errMaskedSecretPlaceholder)
 	}
+	// 只有 operator token 能走到这里（iam 白名单）；写范围与读范围同一条规则。
+	if err := machineScopeGuard(ctx, c.Msg.Namespace, c.Msg.Environment); err != nil {
+		return nil, err
+	}
 	e, err := s.uc.PutKey(ctx, biz.PutParams{
 		Namespace:   c.Msg.Namespace,
 		Environment: c.Msg.Environment,

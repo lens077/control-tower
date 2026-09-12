@@ -169,3 +169,71 @@ func TestLegacyDisabledAfterDeadline(t *testing.T) {
 	assert.Equal(t, http.StatusUnauthorized, rec.Code)
 	assert.EqualValues(t, 0, a.LegacyHits())
 }
+
+// AllowsRead 的 "*" 通配：namespace 任意，environment 仍须相等。
+func TestAllowsReadNamespaceWildcard(t *testing.T) {
+	scope := &MachineScope{Service: "harvest", Environment: "pre", Namespaces: []string{"*"}}
+	assert.True(t, scope.AllowsRead("order", "pre"))
+	assert.True(t, scope.AllowsRead("anything", "pre"))
+	assert.False(t, scope.AllowsRead("order", "dev"), "通配只放宽 namespace，不放宽 environment")
+
+	mixed := &MachineScope{Service: "x", Environment: "dev", Namespaces: []string{"order", "*"}}
+	assert.True(t, mixed.AllowsRead("cart", "dev"))
+}
+
+// operator token：管理面 procedure 白名单放行，超出白名单的仍 403，主体名带 operator: 前缀。
+func TestOperatorTokenProcedureAllowlist(t *testing.T) {
+	scope := MachineScope{TokenID: "op-1", Service: "harvest", Environment: "pre", Namespaces: []string{"*"}, Operator: true}
+	a := &Authorizer{
+		serviceToken: []byte("legacy-shared"),
+		tokens:       newFakeStore("ct_operator_pre", scope),
+		log:          zap.NewNop(),
+	}
+
+	for _, path := range []string{
+		"/config.v1.ConfigService/GetKey",
+		"/config.v1.ConfigService/WatchKeys",
+		"/config.v1.ConfigService/ListKeys",
+		"/config.v1.ConfigService/ListNamespaces",
+		"/config.v1.ConfigService/PutKey",
+		"/config.v1.ConfigService/ListRevisions",
+		"/config.v1.ConfigService/GetRevision",
+		"/config.v1.ConfigService/ListMachineTokens",
+		"/config.v1.ConfigService/IssueMachineToken",
+		"/config.v1.ConfigService/RevokeMachineToken",
+	} {
+		rec, p := doAuth(t, a, "ct_operator_pre", path)
+		require.Equal(t, http.StatusOK, rec.Code, "path=%s", path)
+		require.NotNil(t, p, "path=%s", path)
+		assert.True(t, p.Machine)
+		assert.Equal(t, "operator:harvest", p.Name)
+		require.NotNil(t, p.Scope)
+		assert.True(t, p.Scope.Operator)
+	}
+
+	// 破坏性 procedure 仍仅限管理员 JWT。
+	for _, path := range []string{
+		"/config.v1.ConfigService/DeleteKey",
+		"/config.v1.ConfigService/Rollback",
+		"/config.v1.ConfigService/ListClientConnections",
+	} {
+		rec, _ := doAuth(t, a, "ct_operator_pre", path)
+		assert.Equal(t, http.StatusForbidden, rec.Code, "path=%s", path)
+	}
+	assert.EqualValues(t, 0, a.LegacyHits())
+}
+
+// 普通 service token 不因 operator 引入而放宽：PutKey 等仍 403。
+func TestServiceTokenStillReadOnlyAfterOperator(t *testing.T) {
+	scope := MachineScope{TokenID: "id-1", Service: "order", Environment: "dev", Namespaces: []string{"order"}}
+	a := &Authorizer{tokens: newFakeStore("ct_order_dev", scope), log: zap.NewNop()}
+
+	rec, _ := doAuth(t, a, "ct_order_dev", "/config.v1.ConfigService/PutKey")
+	assert.Equal(t, http.StatusForbidden, rec.Code)
+	rec, _ = doAuth(t, a, "ct_order_dev", "/config.v1.ConfigService/ListKeys")
+	assert.Equal(t, http.StatusForbidden, rec.Code)
+	rec, p := doAuth(t, a, "ct_order_dev", "/config.v1.ConfigService/GetKey")
+	require.Equal(t, http.StatusOK, rec.Code)
+	assert.Equal(t, "service:order", p.Name)
+	assert.False(t, p.Scope.Operator)
+}

@@ -38,6 +38,10 @@ func (r *MachineTokenRepo) Insert(ctx context.Context, t biz.MachineToken) (biz.
 	if err != nil {
 		return biz.MachineToken{}, err
 	}
+	role := t.Role
+	if role == "" {
+		role = biz.RoleService
+	}
 	row, err := r.q.InsertMachineToken(ctx, models.InsertMachineTokenParams{
 		ID:                id,
 		ServiceName:       t.Service,
@@ -45,7 +49,24 @@ func (r *MachineTokenRepo) Insert(ctx context.Context, t biz.MachineToken) (biz.
 		TokenHash:         t.TokenHash,
 		AllowedNamespaces: t.AllowedNamespaces,
 		Note:              t.Note,
+		Role:              role,
 	})
+	if err != nil {
+		return biz.MachineToken{}, err
+	}
+	return toBizToken(row), nil
+}
+
+// Get 按 id 查元数据（含已吊销）；不存在返回 biz.ErrTokenNotFound。
+func (r *MachineTokenRepo) Get(ctx context.Context, tokenID string) (biz.MachineToken, error) {
+	id, err := uuid.Parse(tokenID)
+	if err != nil {
+		return biz.MachineToken{}, biz.ErrTokenNotFound
+	}
+	row, err := r.q.GetMachineToken(ctx, id)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return biz.MachineToken{}, biz.ErrTokenNotFound
+	}
 	if err != nil {
 		return biz.MachineToken{}, err
 	}
@@ -100,6 +121,7 @@ func (r *MachineTokenRepo) LookupActiveByHash(ctx context.Context, hash []byte) 
 		Service:     row.ServiceName,
 		Environment: row.Environment,
 		Namespaces:  row.AllowedNamespaces,
+		Operator:    row.Role == biz.RoleOperator,
 	}, true, nil
 }
 
@@ -133,6 +155,7 @@ func toBizToken(row models.ConfigMachineToken) biz.MachineToken {
 		Note:              row.Note,
 		Disabled:          row.Disabled,
 		CreatedAt:         row.CreatedAt,
+		Role:              row.Role,
 	}
 	if row.RevokedAt.Valid {
 		ts := row.RevokedAt.Time

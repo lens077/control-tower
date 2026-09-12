@@ -37,6 +37,7 @@ type ConfigMachineToken struct {
 	CreatedAt         time.Time
 	RevokedAt         pgtype.Timestamptz
 	LastUsedAt        pgtype.Timestamptz
+	Role              string
 }
 
 type ConfigRevision struct {

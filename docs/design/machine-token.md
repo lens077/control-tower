@@ -28,6 +28,7 @@
 | `created_at` | timestamptz NOT NULL | 签发时刻 |
 | `revoked_at` | timestamptz | 吊销时刻 |
 | `last_used_at` | timestamptz | 最近认证成功时刻（观测用，低频更新） |
+| `role` | text NOT NULL DEFAULT 'service' | `service`（数据面只读）或 `operator`（管理面服务账号，迁移 0003） |
 
 索引：`token_hash` 唯一；`(service_name, environment)` 普通索引。
 
@@ -67,7 +68,7 @@ per-service machine token 是高熵随机 API Key，不是 JWT。当前数据模
 2. **per-service token**：SHA-256 查表命中且未吊销 → 主体=(service, environment, namespaces)；强制校验：请求的 `environment` 与 token 相等、`namespace` ∈ 白名单；
 3. 双双未命中 → 401。
 
-作用域不变：machine token 只允许 `GetKey`/`WatchKeys`。
+作用域：`role=service`（含 legacy）的 machine token 只允许 `GetKey`/`WatchKeys`；`role=operator` 的白名单见下节。
 
 **吊销断流**：`WatchKeys` 服务端在每次心跳 tick（沿现有心跳周期）复验 token 状态；吊销后主动结束流。SDK 现有重连逻辑会带着新 Secret 重建流（若已轮换）或收到 401 快速失败。
 
@@ -78,7 +79,33 @@ per-service machine token 是高熵随机 API Key，不是 JWT。当前数据模
 `2026-09-07T16:05:03Z`。每 6 小时 e2e 同时断言「时序存在」「当前值为零」「7 天窗口为零」；
 空结果或任意非零值都会让巡检失败并重置退役窗口。
 
+## operator 角色（管理面服务账号，2026-09-11）
+
+**目的**：自动化（例如把各服务 `bootstrap.yaml` 写回配置中心、为其签发 service token 的 harvest 脚本）不该依赖人类的 Casdoor 浏览器会话拿管理员 JWT。`role=operator` 的 machine token 是一个非交互、最小权限的管理面主体，走同一个 `x-config-center-service-token` 头。
+
+**作用域**：
+
+- 与 service token 一样按 **environment** 收窄：请求的 `environment` 必须与 token 相等，跨环境一律 403/PermissionDenied。
+- `allowed_namespaces` 支持通配 `*`（任意 namespace）；签发 operator 时留空默认为 `["*"]`，显式给白名单则按白名单。通配只放宽 namespace，不放宽 environment。
+- procedure 白名单（iam `operatorProcedure`）：`GetKey`、`WatchKeys`、`ListKeys`、`ListNamespaces`、`PutKey`、`ListRevisions`、`GetRevision`、`ListMachineTokens`、`IssueMachineToken`、`RevokeMachineToken`。
+- `PutKey` 在 service 层再过一次 `machineScopeGuard`：写范围与读范围同一条规则。
+- 主体名为 `operator:<service_name>`，会落到 `updated_by`/revision `author` 与审计日志。
+
+**不能做的事**：
+
+- 不能签发 `role=operator` 的 token（`operator token cannot issue operator tokens`），不能吊销 operator token（含自身）——防止自我复制与横向清场；这两条都只有管理员 JWT 能做。
+- 签发与吊销 service token 也只限**自身 environment**（`operator token can only issue tokens for its own environment` / `... revoke tokens in its own environment`）：一枚 pre 的 operator 碰不到 dev 的凭据。
+- `DeleteKey`、`Rollback`、`ListClientConnections` 不在白名单，仍仅限管理员 JWT。
+- 不能读取任何 token 哈希/明文；`ListMachineTokens` 只回元数据（含 `role`）。
+
+**签发**：管理员 JWT 调 `IssueMachineToken`，`role = MACHINE_TOKEN_ROLE_OPERATOR`（proto 新增枚举，`UNSPECIFIED` 等价于 `SERVICE`）；Web 控制台的 `/tokens` 页面走的是同一个 RPC。明文同样只在响应出现一次。
+
+**存放**：只进 K8s Secret（自动化的 Job/CronJob 以 env 或挂载读取）与本地环境变量；不进文件、不进仓库、不进日志。轮换与吊销手顺与 service token 相同（两代重叠：签新 → 换 Secret → 吊旧）。
+
+**滚动前置**：goose 迁移 `00003_machine_token_role.sql`（`ALTER TABLE config.machine_token ADD COLUMN IF NOT EXISTS role TEXT NOT NULL DEFAULT 'service'`）随进程启动自动应用；存量 token 自动落为 `service`，行为不变。旧镜像不读该列，可安全回退。
+
 ## 兼容性说明
 
 - SDK 与请求头名不变——旧 SDK v0.1.0 与新 SDK 都按原样工作（wire 冻结）。
 - 新增 RPC/字段全部为 additive，`buf breaking --against` 旧仓必须保持通过。
+- `MachineTokenRole` 枚举、`IssueMachineTokenRequest.role = 5`、`MachineTokenMeta.role = 10` 同为 additive；旧客户端不填 `role` 即签发 service token。

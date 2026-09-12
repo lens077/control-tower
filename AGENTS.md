@@ -13,6 +13,9 @@ config web 仍为 `0.2.6`，gateway 仍为 `0.2.5`。滚动后 `config-api.apikv
 节点 containerd 的 `NO_PROXY` 已加入 `ghcr.io,.githubusercontent.com`，避免请求误走已下线的
 `192.168.3.220:7890`。不要只用本机 `docker manifest inspect` 判断可见性（Keychain 会偷偷带凭据）。
 12 个 consumer selector 已换成 scoped Machine Token；legacy 回退仍在 7 天烘烤期。
+machine token 新增 `role` 列（`service`|`operator`，见 `docs/design/machine-token.md`「operator 角色」）：
+下一次滚动 config 时，内嵌的 goose 迁移 `00003_machine_token_role.sql` 会在启动时自动应用（加列带默认值，
+旧镜像不读该列，可安全回退）；滚动后核对 `public.goose_db_version` 已到 3，再签发 operator token。
 `machine_token_legacy_hits` 的零命中窗口从 `2026-08-31T16:05:03Z` 起算，最早于
 `2026-09-07T16:05:03Z` 删除回退；任何非零命中都会重置窗口。
 

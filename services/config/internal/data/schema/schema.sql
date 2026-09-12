@@ -45,7 +45,9 @@ CREATE TABLE IF NOT EXISTS config.machine_token (
     disabled           BOOLEAN     NOT NULL DEFAULT FALSE,
     created_at         TIMESTAMPTZ NOT NULL DEFAULT now(),
     revoked_at         TIMESTAMPTZ,
-    last_used_at       TIMESTAMPTZ
+    last_used_at       TIMESTAMPTZ,
+    -- 迁移 0003:'service'(数据面只读,默认)| 'operator'(管理面服务账号)
+    role               TEXT        NOT NULL DEFAULT 'service'
 );
 
 CREATE INDEX IF NOT EXISTS idx_machine_token_svc_env ON config.machine_token (service_name, environment);

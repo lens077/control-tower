@@ -210,6 +210,15 @@ message WatchKeysResponse {
 
 // ── machine token(数据面凭据)管理相关消息。
 
+// machine token 角色。SERVICE 只能读数据面(GetKey/WatchKeys);
+// OPERATOR 是管理面服务账号,可在自身 environment 内写配置、签发/吊销 SERVICE token。
+// 详见 docs/design/machine-token.md「operator 角色」。
+enum MachineTokenRole {
+  MACHINE_TOKEN_ROLE_UNSPECIFIED = 0; // 等价于 SERVICE
+  MACHINE_TOKEN_ROLE_SERVICE = 1;
+  MACHINE_TOKEN_ROLE_OPERATOR = 2;
+}
+
 // machine token 元数据(绝不携带哈希或明文)。
 message MachineTokenMeta {
   string id = 1;
@@ -221,6 +230,7 @@ message MachineTokenMeta {
   google.protobuf.Timestamp created_at = 7;
   google.protobuf.Timestamp revoked_at = 8;
   google.protobuf.Timestamp last_used_at = 9;
+  MachineTokenRole role = 10;
 }
 
 message ListMachineTokensRequest {
@@ -243,6 +253,9 @@ message IssueMachineTokenRequest {
     items: {string: {min_len: 1, max_len: 64}}
   }];
   string note = 4 [(buf.validate.field).string = {max_len: 256}];
+  // 角色;UNSPECIFIED 等价于 SERVICE。OPERATOR 只能由管理员 JWT 签发,
+  // 且 allowed_namespaces 为空时默认为 "*"(任意 namespace)。
+  MachineTokenRole role = 5;
 }
 
 message IssueMachineTokenResponse {
