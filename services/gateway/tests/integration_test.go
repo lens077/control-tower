@@ -43,7 +43,7 @@ type env struct {
 	lastBackendHeaders http.Header
 }
 
-func setup(t *testing.T) *env {
+func setup(t *testing.T, configure ...func(*app.Deps)) *env {
 	t.Helper()
 	e := &env{}
 
@@ -112,7 +112,7 @@ m = g(r.sub, p.sub) && keyMatch2(r.obj, p.obj) && regexMatch(r.act, p.act)
 		t.Fatal(err)
 	}
 
-	handler := app.BuildHandler(app.Deps{
+	deps := app.Deps{
 		State:      e.state,
 		Cors:       cors,
 		Introspect: httpmw.Disabled{},
@@ -120,7 +120,11 @@ m = g(r.sub, p.sub) && keyMatch2(r.obj, p.obj) && regexMatch(r.act, p.act)
 		Errors:     gwerrors.NewWriter(),
 		Log:        zap.NewNop(),
 		Transport:  http.DefaultTransport, // 后端是 h1 httptest
-	})
+	}
+	for _, option := range configure {
+		option(&deps)
+	}
+	handler := app.BuildHandler(deps)
 	e.gw = httptest.NewServer(handler)
 	t.Cleanup(e.gw.Close)
 	return e

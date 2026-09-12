@@ -8,6 +8,7 @@ import (
 	"github.com/lens077/control-tower/services/gateway/internal/bff"
 	"github.com/lens077/control-tower/services/gateway/internal/guest"
 	"github.com/lens077/control-tower/services/gateway/internal/gwerrors"
+	"github.com/lens077/control-tower/services/gateway/internal/health"
 	"github.com/lens077/control-tower/services/gateway/internal/httpmw"
 	"github.com/lens077/control-tower/services/gateway/internal/loader"
 	"github.com/lens077/control-tower/services/gateway/internal/proxy"
@@ -45,7 +46,7 @@ type Deps struct {
 }
 
 // BuildHandler 构造业务端口的完整处理器：
-// healthz/readyz 先于包路由注册；其余路径走
+// healthz/readyz 和管理员诊断先于包路由注册；其余路径走
 // recover → otel → accesslog → cors → auth → proxy。
 func BuildHandler(d Deps) http.Handler {
 	transport := d.Transport
@@ -53,30 +54,20 @@ func BuildHandler(d Deps) http.Handler {
 		transport = otelhttp.NewTransport(proxy.NewH2CTransport())
 	}
 	p := proxy.New(d.Resolver, d.Errors, d.Log, transport)
-
+	auth := httpmw.AuthDeps{
+		Table: d.State.Table, Verifier: d.State.Verifier(), Enforcer: d.State.Enforcer(),
+		Introspect: d.Introspect, Roles: d.Roles, Errors: d.Errors,
+		Sessions: d.Sessions, SessionCookie: d.SessionCookie, SessionHeader: d.SessionHeader,
+		Refresher: d.Refresher, OriginAllowed: d.Cors.OriginAllowed, GuestCookie: d.GuestCookie,
+	}
+	instrument := func(next http.Handler) http.Handler {
+		return otelhttp.NewHandler(next, "gateway", otelhttp.WithSpanNameFormatter(
+			func(_ string, r *http.Request) string { return r.URL.Path },
+		))
+	}
 	chain := httpmw.Chain(p,
-		httpmw.Recover(d.Log, d.Errors),
-		func(next http.Handler) http.Handler {
-			return otelhttp.NewHandler(next, "gateway", otelhttp.WithSpanNameFormatter(
-				func(_ string, r *http.Request) string { return r.URL.Path },
-			))
-		},
-		httpmw.AccessLog(d.Log),
-		d.Cors.Middleware(),
-		httpmw.Auth(httpmw.AuthDeps{
-			Table:         d.State.Table,
-			Verifier:      d.State.Verifier(),
-			Enforcer:      d.State.Enforcer(),
-			Introspect:    d.Introspect,
-			Roles:         d.Roles,
-			Errors:        d.Errors,
-			Sessions:      d.Sessions,
-			SessionCookie: d.SessionCookie,
-			SessionHeader: d.SessionHeader,
-			Refresher:     d.Refresher,
-			OriginAllowed: d.Cors.OriginAllowed,
-			GuestCookie:   d.GuestCookie,
-		}),
+		httpmw.Recover(d.Log, d.Errors), instrument,
+		httpmw.AccessLog(d.Log), d.Cors.Middleware(), httpmw.Auth(auth),
 	)
 
 	mux := http.NewServeMux()
@@ -100,13 +91,13 @@ func BuildHandler(d Deps) http.Handler {
 		w.WriteHeader(http.StatusServiceUnavailable)
 		_, _ = w.Write([]byte("loading"))
 	})
+	// 固定本地管理端点：不经业务匿名清单，也不增加 local:// 路由协议。
+	mux.Handle(health.Path, httpmw.Chain(health.New(d.State.Table, d.Resolver, transport),
+		httpmw.Recover(d.Log, d.Errors), instrument,
+		httpmw.AccessLog(d.Log), d.Cors.Middleware(), httpmw.AdminRead(auth),
+	))
 	// BFF 端点与 healthz/readyz 同列本地路由，先于包路由注册，永不被代理。
-	//
-	// 必须套 Recover/AccessLog/Cors，但**不能套 Auth**（登录入口本就该匿名可达）：
-	//   - AccessLog：这些是安全关键端点，不进日志等于排障时两眼一抹黑
-	//     （实测踩过：桌面端登录失败，网关侧查不到任何记录）；
-	//   - Cors：生产上前端在 shop.apikv.com、网关在 gateway.apikv.com，
-	//     跨源调 /auth/me 若无 CORS 头会被浏览器直接挡掉。
+	// 登录入口本就匿名可达，但仍必须套 Recover/AccessLog/Cors。
 	if d.BFF != nil {
 		mux.Handle("/auth/", httpmw.Chain(d.BFF.Handler(),
 			httpmw.Recover(d.Log, d.Errors),

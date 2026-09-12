@@ -10,6 +10,7 @@ package router
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -85,6 +86,16 @@ func (t *Table) Resolve(path string) (Route, bool) {
 	}
 	r, ok := t.byPackage[pkg]
 	return r, ok
+}
+
+// Routes 返回当前路由的稳定快照；调用方不得修改元素。
+func (t *Table) Routes() []Route {
+	out := make([]Route, 0, len(t.byPackage))
+	for _, route := range t.byPackage {
+		out = append(out, route)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Package < out[j].Package })
+	return out
 }
 
 // IsAnonymous 按完整 procedure 路径判定是否在匿名清单（authn 与 authz 共用）。

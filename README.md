@@ -16,6 +16,7 @@
 ## 文档
 
 - `docs/design/architecture.md` — 架构、请求链路、不变式
+- `docs/design/service-health.md` — admin 专属的服务健康快照、h2c 探测口径、超时与缓存边界
 - `docs/design/auth.md` — JWT 信任域、混合撤权三场景操作手册
 - `docs/design/machine-token.md` — 数据面凭据设计
 - `docs/design/decisions.md` — 砍掉/不做清单及原因

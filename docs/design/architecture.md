@@ -29,6 +29,7 @@ Client（Connect/JSON 或 gRPC-Web）
 - 重试默认关闭；无请求体缓存。
 - `RawPath != Path`（含转义）直接 404；路径长度设上限；大小写敏感；`/healthz`、`/readyz` 先于包路由注册，永不代理。
 - `/readyz` 就绪条件 = 路由表 + JWT 公钥 + Casbin 模型/策略全部加载成功。
+- `GET /admin/health/services` 是固定本地只读管理端点：复用现有身份认证，显式要求 `admin`，不进入业务匿名/访客清单，也不放宽 RPC 的 POST-only Casbin 规则；探测口径、响应字段和资源上限见 [service-health.md](service-health.md)。
 
 ## 配置与自举
 
