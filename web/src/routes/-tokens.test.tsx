@@ -3,7 +3,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { create } from "@bufbuild/protobuf";
 import { afterEach, beforeAll, describe, expect, test, vi } from "vite-plus/test";
-import { TokensPage } from "@/routes/tokens";
+import { TokensPage } from "@/components/TokensPage";
 import {
   IssueMachineTokenResponseSchema,
   ListMachineTokensResponseSchema,

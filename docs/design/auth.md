@@ -10,6 +10,13 @@
 - 撤权走「配置中心撤销名单键 + Casdoor 侧操作」的混合通道，生效时间约等于 Watch 推送延迟（秒级）。
 - 高危路由可标注 `online_check`，命中时实时调 Casdoor 校验，错误按 fail-close 处理（只收窄授权，不放大）。
 
+## Web 端存储边界
+
+- 访问令牌仅保存在运行时内存中，不写入 `localStorage` 或 `sessionStorage`。
+- OAuth PKCE 交易状态和登录后回跳地址使用 `sessionStorage`，仅用于当前浏览器会话。
+- 语言偏好和编辑器上下文属于界面状态，可写入 `localStorage`；这些数据不构成鉴权状态。
+- 测试环境通过 `web/src/test-setup.ts` 提供显式内存版 Web Storage，不依赖运行器或 Node 版本的默认实现。
+
 ## JWT 校验（P0-C 修复）
 
 网关对每个非匿名请求本地验签，并强制绑定信任域。全部条件缺一不可：

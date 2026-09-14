@@ -66,6 +66,7 @@ export default defineConfig(({ mode }) => {
   // 基础测试配置（所有环境共享）
   const baseTestConfig = {
     environment: "jsdom",
+    setupFiles: [resolve(__dirname, "./src/test-setup.ts")],
   };
 
   // 开发环境特有的浏览器测试配置
