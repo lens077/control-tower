@@ -39,6 +39,7 @@ export interface IssueMachineTokenInput {
   environment: string;
   allowedNamespaces: string[];
   note: string;
+  role?: number;
 }
 
 export const configApi = {

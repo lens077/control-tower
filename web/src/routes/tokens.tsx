@@ -14,6 +14,7 @@ import {
   DialogTitle,
   Divider,
   IconButton,
+  MenuItem,
   Stack,
   TextField,
   Tooltip,
@@ -22,7 +23,7 @@ import {
 import { Copy, KeyRound, Plus, RefreshCw, ShieldX } from "lucide-react";
 import { configApi } from "@/api";
 import { toAppError } from "@/api/transport";
-import type { MachineTokenMeta } from "@/gen/api";
+import { MachineTokenRole, type MachineTokenMeta } from "@/gen/api";
 import { useTranslation } from "@/i18n";
 import { sp } from "@/styles/glass";
 
@@ -37,6 +38,7 @@ interface IssueForm {
   environment: string;
   allowedNamespaces: string;
   note: string;
+  role: MachineTokenRole;
 }
 
 const EMPTY_ISSUE_FORM: IssueForm = {
@@ -44,6 +46,7 @@ const EMPTY_ISSUE_FORM: IssueForm = {
   environment: "",
   allowedNamespaces: "",
   note: "",
+  role: MachineTokenRole.SERVICE,
 };
 
 function formatTime(value?: Timestamp): string {
@@ -85,6 +88,7 @@ export function TokensPage({ api = configApi, initialIssueOpen = false, initialI
         environment: issueForm.environment.trim(),
         allowedNamespaces: parseNamespaces(issueForm.allowedNamespaces),
         note: issueForm.note.trim(),
+        role: issueForm.role,
       }),
     onSuccess: async (response) => {
       setIssuedToken(response.token);
@@ -184,6 +188,15 @@ export function TokensPage({ api = configApi, initialIssueOpen = false, initialI
                 value={issueForm.environment}
                 onChange={(event) => setIssueForm((form) => ({ ...form, environment: event.target.value }))}
               />
+              <TextField
+                select
+                label={t("tokens.role")}
+                value={issueForm.role}
+                onChange={(event) => setIssueForm((form) => ({ ...form, role: Number(event.target.value) as MachineTokenRole }))}
+              >
+                <MenuItem value={MachineTokenRole.SERVICE}>{t("tokens.roleService")}</MenuItem>
+                <MenuItem value={MachineTokenRole.OPERATOR}>{t("tokens.roleOperator")}</MenuItem>
+              </TextField>
               <TextField
                 multiline
                 minRows={2}

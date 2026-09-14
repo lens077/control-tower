@@ -8,6 +8,7 @@ import {
   IssueMachineTokenResponseSchema,
   ListMachineTokensResponseSchema,
   RevokeMachineTokenResponseSchema,
+  MachineTokenRole,
 } from "@/gen/api";
 import { i18next, initI18n } from "@/i18n";
 import configEn from "@/locales/en/config.json";
@@ -105,6 +106,19 @@ describe("Machine token management", () => {
 
     await act(async () => clickButton("I have copied it"));
     expect(document.body.textContent).not.toContain("ct_once_only_plaintext");
+  });
+
+  test("operator 角色随签发请求发送", async () => {
+    const api = buildApi();
+    await renderPage(api, {
+      initialIssueOpen: true,
+      initialIssueForm: { serviceName: "harvest", environment: "pre", role: MachineTokenRole.OPERATOR },
+    });
+    await vi.waitFor(() => expect(findButton("Issue")?.disabled).toBe(false));
+    await act(async () => clickButton("Issue"));
+    await vi.waitFor(() => expect(api.issueMachineToken).toHaveBeenCalledWith(
+      expect.objectContaining({ serviceName: "harvest", environment: "pre", role: MachineTokenRole.OPERATOR }),
+    ));
   });
 
   test("列表将 service 和 environment 筛选参数传给 RPC", async () => {
