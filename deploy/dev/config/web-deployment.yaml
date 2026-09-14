@@ -20,7 +20,7 @@ spec:
     spec:
       containers:
         - name: config-center-web
-          image: ghcr.io/lens077/control-tower-config-web:0.2.6
+          image: ghcr.io/lens077/control-tower-config-web:0.2.12
           imagePullPolicy: Always
           ports:
             - name: http
