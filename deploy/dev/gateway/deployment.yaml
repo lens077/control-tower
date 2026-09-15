@@ -56,7 +56,7 @@ spec:
       containers:
         - name: gateway
           # 禁 latest；使用发布 semver tag，发布后不得覆写同名 tag。
-          image: ghcr.io/lens077/control-tower-gateway:0.2.10
+          image: ccr.ccs.tencentyun.com/sumery/control-tower-gateway:0.2.10
           imagePullPolicy: IfNotPresent
           ports:
             - name: http

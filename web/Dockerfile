@@ -12,6 +12,7 @@ ARG PNPM_VERSION=11.6.0
 # (arm64 上慢一个量级),白等而产出完全相同。deps/build 阶段都继承这里,
 # 只有最后的 caddy 阶段按目标架构出。
 FROM --platform=$BUILDPLATFORM node:${NODE_VERSION}-alpine AS base
+ARG PNPM_VERSION
 WORKDIR /usr/src/app
 RUN --mount=type=cache,target=/root/.npm \
     npm install -g pnpm@${PNPM_VERSION}
