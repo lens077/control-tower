@@ -2,7 +2,7 @@
 
 ## 背景与目标
 
-初始状态是一把全局共享 token（`CONFIG_CENTER_SERVICE_TOKEN` 环境变量，恒时比较），任何持有者都能读取全部 namespace×environment 配置。2026-08-31 已将 10 个业务服务和 gateway 的 dev/pre selector 迁移到 per-service token；服务端暂时保留 legacy 回退，用于 7 天零命中烘烤和应急回滚。
+初始状态是一把全局共享 token（`CONFIG_CENTER_SERVICE_TOKEN` 环境变量，恒时比较），任何持有者都能读取全部 namespace×environment 配置。2026-08-31 已将 10 个业务服务和 gateway 的 dev/pre selector 迁移到 per-service token；服务端曾保留 legacy 回退用于 7 天零命中烘烤，**2026-09 关闭死线后已移除**（见文末「共享 token 退役记录」）。
 
 目标：
 
@@ -60,24 +60,20 @@ per-service machine token 是高熵随机 API Key，不是 JWT。当前数据模
 
 在引入到期机制时，必须同时处理 `WatchKeys` 长流：服务端应在心跳复验中检查到期状态，并确保新 Secret 已生效后再吊销或淘汰旧 token，避免配置读取中断。
 
-## 数据面校验（双栈过渡）
+## 数据面校验
 
-`x-config-center-service-token` 头的校验顺序：
+`x-config-center-service-token` 头只有一条路径：
 
-1. **legacy 共享 token**：与 `CONFIG_CENTER_SERVICE_TOKEN` 恒时比较命中 → 按旧语义放行（任意 namespace 只读），记 WARN 日志与 `machine_token_legacy_hits` 可观测量表。量表从进程启动起累计，并始终上报 `0`，避免把「零命中」与「指标未接线」混为一谈；
-2. **per-service token**：SHA-256 查表命中且未吊销 → 主体=(service, environment, namespaces)；强制校验：请求的 `environment` 与 token 相等、`namespace` ∈ 白名单；
-3. 双双未命中 → 401。
+1. **per-service token**：SHA-256 查表命中且未吊销 → 主体=(service, environment, namespaces)；强制校验：请求的 `environment` 与 token 相等、`namespace` ∈ 白名单；
+2. 未命中 → 401。
 
-作用域：`role=service`（含 legacy）的 machine token 只允许 `GetKey`/`WatchKeys`；`role=operator` 的白名单见下节。
+共享 token 分支（`CONFIG_CENTER_SERVICE_TOKEN` 恒时比较、`machine_token_legacy_hits` 量表）已在关闭死线后删除。
+
+作用域：`role=service` 的 machine token 只允许 `GetKey`/`WatchKeys`；`role=operator` 的白名单见下节。
 
 **吊销断流**：`WatchKeys` 服务端在每次心跳 tick（沿现有心跳周期）复验 token 状态；吊销后主动结束流。SDK 现有重连逻辑会带着新 Secret 重建流（若已轮换）或收到 401 快速失败。
 
-**共享 token 关闭死线**：10 个业务服务与 gateway 全部换发 per-service token 后，`machine_token_legacy_hits` 必须连续 7 天为零。满足该条件后，移除环境变量、K8s Secret 字段和 legacy 分支。烘烤期内出现任意非零值时，从最后一次命中重新计算 7 天窗口。
-
-**当前烘烤窗口**：VictoriaMetrics 于 `2026-08-31T16:05:03Z` 首次确认当前值与
-`max_over_time(machine_token_legacy_hits[7d])` 均为 `0`；最早删除时间为
-`2026-09-07T16:05:03Z`。每 6 小时 e2e 同时断言「时序存在」「当前值为零」「7 天窗口为零」；
-空结果或任意非零值都会让巡检失败并重置退役窗口。
+**共享 token 退役记录**（原「关闭死线」条款）：规则是 `machine_token_legacy_hits` 连续 7 天为零后移除环境变量、Secret 字段与 legacy 分支；烘烤期内任意非零值从最后一次命中重算 7 天。2026-08-31T16:05Z 起窗口清零；2026-09-12 02:35–03:55Z 出现 12 次命中，全部是 `client=cart-service` 从开发机 `make dev` 发出——本地 gitignored selector 里塞的是共享 token（dev 环境当时没有 per-service selector，8-31 签的 dev token 明文已失）。处理：为 dev 建 `ecommerce-config-source-dev` 并签 10 枚 per-service token，开发机切换，8-31 的孤儿 token 吊销；重启 config 服务归零量表（量表从进程启动累计，不重启永不归零）。集群内所有 Secret 核对后无任何消费者再持有共享 token，按规则最后一次命中 + 7 天 = **2026-09-19T03:55Z** 可移除，本次改动即该移除（分支 `chore/retire-legacy-shared-token`，到期后合并发版）。移除后 e2e 的零命中巡检用例同时删除——指标不存在了，「时序存在」断言没有意义。
 
 ## operator 角色（管理面服务账号，2026-09-11）
 

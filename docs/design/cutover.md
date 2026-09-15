@@ -72,6 +72,6 @@ kubectl -n ecommerce patch service ecommerce-gateway-service \
 ## 6. 退役条件（进入 P6 的门）
 
 - 烘烤期满且无回滚触发；
-- `machine_token_legacy_hits` 连续 7 天为零 → 移除 `CONFIG_CENTER_SERVICE_TOKEN`（关闭共享 token 死线）；
+- ~~`machine_token_legacy_hits` 连续 7 天为零 → 移除 `CONFIG_CENTER_SERVICE_TOKEN`~~ 已完成（2026-09，见 `machine-token.md` 退役记录）；
 - 冷回滚演练通过记录在案；
 - 之后才执行：删除 ecommerce/gateway 目录、matrix 改 external、structcheck 切换、旧 `config.yaml` 键归档删除。

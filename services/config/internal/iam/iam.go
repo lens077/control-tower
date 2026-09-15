@@ -4,7 +4,6 @@ package iam
 import (
 	"context"
 	"crypto"
-	"crypto/hmac"
 	"crypto/rsa"
 	"crypto/sha256"
 	"crypto/x509"
@@ -16,22 +15,16 @@ import (
 	"net/http"
 	"os"
 	"strings"
-	"sync/atomic"
 	"time"
 
 	"github.com/lens077/control-tower/constants"
-	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/metric"
 	"go.uber.org/fx"
 	"go.uber.org/zap"
 )
 
 var Module = fx.Module("iam",
 	fx.Provide(NewAuthorizer),
-	fx.Invoke(registerLegacyHitMetric),
 )
-
-const metricScopeName = "github.com/lens077/control-tower/services/config/internal/iam"
 
 type principalContextKey struct{}
 
@@ -45,9 +38,7 @@ type Principal struct {
 
 // MachineScope 是 machine token 的授权范围（设计：docs/design/machine-token.md）。
 type MachineScope struct {
-	// Legacy 表示命中了共享 token（双栈过渡期），范围=任意 namespace 只读。
-	Legacy bool
-	// TokenID/Service/Environment/Namespaces 仅 per-service token 填充。
+	// TokenID/Service/Environment/Namespaces 由 per-service token 查表填充。
 	TokenID     string
 	Service     string
 	Environment string
@@ -65,9 +56,6 @@ const NamespaceWildcard = "*"
 func (s *MachineScope) AllowsRead(namespace, environment string) bool {
 	if s == nil {
 		return false
-	}
-	if s.Legacy {
-		return true
 	}
 	if environment != s.Environment {
 		return false
@@ -101,37 +89,11 @@ func ContextWithPrincipal(ctx context.Context, principal Principal) context.Cont
 }
 
 type Authorizer struct {
-	serviceToken     []byte
 	tokens           TokenStore
-	legacyHits       atomic.Int64
 	casdoorKey       *rsa.PublicKey
 	expectedIssuer   string
 	expectedAudience string
 	log              *zap.Logger
-}
-
-// LegacyHits 返回共享 token 命中次数（「双栈仍开」告警数据源）。
-func (a *Authorizer) LegacyHits() int64 { return a.legacyHits.Load() }
-
-// registerLegacyHitMetric 导出从本进程启动起的累计命中数。量表始终上报 0，
-// 避免「没有 legacy 请求」与「指标没有接线」都表现为空序列。
-func registerLegacyHitMetric(authorizer *Authorizer) error {
-	meter := otel.Meter(metricScopeName)
-	gauge, err := meter.Int64ObservableGauge(
-		"machine_token_legacy_hits",
-		metric.WithDescription("本进程命中 legacy 共享 Config Center token 的累计次数"),
-		metric.WithUnit("{hit}"),
-	)
-	if err != nil {
-		return fmt.Errorf("create machine_token_legacy_hits gauge: %w", err)
-	}
-	if _, err := meter.RegisterCallback(func(_ context.Context, observer metric.Observer) error {
-		observer.ObserveInt64(gauge, authorizer.LegacyHits())
-		return nil
-	}, gauge); err != nil {
-		return fmt.Errorf("register machine_token_legacy_hits callback: %w", err)
-	}
-	return nil
 }
 
 type authorizationError struct {
@@ -151,12 +113,12 @@ func forbidden(reason string) error {
 
 // NewAuthorizer loads Casdoor's public certificate and validation binding from
 // the local process environment; no gateway or user-service call is involved.
-// tokens 提供 per-service machine token 查表（双栈的第二段；nil 仅限测试）。
+// tokens 提供 per-service machine token 查表（nil 仅限测试）。
+// 共享 token（CONFIG_CENTER_SERVICE_TOKEN）已于关闭死线后移除：数据面只认查表命中的 machine token。
 func NewAuthorizer(logger *zap.Logger, tokens TokenStore) (*Authorizer, error) {
 	authorizer := &Authorizer{
-		serviceToken: []byte(os.Getenv(constants.EnvConfigCenterServiceToken)),
-		tokens:       tokens,
-		log:          logger.Named("iam"),
+		tokens: tokens,
+		log:    logger.Named("iam"),
 	}
 	certificateFile := os.Getenv(constants.EnvCasdoorCertificateFile)
 	if certificateFile == "" {
@@ -209,19 +171,7 @@ func (a *Authorizer) HTTP(next http.Handler) http.Handler {
 
 func (a *Authorizer) authorize(r *http.Request) (Principal, error) {
 	if candidate := r.Header.Get(constants.ServiceTokenHeader); candidate != "" {
-		// 双栈第一段：legacy 共享 token（关闭死线前保留，命中即告警计数）。
-		// 只允许数据面只读 procedure。
-		if len(a.serviceToken) > 0 && hmac.Equal([]byte(candidate), a.serviceToken) {
-			if !machineReadProcedure(r.URL.Path) {
-				return Principal{}, forbidden("service token cannot mutate configuration")
-			}
-			a.legacyHits.Add(1)
-			a.log.Warn("legacy shared service token used; rotate to per-service machine token",
-				zap.String("path", r.URL.Path),
-				zap.String("client", r.Header.Get(constants.ClientNameHeader)))
-			return Principal{Name: "service", Machine: true, Scope: &MachineScope{Legacy: true}}, nil
-		}
-		// 双栈第二段：per-service token 查表（SHA-256）。
+		// per-service machine token 查表（SHA-256）。共享 token 回退已移除（2026-09 关闭死线）。
 		// 先查表再判 procedure：operator 与 service 的白名单不同，未知 token 一律 401。
 		if a.tokens != nil {
 			sum := sha256.Sum256([]byte(candidate))
@@ -276,7 +226,7 @@ func (a *Authorizer) authorize(r *http.Request) (Principal, error) {
 	return Principal{Name: claimName(claims), Machine: false}, nil
 }
 
-// machineReadProcedure 是 role=service（及 legacy）token 的 procedure 白名单：数据面只读。
+// machineReadProcedure 是 role=service token 的 procedure 白名单：数据面只读。
 func machineReadProcedure(path string) bool {
 	switch path {
 	case "/config.v1.ConfigService/GetKey", "/config.v1.ConfigService/WatchKeys":

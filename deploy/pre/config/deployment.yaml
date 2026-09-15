@@ -48,11 +48,6 @@ spec:
               value: "https://casdoor.apikv.com"
             - name: CASDOOR_AUDIENCE
               value: "baxf6718e392099b7915"
-            - name: CONFIG_CENTER_SERVICE_TOKEN
-              valueFrom:
-                secretKeyRef:
-                  name: config-center-iam
-                  key: service-token
             # Consul is discovery only, never this service's configuration source.
             #
             # 2026-08-29 关掉:把本服务注册进 Consul 目前没有任何消费方 ——

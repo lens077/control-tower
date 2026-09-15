@@ -11,9 +11,6 @@ const (
 	EnvServiceVersion = "SERVICE_VERSION"
 	EnvDeploymentMode = "DEPLOYMENT_MODE"
 	EnvConfigFile     = "CONFIG_FILE"
-	// EnvConfigCenterServiceToken protects machine-to-machine GetKey/WatchKeys
-	// calls that bypass the gateway. Supply it through the deployment secret.
-	EnvConfigCenterServiceToken = "CONFIG_CENTER_SERVICE_TOKEN"
 	// EnvCasdoorCertificateFile points at Casdoor's public certificate PEM.
 	// Browser traffic is verified locally instead of trusting forwarded identity headers.
 	EnvCasdoorCertificateFile = "CASDOOR_CERTIFICATE_FILE"

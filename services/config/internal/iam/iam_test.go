@@ -35,7 +35,9 @@ func TestNewAuthorizer_RequiresIssuerAndAudienceWithCertificate(t *testing.T) {
 }
 
 func TestAuthorizer_AllowsServiceTokenOnlyForReadProcedures(t *testing.T) {
-	authorizer := &Authorizer{serviceToken: []byte("reader-token"), log: zap.NewNop()}
+	// 共享 token 已移除：读只读白名单的主体是查表命中的 per-service token。
+	scope := MachineScope{TokenID: "id-reader", Service: "reader", Environment: "dev", Namespaces: []string{"reader"}}
+	authorizer := &Authorizer{tokens: newFakeStore("reader-token", scope), log: zap.NewNop()}
 	handler := authorizer.HTTP(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		principal, ok := PrincipalFromContext(r.Context())
 		require.True(t, ok)
