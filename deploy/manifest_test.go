@@ -25,8 +25,9 @@ func TestPreConfigWebUsesPublicAPIHost(t *testing.T) {
 	}
 }
 
-func TestConfigImagesUseGHCR(t *testing.T) {
-	const image = "image: ghcr.io/lens077/control-tower-config:"
+// 2026-09-15 起镜像发布到 TCR（GHCR 从集群与构建机都不可达）。
+func TestConfigImagesUseTCR(t *testing.T) {
+	const image = "image: ccr.ccs.tencentyun.com/sumery/control-tower-config:"
 	for _, environment := range []string{"dev", "pre"} {
 		manifest := readFile(t, environment+"/config/deployment.yaml")
 		if !strings.Contains(manifest, image) {
