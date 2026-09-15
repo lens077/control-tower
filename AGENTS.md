@@ -2,20 +2,25 @@
 
 网关与配置中心合一的平台仓：单 module、两服务（`services/gateway`、`services/config`）。由 ecommerce 旧网关（go-kratos/gateway fork）与 config-center 合并重写而来。
 
-## 部署现状（2026-08-31 逐资源核对 + e2e 实测）
+## 部署现状（2026-09-15 逐资源核对 + 公网探活）
 
 集群 2026-08-21 前后重建过，`postgresql` ns 已不存在。`config-center` ns 于 2026-08-29
 按 `deploy/pre/config/` 重建，gateway 于 2026-08-30 重新拉起，**两个服务都在跑**。
-2026-09-02 发布裸 tag `0.2.10`（同步 ecommerce search catalog Schema，`0.2.9` 已被 dae4d86 占用）
-并已滚动到集群：config 现运行 `0.2.10`，dev/pre 的两份 config 后端 manifest 已同步为 `0.2.10`；
-config web 仍为 `0.2.6`，gateway 仍为 `0.2.5`。滚动后 `config-api.apikv.com/healthz` 200，
-并用管理员 JWT 完成 `search/dev/bootstrap.yaml` 的 catalog 形态 PutKey（v5）实测放行。
-节点 containerd 的 `NO_PROXY` 已加入 `ghcr.io,.githubusercontent.com`，避免请求误走已下线的
-`192.168.3.220:7890`。不要只用本机 `docker manifest inspect` 判断可见性（Keychain 会偷偷带凭据）。
+
+**镜像源已于 2026-09-15 从 GHCR 切到 TCR**：三份 Deployment（dev/pre 各一套）的 image 统一为
+`ccr.ccs.tencentyun.com/sumery/control-tower-{config,config-web,gateway}:<tag>`，并且每份都带
+`imagePullSecrets: [tcr-pull]`（TCR 仓库是 private，`config-center` 与 `ecommerce` 两个 ns 都已有该 Secret；
+漏掉的症状是 `ErrImagePull ... 401 Unauthorized`）。`deploy/manifest_test.go` 守这两条。
+CI 发布 tag 时仍双推 GHCR + TCR（`.github/workflows/ci.yml`），GHCR 只作追溯，集群不再从它拉。
+本机手工构建 web 镜像时必须 `--platform linux/amd64`：三个节点都是 amd64，Apple Silicon 默认出 arm64
+会 `exec format error`。不要只用本机 `docker manifest inspect` 判断可见性（Keychain 会偷偷带凭据）。
+
 12 个 consumer selector 已换成 scoped Machine Token；legacy 回退仍在 7 天烘烤期。
-machine token 新增 `role` 列（`service`|`operator`，见 `docs/design/machine-token.md`「operator 角色」）：
-下一次滚动 config 时，内嵌的 goose 迁移 `00003_machine_token_role.sql` 会在启动时自动应用（加列带默认值，
-旧镜像不读该列，可安全回退）；滚动后核对 `public.goose_db_version` 已到 3，再签发 operator token。
+machine token 的 `role` 列（`service`|`operator`，见 `docs/design/machine-token.md`「operator 角色」）
+已随 config `0.2.11` 滚动落地：2026-09-15 启动日志 `goose: no migrations to run. current version: 3`。
+pre 环境的 operator token 存于 Secret `config-center/config-center-operator`（主体 `operator:harvest`，
+scope 只到 pre；读 dev 会 `permission_denied`），走 `x-config-center-service-token` 头，
+2026-09-15 用它完成 `gateway/pre/routes.yaml` 的 PutKey（v2）实测放行。
 `machine_token_legacy_hits` 的零命中窗口从 `2026-08-31T16:05:03Z` 起算，最早于
 `2026-09-07T16:05:03Z` 删除回退；任何非零命中都会重置窗口。
 
@@ -26,9 +31,9 @@ machine token 新增 `role` 列（`service`|`operator`，见 `docs/design/machin
 
 | 服务 | 集群状态 | 备注 |
 |---|---|---|
-| config | `config-center/config-center` **运行中**（`0.2.10`） | `config-center.config-center.svc:30010`，镜像走 GHCR |
-| config web | `config-center/config-center-web` **运行中**（`0.2.6`） | `config-center-web.config-center.svc:80`，镜像走 GHCR |
-| gateway | `ecommerce/control-tower-gateway` **运行中**（`0.2.5`，2 副本） | `ecommerce-gateway-service.ecommerce.svc:8080`，镜像走 GHCR；`/healthz`、`/readyz` 均 200 |
+| config | `config-center/config-center` **运行中**（`0.2.11`，TCR） | `config-center.config-center.svc:30010`；来自 `deploy/pre/config/deployment.yaml` |
+| config web | `config-center/config-center-web` **运行中**（`0.2.12`，TCR） | `config-center-web.config-center.svc:80`；来自 `deploy/pre/config/web-deployment.yaml` |
+| gateway | `ecommerce/control-tower-gateway` **运行中**（`0.2.10`，TCR，2 副本） | `ecommerce-gateway-service.ecommerce.svc:8080`；**来自 `deploy/dev/gateway/deployment.yaml`**（见下）；`/healthz`、`/readyz` 均 200 |
 
 重新收敛公网入口：
 
@@ -36,16 +41,30 @@ machine token 新增 `role` 列（`service`|`operator`，见 `docs/design/machin
 kubectl apply -f deploy/pre/config/httproute.yaml -f deploy/pre/gateway/httproute.yaml
 ```
 
-2026-08-31 已对 `deploy/dev` 的 18 个资源执行 API Server dry-run，并把补齐后的
-`deploy/pre/gateway` 实际滚动到集群；随后 live e2e 通过。dev/pre manifest 仍指向同一组 namespace
-与对象名，不是两个隔离部署：公网 gateway 必须使用 pre config-source，不能再混用 dev deployment。
-pre 当前未配置 BFF 会话轨，按设计退回 legacy bearer；不得把 dev 的 insecure/localhost BFF 参数带到公网。
+dev/pre manifest 仍指向同一组 namespace 与对象名，不是两个隔离部署。**公网 gateway 当前跑的是 dev
+manifest**（`DEPLOYMENT_MODE=dev`、`control-tower-config-source-dev`、带 dragonfly session 的 BFF 会话轨），
+2026-09-15 用 `kubectl diff -f deploy/dev/gateway/deployment.yaml` 核对，除镜像源外与线上零差异。
+这与 2026-08-31 的「公网必须用 pre」结论相反，原因有两条，都在同日实测：
+
+1. `gateway/pre/routes.yaml` 的 target 直到当天还是 `discovery:///`，而业务服务 2026-09-03 起已关闭
+   Consul 注册（见下节），用 pre manifest 滚动后新 Pod 的 `/readyz` 持续 503、日志刷
+   `consul returned empty instance list`，已 `rollout undo`。模板 `routes/pre.yaml` 与 Config Center 的
+   pre 键（v2）当天已改成 `direct://`，这一条**已修**。
+2. pre manifest 没有 BFF 会话轨，而公网网关每天有 `/auth/me` 真实流量（consumer-next 走 BFF 登录）。
+   切到 pre 会让登录态消失。这一条**未修**：要先给 pre 补一套非 insecure、非 localhost 的 BFF 参数
+   （`BFF_PUBLIC_BASE_URL`/`BFF_ALLOWED_REDIRECTS` 指向 `https://shop.apikv.com`，session Redis 走
+   `redis.apikv.com:30002`），再切。切之前不要 apply `deploy/pre/gateway/deployment.yaml` 到集群。
+
+`deploy/manifest_test.go` 仍禁止 pre 出现 dev 的 insecure/localhost BFF 参数，这条不变。
 
 ### Consul 的实际作用范围
 
-- **网关需要 Consul**：`routes/{dev,pre}.yaml` 的 11 个后端全是 `discovery:///<service>`，
-  靠 Consul 解析成 Pod IP。这 10 个业务服务都已注册在案（token 是 `ecommerce/consul-ecommerce-token`，
-  策略 `ecommerce-services` = `service_prefix "" { policy = "write" }`）。
+- **网关当前不依赖 Consul**：`routes/{dev,pre}.yaml` 的 11 个后端自 2026-09-03（dev，e0c59ee）/
+  2026-09-15（pre）起全是 `direct://<k8s Service>.ecommerce.svc:<port>`，走 K8s Service DNS。
+  业务服务已关闭 Consul 注册（各 deployment `CONSUL_ENABLED=false`），带 token 查 catalog 只剩
+  `consul` 自身；`discovery:///` 会因空列表让 `/readyz` 503。gateway manifest 里的
+  `CONSUL_HTTP_ADDR`/`CONSUL_HTTP_TOKEN`（`ecommerce/consul-ecommerce-token`）保留给将来重开注册时用，
+  两种 target 写法网关都支持（`proxy.go` 的 `discoveryPrefix`/`directPrefix`）。
 - **找 config 服务不需要 Consul**：网关的配置源写死的是
   `http://config-center.config-center.svc:30010`，走 K8s Service DNS。
 - 所以 config 服务的 Consul 注册**没有任何消费方**，默认显式关闭：
@@ -110,7 +129,9 @@ PG 与 Redis 的证书由 node3 的 Pigsty 自签 CA 签发，SAN 已补上两�
 
 ```bash
 make verify        # build + buf lint + go vet + test（提交前必跑）
-make api           # proto 变更后重新生成（buf generate + lint）
+make api           # proto 变更后重新生成：Go/Connect（buf.gen.yaml）+ 控制台 TS（buf.gen.ts.yaml → web/src/gen）
+make check-gen     # 生成物门禁：三份产物必须与 proto 一致（CI 的 codegen job 跑的就是它；先 make tools 钉插件版本）
+cd web && pnpm test && pnpm build   # 控制台单测（jsdom + src/test-setup.ts 显式提供 Web Storage）+ tsc + 生产构建
 
 # 实机浏览器端到端（打真实环境，覆盖两个微服务）。凭据只从环境变量给。
 cd e2e && pnpm install && pnpm run install-browser
@@ -134,4 +155,5 @@ CI 里由 `.github/workflows/e2e.yml` 承接。当前工作树已恢复 6 小时
 指标链路名字对不上、网关路由形态被误解。**改 `web/Dockerfile` 的响应头、改鉴权流程、
 改 `promql/catalog.go` 之后必须跑它。**
 
-CI 由裸 semver tag（`X.Y.Z`）触发发布；PR 只跑质量门禁；push main 不构建。
+CI 由裸 semver tag（`X.Y.Z`）触发发布；PR 只跑质量门禁（`test` Go 门禁 + `web` 控制台门禁 +
+`codegen` 生成物门禁，三者都过才构建镜像）；push main 不构建。

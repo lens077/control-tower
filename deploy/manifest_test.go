@@ -25,26 +25,37 @@ func TestPreConfigWebUsesPublicAPIHost(t *testing.T) {
 	}
 }
 
-func TestConfigImagesUseGHCR(t *testing.T) {
-	const image = "image: ghcr.io/lens077/control-tower-config:"
+// 2026-09-15 起集群统一从 TCR 拉镜像（GHCR 匿名拉取在节点上不稳定，见 AGENTS.md「部署现状」）。
+// TCR 仓库是 private，所以每份 Deployment 都必须带 tcr-pull 拉取凭据，缺一份就是 ImagePullBackOff。
+const tcrImagePrefix = "image: ccr.ccs.tencentyun.com/sumery/control-tower-"
+
+var deploymentManifests = []string{
+	"config/deployment.yaml",
+	"config/web-deployment.yaml",
+	"gateway/deployment.yaml",
+}
+
+func TestDeploymentImagesUseTCR(t *testing.T) {
 	for _, environment := range []string{"dev", "pre"} {
-		manifest := readFile(t, environment+"/config/deployment.yaml")
-		if !strings.Contains(manifest, image) {
-			t.Errorf("%s config deployment is not using %s", environment, image)
+		for _, deployment := range deploymentManifests {
+			manifest := readFile(t, environment+"/"+deployment)
+			if !strings.Contains(manifest, tcrImagePrefix) {
+				t.Errorf("%s/%s is not pulling from TCR (%s...)", environment, deployment, tcrImagePrefix)
+			}
+			if strings.Contains(manifest, "ghcr.io/") {
+				t.Errorf("%s/%s still references GHCR", environment, deployment)
+			}
 		}
 	}
 }
 
-func TestPublicGHCRDeploymentsDoNotRequireTCRPullSecret(t *testing.T) {
+func TestTCRDeploymentsCarryPullSecret(t *testing.T) {
+	pattern := regexp.MustCompile(`(?m)^      imagePullSecrets:\n        - name: tcr-pull$`)
 	for _, environment := range []string{"dev", "pre"} {
-		for _, deployment := range []string{
-			"config/deployment.yaml",
-			"config/web-deployment.yaml",
-			"gateway/deployment.yaml",
-		} {
+		for _, deployment := range deploymentManifests {
 			manifest := readFile(t, environment+"/"+deployment)
-			if strings.Contains(manifest, "tcr-pull") {
-				t.Errorf("%s/%s still requires the retired TCR pull Secret", environment, deployment)
+			if !pattern.MatchString(manifest) {
+				t.Errorf("%s/%s does not declare imagePullSecrets tcr-pull at pod spec level", environment, deployment)
 			}
 		}
 	}

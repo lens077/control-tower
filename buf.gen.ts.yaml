@@ -16,6 +16,11 @@ plugins:
   # 又往 web/src/gen 生成了一份。两份并存,前端只 import 后者,于是「改 proto、
   # 跑 make api、看到 TS 重新生成了、控制台却没变」。实测到 make api 前那两份
   # config_pb.ts 内容已经不一致。
+  #
+  # 本模板由根级 `make api`（api-ts 目标）驱动,protoc-gen-es 取自 web/node_modules;
+  # `make check-gen`（CI codegen job）保证 web/src/gen 与 proto 一致。web/buf.gen.yaml
+  # 已于 2026-09-15 删除:它不排除 services/*/internal/conf,从 web 目录跑会多出一份
+  # web/src/gen/services/ 并改写 fileDesc,正是「两份不一致」的来源。
   - local: protoc-gen-es
     out: web/src/gen
     # Also generate any imported dependencies

@@ -8,3 +8,10 @@ onlyBuiltDependencies:
   - "@bufbuild/buf"
   - "@swc/core"
   - esbuild
+
+# Node 25+ 默认启用实验性 Web Storage,任何脚本触碰 globalThis.localStorage 都会往 stderr
+# 刷 "localStorage is not available because --localstorage-file was not provided"
+# (vitest worker、protoc-gen-es 插件进程都会中招)。显式关掉:测试用的 Storage 由
+# src/test-setup.ts 提供,jsdom 环境自带,Node 内建的那份没有任何消费方。
+# 该开关在 Node 24(CI / Dockerfile)与 26(本机)上都已实测可用。
+nodeOptions: --no-experimental-webstorage
