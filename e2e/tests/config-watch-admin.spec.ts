@@ -98,7 +98,10 @@ async function issueMachineToken(page: Page): Promise<string> {
   }
   // 先记录，后关对话框；即使 UI 操作随后失败，afterAll 仍能定位并吊销已签发的 token。
   issuedToken = token;
+  // 关闭需要二次确认：明文只在确认后才从内存里丢弃。
   await issuedDialog.getByRole("button", { name: "我已复制，关闭" }).click();
+  const confirmDialog = page.getByRole("dialog").filter({ hasText: "确认关闭？" });
+  await confirmDialog.getByRole("button", { name: "确认关闭", exact: true }).click();
   return token;
 }
 

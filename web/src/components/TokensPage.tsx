@@ -19,11 +19,13 @@ import {
   Tooltip,
   Typography,
 } from "@mui/material";
-import { Copy, KeyRound, Plus, RefreshCw, ShieldX } from "lucide-react";
+import { Copy, Eye, KeyRound, Plus, RefreshCw, ShieldX } from "lucide-react";
+import { useSnapshot } from "valtio";
 import { configApi } from "@/api";
 import { toAppError } from "@/api/transport";
 import { MachineTokenRole, type MachineTokenMeta } from "@/gen/api";
 import { useTranslation } from "@/i18n";
+import { forgetIssuedToken, issuedTokenStore, rememberIssuedToken } from "@/store/issued-tokens";
 import { sp } from "@/styles/glass";
 
 type Timestamp = { seconds: bigint; nanos: number };
@@ -67,9 +69,12 @@ export function TokensPage({ api = configApi, initialIssueOpen = false, initialI
   const [environment, setEnvironment] = useState(initialFilters?.environment ?? "");
   const [issueOpen, setIssueOpen] = useState(initialIssueOpen);
   const [issueForm, setIssueForm] = useState<IssueForm>({ ...EMPTY_ISSUE_FORM, ...initialIssueForm });
-  const [issuedToken, setIssuedToken] = useState<string | null>(null);
+  // 弹窗里正在展示的明文。关闭弹窗只是收起视图，明文仍留在 issuedTokenStore 里可再次打开。
+  const [issuedView, setIssuedView] = useState<{ id: string; token: string } | null>(null);
+  const [confirmForget, setConfirmForget] = useState(false);
   const [copied, setCopied] = useState(false);
   const [revokeTarget, setRevokeTarget] = useState<MachineTokenMeta | null>(null);
+  const issuedPlaintexts = useSnapshot(issuedTokenStore).plaintexts;
 
   const tokensQuery = useQuery({
     queryKey: ["machineTokens", serviceName, environment],
@@ -86,7 +91,10 @@ export function TokensPage({ api = configApi, initialIssueOpen = false, initialI
         role: issueForm.role,
       }),
     onSuccess: async (response) => {
-      setIssuedToken(response.token);
+      const id = response.meta?.id ?? "";
+      rememberIssuedToken(id, response.token);
+      setIssuedView({ id, token: response.token });
+      setCopied(false);
       setIssueOpen(false);
       setIssueForm(EMPTY_ISSUE_FORM);
       await queryClient.invalidateQueries({ queryKey: ["machineTokens"] });
@@ -95,25 +103,36 @@ export function TokensPage({ api = configApi, initialIssueOpen = false, initialI
 
   const revokeMutation = useMutation({
     mutationFn: (id: string) => api.revokeMachineToken(id),
-    onSuccess: async () => {
+    onSuccess: async (_response, id) => {
+      // 已吊销的 token 明文再留着没有意义。
+      forgetIssuedToken(id);
       setRevokeTarget(null);
       await queryClient.invalidateQueries({ queryKey: ["machineTokens"] });
     },
   });
 
-  useEffect(() => () => setIssuedToken(null), []);
+  useEffect(() => () => setIssuedView(null), []);
 
   const tokens = tokensQuery.data?.tokens ?? [];
   const issueValid = issueForm.serviceName.trim() !== "" && issueForm.environment.trim() !== "";
 
-  const closeIssuedToken = () => {
-    setIssuedToken(null);
+  // 收起弹窗：明文继续留在内存里，列表卡片上的「查看明文」可以再次打开。
+  const hideIssuedToken = () => {
+    setIssuedView(null);
+    setCopied(false);
+  };
+
+  // 确认后丢弃：从内存里抹掉，之后真的取不回来了。
+  const forgetIssuedView = () => {
+    if (issuedView) forgetIssuedToken(issuedView.id);
+    setConfirmForget(false);
+    setIssuedView(null);
     setCopied(false);
   };
 
   const copyIssuedToken = async () => {
-    if (!issuedToken) return;
-    await navigator.clipboard.writeText(issuedToken);
+    if (!issuedView) return;
+    await navigator.clipboard.writeText(issuedView.token);
     setCopied(true);
   };
 
@@ -160,7 +179,16 @@ export function TokensPage({ api = configApi, initialIssueOpen = false, initialI
         </Card>
       ) : (
         tokens.map((token) => (
-          <TokenCard key={token.id} token={token} onRevoke={() => setRevokeTarget(token)} />
+          <TokenCard
+            key={token.id}
+            token={token}
+            plaintext={issuedPlaintexts[token.id]}
+            onView={(plaintext) => {
+              setIssuedView({ id: token.id, token: plaintext });
+              setCopied(false);
+            }}
+            onRevoke={() => setRevokeTarget(token)}
+          />
         ))
       )}
 
@@ -218,13 +246,13 @@ export function TokensPage({ api = configApi, initialIssueOpen = false, initialI
         </Box>
       </Dialog>
 
-      <Dialog open={issuedToken !== null} onClose={closeIssuedToken} fullWidth maxWidth="sm">
+      <Dialog open={issuedView !== null} onClose={hideIssuedToken} fullWidth maxWidth="sm">
         <DialogTitle>{t("tokens.issued.title")}</DialogTitle>
         <DialogContent>
-          <Alert severity="warning" sx={{ mb: sp[3] }}>{t("tokens.issued.warning")}</Alert>
+          <Alert severity="info" sx={{ mb: sp[3] }}>{t("tokens.issued.warning")}</Alert>
           <Box sx={{ display: "flex", alignItems: "center", gap: sp[1], p: sp[2], borderRadius: 1, bgcolor: "action.hover" }}>
             <Typography data-testid="issued-token" sx={{ flex: 1, minWidth: 0, overflowWrap: "anywhere", fontFamily: "monospace" }}>
-              {issuedToken}
+              {issuedView?.token}
             </Typography>
             <Tooltip title={copied ? t("tokens.issued.copied") : t("tokens.issued.copy")}>
               <IconButton aria-label={t("tokens.issued.copy")} onClick={copyIssuedToken}><Copy size={18} /></IconButton>
@@ -232,7 +260,24 @@ export function TokensPage({ api = configApi, initialIssueOpen = false, initialI
           </Box>
         </DialogContent>
         <DialogActions>
-          <Button variant="contained" onClick={closeIssuedToken}>{t("tokens.issued.close")}</Button>
+          <Button color="inherit" onClick={hideIssuedToken}>{t("tokens.issued.hide")}</Button>
+          <Button variant="outlined" color="inherit" onClick={() => setConfirmForget(true)}>
+            {t("tokens.issued.close")}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog open={confirmForget} onClose={() => setConfirmForget(false)} fullWidth maxWidth="xs">
+        <DialogTitle>{t("tokens.issued.confirm.title")}</DialogTitle>
+        <DialogContent>
+          <Typography>{t("tokens.issued.confirm.body")}</Typography>
+          <Alert severity="warning" sx={{ mt: sp[3] }}>{t("tokens.issued.confirm.warning")}</Alert>
+        </DialogContent>
+        <DialogActions>
+          <Button color="inherit" onClick={() => setConfirmForget(false)}>{t("tokens.cancel")}</Button>
+          <Button variant="outlined" color="error" onClick={forgetIssuedView}>
+            {t("tokens.issued.confirm.submit")}
+          </Button>
         </DialogActions>
       </Dialog>
 
@@ -259,7 +304,17 @@ export function TokensPage({ api = configApi, initialIssueOpen = false, initialI
   );
 }
 
-function TokenCard({ token, onRevoke }: { token: MachineTokenMeta; onRevoke: () => void }) {
+function TokenCard({
+  token,
+  plaintext,
+  onView,
+  onRevoke,
+}: {
+  token: MachineTokenMeta;
+  plaintext?: string;
+  onView: (plaintext: string) => void;
+  onRevoke: () => void;
+}) {
   const { t } = useTranslation();
   return (
     <Card>
@@ -269,6 +324,11 @@ function TokenCard({ token, onRevoke }: { token: MachineTokenMeta; onRevoke: () 
         <Chip size="small" variant="outlined" label={token.environment} />
         <Chip size="small" color={token.disabled ? "default" : "success"} label={t(token.disabled ? "tokens.status.revoked" : "tokens.status.active")} />
         <Box sx={{ flex: 1 }} />
+        {plaintext !== undefined && (
+          <Button color="inherit" startIcon={<Eye size={16} />} onClick={() => onView(plaintext)}>
+            {t("tokens.issued.view")}
+          </Button>
+        )}
         <Button color="error" startIcon={<ShieldX size={16} />} disabled={token.disabled} onClick={onRevoke}>{t("tokens.revoke.action")}</Button>
       </Box>
       <Divider />

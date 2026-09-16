@@ -111,10 +111,18 @@
     },
     "issued": {
       "title": "Machine Token 已签发",
-      "warning": "仅此一次，请立即复制。关闭后不可再查看此 Token 明文。",
+      "warning": "Token 明文保留在当前页面，可以随时重新打开查看、重复复制。刷新页面或关闭标签页后无法找回。",
       "copy": "复制 Token",
       "copied": "已复制",
-      "close": "我已复制，关闭"
+      "view": "查看明文",
+      "hide": "稍后再看",
+      "close": "我已复制，关闭",
+      "confirm": {
+        "title": "确认关闭？",
+        "body": "关闭后将丢弃这份明文，之后无法再从控制台查看。",
+        "warning": "服务端只保存 token 哈希，明文丢失后只能重新签发一枚新的 Token。",
+        "submit": "确认关闭"
+      }
     },
     "revoke": {
       "action": "吊销",

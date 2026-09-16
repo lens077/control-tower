@@ -111,10 +111,18 @@
     },
     "issued": {
       "title": "Machine token issued",
-      "warning": "This is the only time the plaintext token will be shown. Copy it now; it cannot be viewed again after closing.",
+      "warning": "The plaintext token stays on this page, so you can reopen and copy it again at any time. It is lost once you reload the page or close the tab.",
       "copy": "Copy token",
       "copied": "Copied",
-      "close": "I have copied it"
+      "view": "View plaintext",
+      "hide": "View later",
+      "close": "I have copied it",
+      "confirm": {
+        "title": "Close and discard?",
+        "body": "Closing discards this plaintext token; it can no longer be viewed from the console.",
+        "warning": "The server only stores the token hash. Once the plaintext is gone, you have to issue a new token.",
+        "submit": "Close and discard"
+      }
     },
     "revoke": {
       "action": "Revoke",
