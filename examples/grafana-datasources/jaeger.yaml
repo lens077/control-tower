@@ -1,0 +1,35 @@
+# Grafana 数据源 provisioning：Jaeger。
+#
+# 这是 configctl 的示例载荷，不是线上真值：集群里目前没有 Jaeger，
+# 写进 Config Center 前请把 url 换成你实际的查询端地址。
+#
+#   configctl put -namespace observability -environment prod \
+#     -key grafana/datasources/jaeger \
+#     -file examples/grafana-datasources/jaeger.yaml \
+#     -comment "接入 Jaeger 数据源"
+#
+# Grafana 侧把这份 YAML 落到 /etc/grafana/provisioning/datasources/ 下即可生效。
+apiVersion: 1
+
+datasources:
+  - name: Jaeger
+    type: jaeger
+    uid: jaeger
+    access: proxy
+    # 查询端地址，不是 collector 的 OTLP 接收口。
+    url: http://jaeger-query.observability.svc:16686
+    isDefault: false
+    editable: false
+    jsonData:
+      # 从 trace 跳到日志/指标时复用已有数据源，避免在 Grafana 里再配一份。
+      tracesToLogsV2:
+        datasourceUid: loki
+        spanStartTimeShift: -5m
+        spanEndTimeShift: 5m
+        filterByTraceID: true
+      tracesToMetrics:
+        datasourceUid: victoriametrics
+        spanStartTimeShift: -5m
+        spanEndTimeShift: 5m
+      nodeGraph:
+        enabled: true

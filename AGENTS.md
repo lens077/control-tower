@@ -116,6 +116,7 @@ PG 与 Redis 的证书由 node3 的 Pigsty 自签 CA 签发，SAN 已补上两�
 | `docs/design/bff-migration.md` | BFF 化实施手顺：三轨并存、四阶段、按阶段回滚 |
 | `docs/design/adr-0001-token-model.md` | 已被 ADR-0002 取代，留作追溯（含一处已标注的事实错误） |
 | `docs/operations/2026-08-30-recovery-record.md` | 2026-08-29/30 恢复实录：六个故障的判别法、根因与回滚点——**排查「网络面板正常但功能不对」这类症状前先翻它** |
+| `docs/operations/configctl.md` | 命令行写 Config Center：`configctl put/get/ls`、凭据与 scope 限制——**要把文件灌进某个 key 就用它，别手搓 curl** |
 
 ## 硬约束
 
