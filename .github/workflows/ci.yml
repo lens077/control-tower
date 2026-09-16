@@ -60,6 +60,10 @@ jobs:
       - name: Set up buf
         uses: bufbuild/buf-setup-action@v1
         with:
+          # 钉死 buf 版本：action 默认还停在 1.50.0，与本地 1.72.0 生成的
+          # third_party/validate/validate.pb.go 不一致，会让 check-gen 出一次假 diff。
+          # 升级本地 buf 时同步改这里。
+          version: "1.72.0"
           github_token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Buf lint
@@ -122,6 +126,10 @@ jobs:
       - name: Set up buf
         uses: bufbuild/buf-setup-action@v1
         with:
+          # 钉死 buf 版本：action 默认还停在 1.50.0，与本地 1.72.0 生成的
+          # third_party/validate/validate.pb.go 不一致，会让 check-gen 出一次假 diff。
+          # 升级本地 buf 时同步改这里。
+          version: "1.72.0"
           github_token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Set up pnpm
