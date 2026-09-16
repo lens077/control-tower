@@ -92,14 +92,15 @@ async function issueMachineToken(page: Page): Promise<string> {
   await issueDialog.getByRole("button", { name: "签发", exact: true }).click();
 
   const issuedDialog = page.getByRole("dialog").filter({ hasText: "Machine Token 已签发" });
-  const token = (await issuedDialog.getByTestId("issued-token").textContent())?.trim() ?? "";
+  // 明文渲染在只读 input 里，读 value 而不是 textContent。
+  const token = (await issuedDialog.getByTestId("issued-token").inputValue()).trim();
   if (!token.startsWith("ct_") || token.length < 40) {
     throw new Error("签发响应没有返回符合格式的 Machine Token");
   }
   // 先记录，后关对话框；即使 UI 操作随后失败，afterAll 仍能定位并吊销已签发的 token。
   issuedToken = token;
   // 关闭需要二次确认：明文只在确认后才从内存里丢弃。
-  await issuedDialog.getByRole("button", { name: "我已复制，关闭" }).click();
+  await issuedDialog.getByRole("button", { name: "关闭", exact: true }).click();
   const confirmDialog = page.getByRole("dialog").filter({ hasText: "确认关闭？" });
   await confirmDialog.getByRole("button", { name: "确认关闭", exact: true }).click();
   return token;

@@ -70,6 +70,12 @@ async function renderPage(api: ReturnType<typeof buildApi>, props: Record<string
   await vi.waitFor(() => expect(api.listMachineTokens).toHaveBeenCalled());
 }
 
+// 明文现在渲染在只读 input 里，textContent 是空的，必须读 value。
+function issuedTokenValue(): string | undefined {
+  const input = document.querySelector('[data-testid="issued-token"]');
+  return input instanceof HTMLInputElement ? input.value : undefined;
+}
+
 function findButton(text: string): HTMLButtonElement | undefined {
   return [...document.querySelectorAll("button")].find((item) => item.textContent?.trim() === text);
 }
@@ -118,23 +124,40 @@ describe("Machine token management", () => {
     });
     await act(async () => clickButton("Issue"));
 
-    await vi.waitFor(() => {
-      expect(document.querySelector('[data-testid="issued-token"]')?.textContent).toContain("ct_once_only_plaintext");
-    });
+    await vi.waitFor(() => expect(issuedTokenValue()).toBe("ct_once_only_plaintext"));
 
     // 第一次点关闭只弹确认框，明文还在。
-    await act(async () => clickButton("I have copied it"));
+    await act(async () => clickButton("Close"));
     expect(document.body.textContent).toContain("Close and discard?");
-    expect(document.body.textContent).toContain("ct_once_only_plaintext");
+    expect(issuedTokenValue()).toBe("ct_once_only_plaintext");
 
     // 取消后回到明文视图。
     await act(async () => clickInDialog("Close and discard?", "Cancel"));
     await vi.waitFor(() => expect(findDialog("Close and discard?")).toBe(undefined));
-    expect(document.querySelector('[data-testid="issued-token"]')?.textContent).toContain("ct_once_only_plaintext");
+    expect(issuedTokenValue()).toBe("ct_once_only_plaintext");
 
-    await act(async () => clickButton("I have copied it"));
+    await act(async () => clickButton("Close"));
     await act(async () => clickButton("Close and discard"));
-    expect(document.body.textContent).not.toContain("ct_once_only_plaintext");
+    expect(issuedTokenValue() ?? "").toBe("");
+  });
+
+  test("复制到剪贴板并关闭：写剪贴板后仍走二次确认", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
+
+    const api = buildApi();
+    await renderPage(api, {
+      initialIssueOpen: true,
+      initialIssueForm: { serviceName: "order", environment: "dev" },
+    });
+    await vi.waitFor(() => expect(findButton("Issue")?.disabled).toBe(false));
+    await act(async () => clickButton("Issue"));
+    await vi.waitFor(() => expect(issuedTokenValue()).toBe("ct_once_only_plaintext"));
+
+    await act(async () => clickButton("Copy to clipboard and close"));
+    await vi.waitFor(() => expect(writeText).toHaveBeenCalledWith("ct_once_only_plaintext"));
+    await vi.waitFor(() => expect(findDialog("Close and discard?")).toBeTruthy());
+    expect(issuedTokenValue()).toBe("ct_once_only_plaintext");
   });
 
   test("收起弹窗后仍可从列表重新查看明文", async () => {
@@ -157,17 +180,17 @@ describe("Machine token management", () => {
 
     await vi.waitFor(() => expect(findButton("Issue")?.disabled).toBe(false));
     await act(async () => clickButton("Issue"));
-    await vi.waitFor(() => {
-      expect(document.querySelector('[data-testid="issued-token"]')?.textContent).toContain("ct_once_only_plaintext");
-    });
+    await vi.waitFor(() => expect(issuedTokenValue()).toBe("ct_once_only_plaintext"));
 
-    // 「稍后再看」只收起视图，明文留在内存里。
-    await act(async () => clickButton("View later"));
-    expect(document.querySelector('[data-testid="issued-token"]')?.textContent ?? "").toBe("");
+    // 右上角 X（「稍后再看」）只收起视图，明文留在内存里。
+    const hide = document.querySelector('[aria-label="View later"]');
+    if (!(hide instanceof HTMLElement)) throw new Error("hide button not found");
+    await act(async () => hide.click());
+    expect(issuedTokenValue() ?? "").toBe("");
 
     await vi.waitFor(() => expect(findButton("View plaintext")).toBeTruthy());
     await act(async () => clickButton("View plaintext"));
-    expect(document.querySelector('[data-testid="issued-token"]')?.textContent).toContain("ct_once_only_plaintext");
+    expect(issuedTokenValue()).toBe("ct_once_only_plaintext");
   });
 
   test("operator 角色随签发请求发送", async () => {

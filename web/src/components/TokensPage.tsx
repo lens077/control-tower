@@ -19,7 +19,7 @@ import {
   Tooltip,
   Typography,
 } from "@mui/material";
-import { Copy, Eye, KeyRound, Plus, RefreshCw, ShieldX } from "lucide-react";
+import { Copy, Eye, KeyRound, Plus, RefreshCw, ShieldX, X } from "lucide-react";
 import { useSnapshot } from "valtio";
 import { configApi } from "@/api";
 import { toAppError } from "@/api/transport";
@@ -136,6 +136,17 @@ export function TokensPage({ api = configApi, initialIssueOpen = false, initialI
     setCopied(true);
   };
 
+  // 复制并关闭：剪贴板失败（无权限/非安全上下文）也要让确认框照常出来，
+  // 否则用户会卡在一个既没复制上、又没有反馈的弹窗里。
+  const copyAndClose = async () => {
+    try {
+      await copyIssuedToken();
+    } catch {
+      // 剪贴板不可用（非安全上下文、权限被拒）不该卡住关闭流程；明文还在框里可以手动选中。
+    }
+    setConfirmForget(true);
+  };
+
   const submitIssue = (event: FormEvent) => {
     event.preventDefault();
     if (issueValid) issueMutation.mutate();
@@ -247,23 +258,52 @@ export function TokensPage({ api = configApi, initialIssueOpen = false, initialI
       </Dialog>
 
       <Dialog open={issuedView !== null} onClose={hideIssuedToken} fullWidth maxWidth="sm">
-        <DialogTitle>{t("tokens.issued.title")}</DialogTitle>
+        <DialogTitle sx={{ display: "flex", alignItems: "center", gap: sp[2] }}>
+          <Box sx={{ flex: 1, minWidth: 0 }}>{t("tokens.issued.title")}</Box>
+          {/* 右上角 X 是非破坏性的：只收起视图，明文仍留在内存里。 */}
+          <Tooltip title={t("tokens.issued.hide")}>
+            <IconButton aria-label={t("tokens.issued.hide")} size="small" onClick={hideIssuedToken}>
+              <X size={18} />
+            </IconButton>
+          </Tooltip>
+        </DialogTitle>
         <DialogContent>
-          <Alert severity="info" sx={{ mb: sp[3] }}>{t("tokens.issued.warning")}</Alert>
-          <Box sx={{ display: "flex", alignItems: "center", gap: sp[1], p: sp[2], borderRadius: 1, bgcolor: "action.hover" }}>
-            <Typography data-testid="issued-token" sx={{ flex: 1, minWidth: 0, overflowWrap: "anywhere", fontFamily: "monospace" }}>
-              {issuedView?.token}
-            </Typography>
-            <Tooltip title={copied ? t("tokens.issued.copied") : t("tokens.issued.copy")}>
-              <IconButton aria-label={t("tokens.issued.copy")} onClick={copyIssuedToken}><Copy size={18} /></IconButton>
-            </Tooltip>
-          </Box>
+          <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>{t("tokens.issued.label")}</Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mt: sp[1], mb: sp[2] }}>
+            {t("tokens.issued.warning")}
+          </Typography>
+          <Stack direction={{ xs: "column", sm: "row" }} spacing={sp[2]} sx={{ alignItems: { sm: "center" } }}>
+            <TextField
+              fullWidth
+              size="small"
+              value={issuedView?.token ?? ""}
+              onFocus={(event) => event.target.select()}
+              slotProps={{
+                htmlInput: {
+                  readOnly: true,
+                  spellCheck: false,
+                  "data-testid": "issued-token",
+                  "aria-label": t("tokens.issued.label"),
+                  style: { fontFamily: "monospace" },
+                },
+              }}
+            />
+            <Button
+              variant="outlined"
+              color="inherit"
+              startIcon={<Copy size={16} />}
+              onClick={copyIssuedToken}
+              sx={{ flexShrink: 0 }}
+            >
+              {copied ? t("tokens.issued.copied") : t("tokens.issued.copyToClipboard")}
+            </Button>
+          </Stack>
         </DialogContent>
         <DialogActions>
-          <Button color="inherit" onClick={hideIssuedToken}>{t("tokens.issued.hide")}</Button>
-          <Button variant="outlined" color="inherit" onClick={() => setConfirmForget(true)}>
-            {t("tokens.issued.close")}
+          <Button variant="outlined" color="inherit" onClick={copyAndClose}>
+            {t("tokens.issued.copyAndClose")}
           </Button>
+          <Button color="inherit" onClick={() => setConfirmForget(true)}>{t("tokens.issued.close")}</Button>
         </DialogActions>
       </Dialog>
 

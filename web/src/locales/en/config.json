@@ -111,12 +111,14 @@
     },
     "issued": {
       "title": "Machine token issued",
-      "warning": "The plaintext token stays on this page, so you can reopen and copy it again at any time. It is lost once you reload the page or close the tab.",
-      "copy": "Copy token",
+      "label": "Token",
+      "warning": "Copy it and store it somewhere safe. The plaintext stays on this page and can be reopened from the list at any time; it is lost once you reload the page or close the tab.",
+      "copyToClipboard": "Copy to clipboard",
       "copied": "Copied",
+      "copyAndClose": "Copy to clipboard and close",
       "view": "View plaintext",
       "hide": "View later",
-      "close": "I have copied it",
+      "close": "Close",
       "confirm": {
         "title": "Close and discard?",
         "body": "Closing discards this plaintext token; it can no longer be viewed from the console.",

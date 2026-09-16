@@ -111,12 +111,14 @@
     },
     "issued": {
       "title": "Machine Token 已签发",
-      "warning": "Token 明文保留在当前页面，可以随时重新打开查看、重复复制。刷新页面或关闭标签页后无法找回。",
-      "copy": "复制 Token",
+      "label": "令牌",
+      "warning": "复制后妥善保存。明文只留在当前页面，可随时从列表重新查看；刷新或关闭标签页后无法找回。",
+      "copyToClipboard": "复制到剪贴板",
       "copied": "已复制",
+      "copyAndClose": "复制到剪贴板并关闭",
       "view": "查看明文",
       "hide": "稍后再看",
-      "close": "我已复制，关闭",
+      "close": "关闭",
       "confirm": {
         "title": "确认关闭？",
         "body": "关闭后将丢弃这份明文，之后无法再从控制台查看。",
