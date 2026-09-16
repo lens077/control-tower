@@ -32,7 +32,7 @@ scope 只到 pre；读 dev 会 `permission_denied`），走 `x-config-center-ser
 | 服务 | 集群状态 | 备注 |
 |---|---|---|
 | config | `config-center/config-center` **运行中**（`0.2.11`，TCR） | `config-center.config-center.svc:30010`；来自 `deploy/pre/config/deployment.yaml` |
-| config web | `config-center/config-center-web` **运行中**（`0.2.12`，TCR） | `config-center-web.config-center.svc:80`；来自 `deploy/pre/config/web-deployment.yaml` |
+| config web | `config-center/config-center-web` **运行中**（`0.2.13`，TCR） | `config-center-web.config-center.svc:80`；来自 `deploy/pre/config/web-deployment.yaml` |
 | gateway | `ecommerce/control-tower-gateway` **运行中**（`0.2.10`，TCR，2 副本） | `ecommerce-gateway-service.ecommerce.svc:8080`；**来自 `deploy/dev/gateway/deployment.yaml`**（见下）；`/healthz`、`/readyz` 均 200 |
 
 重新收敛公网入口：
@@ -130,7 +130,9 @@ PG 与 Redis 的证书由 node3 的 Pigsty 自签 CA 签发，SAN 已补上两�
 ```bash
 make verify        # build + buf lint + go vet + test（提交前必跑）
 make api           # proto 变更后重新生成：Go/Connect（buf.gen.yaml）+ 控制台 TS（buf.gen.ts.yaml → web/src/gen）
-make check-gen     # 生成物门禁：三份产物必须与 proto 一致（CI 的 codegen job 跑的就是它；先 make tools 钉插件版本）
+make check-gen     # 生成物门禁：三份产物必须与 proto 一致（CI 的 codegen job 跑的就是它；先 make tools）
+                   # make tools 同时钉插件库版本与编插件用的 Go（GOTOOLCHAIN=go.mod 的版本）。
+                   # 少钉后者：gofmt 对注释代码块的缩进规则随 Go 版本变，validate.pb.go 会出 1500 行假 diff。
 cd web && pnpm test && pnpm build   # 控制台单测（jsdom + src/test-setup.ts 显式提供 Web Storage）+ tsc + 生产构建
 
 # 实机浏览器端到端（打真实环境，覆盖两个微服务）。凭据只从环境变量给。
