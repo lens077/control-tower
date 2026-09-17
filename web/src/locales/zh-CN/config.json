@@ -5,7 +5,10 @@
     "signOut": "登出",
     "switchAccount": "切换账号",
     "loginRequired": "请先登录以管理配置。",
-    "accessDenied": "当前 Casdoor 账号没有 Config Center 管理权限。点击「切换账号」会先结束当前单点登录会话。"
+    "accessDenied": "当前 Casdoor 账号没有 Config Center 管理权限。点击「切换账号」会先结束当前单点登录会话。",
+    "nav": {
+      "config": "配置"
+    }
   },
   "action": {
     "save": "保存",
@@ -75,7 +78,9 @@
       "local": "未启用 Redis 聚合；列表仅包含由当前 Config Center 进程处理的客户端。",
       "redis_ttl": "已启用 Redis TTL 聚合；列表包含所有 Config Center 副本上的活跃 SDK 客户端，过期记录会自动清除。",
       "redis_ttl_degraded": "已启用 Redis 聚合但当前不可用；页面暂时只显示当前进程视图。"
-    }
+    },
+    "totalLabel": "已知客户端",
+    "activeLabel": "活跃订阅"
   },
   "tokens": {
     "nav": "Machine Token",
@@ -85,6 +90,9 @@
     "issue": "签发 Token",
     "service": "服务名",
     "environment": "环境",
+    "filters": "筛选条件",
+    "filterHint": "可下拉选择，也可直接输入匹配",
+    "filterPlaceholder": "选择或输入",
     "namespaces": "允许的命名空间",
     "role": "角色",
     "roleService": "服务（只读）",
@@ -136,13 +144,19 @@
       "submit": "确认吊销",
       "revoking": "吊销中…",
       "failed": "吊销失败: {{message}}"
-    }
+    },
+    "count": "{{count}} 枚",
+    "ownNamespaceOnly": "仅服务自身的命名空间"
   },
   "newKey": {
     "title": "新建配置 Key",
     "keyLabel": "Key(层级路径,如 gateway/config.yaml)",
     "format": "格式",
-    "submit": "创建并编辑"
+    "submit": "创建并编辑",
+    "location": "位置",
+    "keyHelp": "层级路径用 / 分隔,左侧会按目录分组。",
+    "exists": "已存在同名 key,将直接打开它。",
+    "open": "打开"
   },
   "edit": {
     "loadFailed": "加载失败:{{message}}",
@@ -163,7 +177,24 @@
     "comment": "变更备注",
     "secret": "密钥",
     "saveFailed": "保存失败:{{message}}",
-    "secretWarning": "该项为密钥，值已脱敏显示为 {{masked}}。保存前必须输入新值；服务端会拒绝脱敏占位值。"
+    "secretWarning": "该项为密钥，值已脱敏显示为 {{masked}}。保存前必须输入新值；服务端会拒绝脱敏占位值。",
+    "unsaved": "未保存",
+    "savedPushed": "已保存并下发",
+    "secretHint": "值在读取与历史里脱敏为 ******",
+    "commentHint": "写进这一版的历史记录",
+    "properties": "属性",
+    "meta": {
+      "version": "版本",
+      "updatedBy": "更新人",
+      "updatedAt": "更新于",
+      "createdAt": "创建于"
+    },
+    "leave": {
+      "title": "有未保存的改动",
+      "body": "{{key}} 的改动还没有保存,离开会丢掉这些改动。",
+      "stay": "继续编辑",
+      "discard": "丢弃并离开"
+    }
   },
   "history": {
     "title": "版本历史",
@@ -194,13 +225,7 @@
     "alreadyCurrent": "这已经是当前版本",
     "rollbackDialogTitle": "回滚到 v{{version}}?",
     "rollbackDialogBody": "会把 v{{version}} 的内容写成新版本 v{{next}}(历史不会被删除),并立即下发给正在运行的服务。",
-    "confirmRollback": "确认回滚",
-    "relative": {
-      "justNow": "刚刚",
-      "minutes": "{{value}} 分钟前",
-      "hours": "{{value}} 小时前",
-      "days": "{{value}} 天前"
-    }
+    "confirmRollback": "确认回滚"
   },
   "callback": {
     "responseInvalid": "登录响应异常",
@@ -253,7 +278,8 @@
       "hostMemory": "节点内存使用率",
       "hostDisk": "节点磁盘使用率(根分区)",
       "hostNetwork": "节点网络速率"
-    }
+    },
+    "range": "时间窗"
   },
   "errors": {
     "requestFailed": "请求失败",
@@ -279,6 +305,45 @@
         "maxItems": "{{field}}最多 {{limit}} 项。",
         "required": "{{field}}为必填项。"
       }
+    }
+  },
+  "explorer": {
+    "aria": "资源栏",
+    "keyCount": "{{count}} 个 key",
+    "envEmpty": "无配置",
+    "filter": "过滤 key…",
+    "clearFilter": "清除过滤",
+    "keys": "Keys",
+    "emptyHere": "{{namespace}} / {{environment}} 下暂无配置项;该命名空间在这些环境下有配置:",
+    "noMatch": "没有匹配「{{filter}}」的 key。",
+    "rowDetail": "v{{version}} · {{by}} · {{when}}",
+    "namespacePlaceholder": "选择或输入"
+  },
+  "time": {
+    "justNow": "刚刚",
+    "minutes": "{{value}} 分钟前",
+    "hours": "{{value}} 小时前",
+    "days": "{{value}} 天前"
+  },
+  "overview": {
+    "noNamespace": "尚无命名空间",
+    "namespaceSummary": "共 {{count}} 个 key,在 {{envs}} 环境下有配置。",
+    "namespaceNew": "「{{namespace}}」还不存在;新建第一个 key 后它会出现在这里。",
+    "matrixTitle": "命名空间 × 环境",
+    "matrixSummary": "{{namespaces}} 个命名空间 · {{keys}} 个 key",
+    "matrixHint": "色带表示该环境下有配置;点一格即切换左侧资源栏的位置。",
+    "selectCell": "切换到 {{namespace}} / {{environment}}",
+    "step1": {
+      "title": "在左侧定位",
+      "body": "选命名空间与环境,过滤框按名称即时筛选 key。"
+    },
+    "step2": {
+      "title": "改值并保存",
+      "body": "保存前本地按格式校验;保存即下发给正在订阅的服务。"
+    },
+    "step3": {
+      "title": "核对与回滚",
+      "body": "「历史」里看每一版改了什么;回滚会写成新版本,历史不删。"
     }
   }
 }

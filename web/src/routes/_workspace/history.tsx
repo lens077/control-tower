@@ -7,27 +7,31 @@ import {
   Alert,
   Box,
   Button,
-  Card,
+  ButtonBase,
   Chip,
-  CircularProgress,
   Dialog,
   DialogActions,
   DialogContent,
   DialogContentText,
   DialogTitle,
-  Divider,
+  IconButton,
+  Skeleton,
   ToggleButton,
   ToggleButtonGroup,
   Tooltip,
   Typography,
 } from "@mui/material";
-import { ArrowLeft, RefreshCw, RotateCcw } from "lucide-react";
+import { ArrowLeft, Lock, RefreshCw, RotateCcw } from "lucide-react";
 import { toAppError } from "@/api/transport";
-import { formatDate, i18next, useTranslation } from "@/i18n";
+import { useTranslation } from "@/i18n";
 import { configApi, ConfigFormat } from "@/api";
 import { formatToLanguage } from "@/lib/format";
 import { lineDelta } from "@/lib/linediff";
-import { sp } from "@/styles/glass";
+import { fmtAbsolute, fmtRelative } from "@/lib/time";
+import { setEnvironment, setNamespace } from "@/store/editor";
+import { CLOUD_THEME, defineCloudTheme } from "@/monaco-theme";
+import { envTone, font, grain, ground, hairline, ink, sp, state } from "@/styles/tokens";
+import { EnvBand } from "@/components/Explorer";
 
 const SearchSchema = z.object({
   ns: z.string().default("ecommerce"),
@@ -35,7 +39,7 @@ const SearchSchema = z.object({
   key: z.string(),
 });
 
-export const Route = createFileRoute("/history")({
+export const Route = createFileRoute("/_workspace/history")({
   component: HistoryPage,
   validateSearch: SearchSchema,
 });
@@ -43,39 +47,7 @@ export const Route = createFileRoute("/history")({
 /** 后端对密钥的历史值也做脱敏,占位值与 GetKey 一致 */
 const MASKED = "******";
 
-const LIST_WIDTH = 340;
-const HAIRLINE = "1px solid rgba(15, 23, 42, 0.08)";
-
-type Timestamp = { seconds: bigint; nanos: number };
-
-function toDate(ts?: Timestamp): Date | null {
-  if (!ts) return null;
-  return new Date(Number(ts.seconds) * 1000 + Math.floor(ts.nanos / 1e6));
-}
-
-function fmtAbsolute(ts?: Timestamp): string {
-  return formatDate(toDate(ts));
-}
-
-/**
- * 「3 分钟前」。列表里扫一眼就知道新旧,精确时间放 tooltip。
- *
- * 是模块级函数,拿不到组件里的 t —— 走 i18next.t 在调用时解析。
- * 调用点在 render 里,切语言时组件会重渲染,文案跟着变。
- */
-function fmtRelative(ts?: Timestamp): string {
-  const d = toDate(ts);
-  if (!d) return "";
-  const sec = Math.round((Date.now() - d.getTime()) / 1000);
-  if (sec < 60) return i18next.t("config:history.relative.justNow");
-  const min = Math.round(sec / 60);
-  if (min < 60) return i18next.t("config:history.relative.minutes", { value: min });
-  const hour = Math.round(min / 60);
-  if (hour < 24) return i18next.t("config:history.relative.hours", { value: hour });
-  const day = Math.round(hour / 24);
-  if (day < 30) return i18next.t("config:history.relative.days", { value: day });
-  return formatDate(d);
-}
+const LIST_WIDTH = 300;
 
 function HistoryPage() {
   const { t } = useTranslation();
@@ -86,6 +58,12 @@ function HistoryPage() {
   const [selected, setSelected] = useState<number | null>(null);
   const [compareWith, setCompareWith] = useState<"current" | "prev">("current");
   const [pendingRollback, setPendingRollback] = useState<number | null>(null);
+
+  // 深链打开时把资源栏对齐到这个 key 所在的位置
+  useEffect(() => {
+    setNamespace(ns);
+    setEnvironment(env);
+  }, [ns, env]);
 
   // 换了 key 就得丢掉上一个 key 的选中版本号,否则会指向一个不存在的版本
   useEffect(() => {
@@ -155,14 +133,17 @@ function HistoryPage() {
     : `v${right?.version ?? "?"}`;
 
   const isCurrent = (version: number) => entry != null && version === entry.version;
+  const tone = envTone(env);
 
   // ---------------------------------------------------------------- 版本列表
 
   let listBody: React.ReactNode;
   if (revisions.isLoading) {
     listBody = (
-      <Box sx={{ p: sp[6], textAlign: "center" }}>
-        <CircularProgress size={22} />
+      <Box sx={{ p: sp[3], display: "grid", gap: sp[3] }}>
+        {[0, 1, 2].map((i) => (
+          <Skeleton key={i} variant="rounded" height={56} />
+        ))}
       </Box>
     );
   } else if (revisions.isError) {
@@ -184,11 +165,7 @@ function HistoryPage() {
     );
   } else if (rows.length === 0) {
     listBody = (
-      <Box sx={{ p: sp[4] }}>
-        <Typography color="text.secondary" variant="body2">
-          {t("history.noRevisions")}
-        </Typography>
-      </Box>
+      <Typography sx={{ p: sp[3], fontSize: 12.5, color: ink.muted }}>{t("history.noRevisions")}</Typography>
     );
   } else {
     listBody = (
@@ -196,73 +173,84 @@ function HistoryPage() {
         {rows.map(({ rev, delta, unchanged, isOldest }) => {
           const active = rev.version === activeVersion;
           return (
-            <Box
-              component="li"
-              key={rev.version}
-              onClick={() => setSelected(rev.version)}
-              sx={{
-                px: sp[3],
-                py: sp[2],
-                cursor: "pointer",
-                borderBottom: HAIRLINE,
-                borderLeft: "3px solid",
-                borderLeftColor: active ? "primary.main" : "transparent",
-                background: active ? "rgba(37, 99, 235, 0.08)" : "transparent",
-                "&:hover": {
-                  background: active ? "rgba(37, 99, 235, 0.12)" : "rgba(15, 23, 42, 0.04)",
-                },
-              }}
-            >
-              <Box sx={{ display: "flex", alignItems: "center", gap: sp[2] }}>
-                <Typography sx={{ fontFamily: "monospace", fontWeight: 700, fontSize: 14 }}>
-                  v{rev.version}
-                </Typography>
-                {isCurrent(rev.version) && (
-                  <Chip label={t("history.current")} size="small" color="primary" />
-                )}
-                {isOldest && <Chip label={t("history.initial")} size="small" variant="outlined" />}
-                <Box sx={{ flex: 1 }} />
-                {unchanged ? (
-                  <Tooltip title={t("history.sameAsPrev")}>
-                    <Chip label={t("history.unchanged")} size="small" variant="outlined" />
-                  </Tooltip>
-                ) : (
-                  delta && (
-                    <Typography
-                      component="span"
-                      sx={{ fontFamily: "monospace", fontSize: 12, whiteSpace: "nowrap" }}
-                    >
-                      <Box component="span" sx={{ color: "success.main" }}>
-                        +{delta.added}
-                      </Box>{" "}
-                      <Box component="span" sx={{ color: "error.main" }}>
-                        −{delta.removed}
-                      </Box>
-                    </Typography>
-                  )
-                )}
-              </Box>
-
-              <Typography
-                variant="body2"
+            <Box component="li" key={rev.version} sx={{ m: 0, p: 0, borderBottom: hairline }}>
+              <ButtonBase
+                onClick={() => setSelected(rev.version)}
+                aria-pressed={active}
                 sx={{
-                  mt: sp[1],
-                  overflow: "hidden",
-                  textOverflow: "ellipsis",
-                  whiteSpace: "nowrap",
-                  color: rev.comment ? "text.primary" : "text.disabled",
-                  fontStyle: rev.comment ? "normal" : "italic",
+                  width: "100%",
+                  display: "block",
+                  textAlign: "left",
+                  px: sp[3],
+                  py: sp[2],
+                  position: "relative",
+                  bgcolor: active ? state.activeSoft : "transparent",
+                  transition: "background-color 120ms ease-out",
+                  "&:hover": { bgcolor: active ? state.activeSoft : ground.mist },
+                  "&::before": {
+                    content: '""',
+                    position: "absolute",
+                    left: 0,
+                    top: 6,
+                    bottom: 6,
+                    width: 2,
+                    borderRadius: "0 2px 2px 0",
+                    bgcolor: state.active,
+                    opacity: active ? 1 : 0,
+                    transition: "opacity 120ms ease-out",
+                  },
                 }}
-                title={rev.comment}
               >
-                {rev.comment || t("history.noComment")}
-              </Typography>
+                <Box sx={{ display: "flex", alignItems: "center", gap: sp[2] }}>
+                  <Typography sx={{ fontFamily: font.mono, fontWeight: 500, fontSize: 13, color: ink.strong }}>
+                    v{rev.version}
+                  </Typography>
+                  {isCurrent(rev.version) && <Chip label={t("history.current")} size="small" color="primary" />}
+                  {isOldest && <Chip label={t("history.initial")} size="small" variant="outlined" />}
+                  <Box sx={{ flex: 1 }} />
+                  {unchanged ? (
+                    <Tooltip title={t("history.sameAsPrev")}>
+                      <Typography sx={{ fontSize: 11.5, color: ink.faint }}>{t("history.unchanged")}</Typography>
+                    </Tooltip>
+                  ) : (
+                    delta && (
+                      <Typography
+                        component="span"
+                        sx={{ fontFamily: font.mono, fontSize: 11.5, whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums" }}
+                      >
+                        <Box component="span" sx={{ color: state.success }}>
+                          +{delta.added}
+                        </Box>{" "}
+                        <Box component="span" sx={{ color: state.danger }}>
+                          −{delta.removed}
+                        </Box>
+                      </Typography>
+                    )
+                  )}
+                </Box>
 
-              <Tooltip title={fmtAbsolute(rev.createdAt)} placement="right">
-                <Typography variant="caption" color="text.secondary" sx={{ display: "block" }}>
-                  {rev.author || "—"} · {fmtRelative(rev.createdAt)}
+                <Typography
+                  variant="body2"
+                  sx={{
+                    mt: "2px",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
+                    fontSize: 12.5,
+                    color: rev.comment ? ink.body : ink.faint,
+                    fontStyle: rev.comment ? "normal" : "italic",
+                  }}
+                  title={rev.comment}
+                >
+                  {rev.comment || t("history.noComment")}
                 </Typography>
-              </Tooltip>
+
+                <Tooltip title={fmtAbsolute(rev.createdAt)} placement="right">
+                  <Typography sx={{ display: "block", fontSize: 11.5, color: ink.faint, mt: "1px" }}>
+                    {rev.author || "—"} · {fmtRelative(rev.createdAt)}
+                  </Typography>
+                </Tooltip>
+              </ButtonBase>
             </Box>
           );
         })}
@@ -282,7 +270,7 @@ function HistoryPage() {
   } else if (!activeRev) {
     diffBody = (
       <Box sx={{ p: sp[6], textAlign: "center" }}>
-        <Typography color="text.secondary" variant="body2">
+        <Typography sx={{ fontSize: 13, color: ink.muted }}>
           {revisions.isLoading ? t("history.loading") : t("history.pickVersion")}
         </Typography>
       </Box>
@@ -299,10 +287,14 @@ function HistoryPage() {
         <DiffEditor
           height="100%"
           language={language}
+          theme={CLOUD_THEME}
+          beforeMount={(monaco) => defineCloudTheme(monaco)}
           original={left?.value ?? ""}
           modified={rightValue}
           options={{
+            fontFamily: font.mono,
             fontSize: 13,
+            lineHeight: 20,
             minimap: { enabled: false },
             readOnly: true,
             scrollBeyondLastLine: false,
@@ -315,6 +307,9 @@ function HistoryPage() {
             // 长值(连接串、URL)照样会超出一行,让它折行而不是被裁掉
             wordWrap: "on",
             diffWordWrap: "inherit",
+            renderOverviewRuler: false,
+            padding: { top: 12, bottom: 12 },
+            lineNumbersMinChars: 3,
           }}
         />
       </Box>
@@ -326,69 +321,88 @@ function HistoryPage() {
   return (
     <Box
       sx={{
-        width: "100%",
         flex: 1,
         minHeight: 0,
         display: "flex",
         flexDirection: "column",
-        gap: sp[3],
+        overflow: { xs: "auto", md: "hidden" },
       }}
     >
-      {/* 头部:直接铺在页面上,不再套一层卡片 */}
+      {/* 路径条 */}
       <Box
-        sx={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: sp[2], flexShrink: 0 }}
+        sx={{
+          flexShrink: 0,
+          minHeight: 44,
+          display: "flex",
+          alignItems: "center",
+          flexWrap: "wrap",
+          gap: sp[2],
+          px: sp[4],
+          py: sp[1],
+          borderBottom: hairline,
+        }}
       >
         <Button
-          startIcon={<ArrowLeft size={18} />}
+          startIcon={<ArrowLeft size={15} />}
           onClick={() => navigate({ to: "/edit", search: { ns, env, key } })}
+          sx={{ ml: "-8px" }}
         >
           {t("history.back")}
         </Button>
-        <Typography sx={{ fontFamily: "monospace", fontWeight: 700 }}>{key}</Typography>
-        <Chip label={`${ns}/${env}`} size="small" variant="outlined" />
-        {entry && (
-          <Chip label={t("history.currentVersion", { version: entry.version })} size="small" />
-        )}
-        {entry?.isSecret && (
-          <Chip label={t("history.secret")} size="small" color="warning" variant="outlined" />
-        )}
+        <Box sx={{ display: "flex", alignItems: "center", gap: sp[1], minWidth: 0, fontFamily: font.mono, fontSize: 13 }}>
+          <Box component="span" sx={{ color: ink.muted }}>
+            {ns}
+          </Box>
+          <Box component="span" sx={{ color: ink.faint }}>
+            ›
+          </Box>
+          <EnvBand env={env} height={12} />
+          <Box component="span" sx={{ color: tone.text }}>
+            {env}
+          </Box>
+          <Box component="span" sx={{ color: ink.faint }}>
+            ›
+          </Box>
+          <Box component="span" sx={{ color: ink.strong, fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            {key}
+          </Box>
+        </Box>
+        {entry && <Chip label={t("history.currentVersion", { version: entry.version })} size="small" />}
+        {entry?.isSecret && <Chip label={t("history.secret")} size="small" color="warning" icon={<Lock size={12} />} />}
         <Box sx={{ flex: 1 }} />
-        <Button
-          size="small"
-          startIcon={<RefreshCw size={16} />}
-          disabled={revisions.isFetching}
-          onClick={() => {
-            revisions.refetch();
-            current.refetch();
-          }}
-        >
-          {t("action.refresh")}
-        </Button>
+        <Tooltip title={t("action.refresh")}>
+          <span>
+            <IconButton
+              aria-label={t("action.refresh")}
+              disabled={revisions.isFetching}
+              onClick={() => {
+                revisions.refetch();
+                current.refetch();
+              }}
+            >
+              <RefreshCw size={15} />
+            </IconButton>
+          </span>
+        </Tooltip>
       </Box>
 
-      {current.isError && (
-        <Alert severity="error" sx={{ flexShrink: 0 }}>
-          {t("history.readCurrentFailed", { message: toAppError(current.error).message })}
-        </Alert>
-      )}
-      {rollback.isError && (
-        <Alert severity="error" sx={{ flexShrink: 0 }} onClose={() => rollback.reset()}>
-          {t("history.rollbackFailed", { message: toAppError(rollback.error).message })}
-        </Alert>
+      {(current.isError || rollback.isError) && (
+        <Box sx={{ flexShrink: 0, px: sp[4], pt: sp[3], display: "grid", gap: sp[2] }}>
+          {current.isError && (
+            <Alert severity="error">
+              {t("history.readCurrentFailed", { message: toAppError(current.error).message })}
+            </Alert>
+          )}
+          {rollback.isError && (
+            <Alert severity="error" onClose={() => rollback.reset()}>
+              {t("history.rollbackFailed", { message: toAppError(rollback.error).message })}
+            </Alert>
+          )}
+        </Box>
       )}
 
-      {/* 主体:一块面板内左右分栏,不再是两张互相挤压的卡片 */}
-      <Card
-        sx={{
-          flex: 1,
-          minHeight: 0,
-          display: "flex",
-          flexDirection: { xs: "column", md: "row" },
-          overflow: "hidden",
-          p: 0,
-        }}
-      >
-        {/* 左:版本列表 */}
+      {/* 主体:左版本列表,右差异 */}
+      <Box sx={{ flex: 1, minHeight: 0, display: "flex", flexDirection: { xs: "column", md: "row" } }}>
         <Box
           sx={{
             width: { xs: "100%", md: LIST_WIDTH },
@@ -398,35 +412,38 @@ function HistoryPage() {
             minWidth: 0,
             minHeight: 0,
             maxHeight: { xs: 260, md: "none" },
-            borderRight: { md: HAIRLINE },
-            borderBottom: { xs: HAIRLINE, md: "none" },
+            borderRight: { md: hairline },
+            borderBottom: { xs: hairline, md: "none" },
+            bgcolor: ground.mist,
+            ...grain,
           }}
         >
           <Box
             sx={{
               display: "flex",
-              alignItems: "baseline",
+              alignItems: "center",
               gap: sp[2],
               px: sp[3],
-              py: sp[2],
+              height: 34,
               flexShrink: 0,
+              borderBottom: hairline,
             }}
           >
-            <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
+            <Typography sx={{ fontSize: 11, fontWeight: 500, letterSpacing: "0.06em", textTransform: "uppercase", color: ink.faint }}>
               {t("history.title")}
             </Typography>
+            <Box sx={{ flex: 1 }} />
             {rows.length > 0 && (
-              <Typography variant="caption" color="text.secondary">
+              <Typography sx={{ fontSize: 11.5, color: ink.faint, fontVariantNumeric: "tabular-nums" }}>
                 {t("history.count", { total: rows.length })}
               </Typography>
             )}
           </Box>
-          <Divider />
-          <Box sx={{ flex: 1, minHeight: 0, overflow: "auto" }}>{listBody}</Box>
+          <Box sx={{ flex: 1, minHeight: 0, overflow: "auto", bgcolor: ground.cloud }}>{listBody}</Box>
         </Box>
 
         {/* 右:差异。minWidth:0 是关键 —— 否则 Monaco 的固有宽度会把这一栏顶成窄条 */}
-        <Box sx={{ flex: 1, minWidth: 0, minHeight: 0, display: "flex", flexDirection: "column" }}>
+        <Box sx={{ flex: 1, minWidth: 0, minHeight: { xs: 420, md: 0 }, display: "flex", flexDirection: "column" }}>
           <Box
             sx={{
               display: "flex",
@@ -434,8 +451,10 @@ function HistoryPage() {
               flexWrap: "wrap",
               gap: sp[2],
               px: sp[3],
-              py: sp[2],
+              minHeight: 34,
               flexShrink: 0,
+              borderBottom: hairline,
+              bgcolor: ground.mist,
             }}
           >
             <ToggleButtonGroup
@@ -449,7 +468,7 @@ function HistoryPage() {
             </ToggleButtonGroup>
 
             {activeRev && (
-              <Typography variant="body2" color="text.secondary" sx={{ fontFamily: "monospace" }}>
+              <Typography sx={{ fontSize: 12, color: ink.muted, fontFamily: font.mono }}>
                 {t("history.diffLabel", {
                   left: left ? `v${left.version}` : t("history.empty"),
                   right: rightLabel,
@@ -471,9 +490,10 @@ function HistoryPage() {
                   <Button
                     size="small"
                     variant="contained"
-                    startIcon={<RotateCcw size={16} />}
+                    startIcon={<RotateCcw size={14} />}
                     disabled={rollback.isPending || isCurrent(activeRev.version)}
                     onClick={() => setPendingRollback(activeRev.version)}
+                    sx={{ minHeight: 26 }}
                   >
                     {t("history.rollbackTo", { version: activeRev.version })}
                   </Button>
@@ -481,10 +501,9 @@ function HistoryPage() {
               </Tooltip>
             )}
           </Box>
-          <Divider />
           {diffBody}
         </Box>
-      </Card>
+      </Box>
 
       {/* 回滚会产生一个新版本并立刻下发给在跑的服务,值得先问一句 */}
       <Dialog open={pendingRollback !== null} onClose={() => setPendingRollback(null)}>

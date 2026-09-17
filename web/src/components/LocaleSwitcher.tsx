@@ -11,8 +11,12 @@ export function LocaleSwitcher() {
       onChange={(_, next: "zh-CN" | "en" | null) => next && void setLocale(next)}
       aria-label="language"
     >
-      <ToggleButton value="zh-CN">中</ToggleButton>
-      <ToggleButton value="en">EN</ToggleButton>
+      <ToggleButton value="zh-CN" sx={{ px: "8px" }}>
+        中
+      </ToggleButton>
+      <ToggleButton value="en" sx={{ px: "8px" }}>
+        EN
+      </ToggleButton>
     </ToggleButtonGroup>
   );
 }

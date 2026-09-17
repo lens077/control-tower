@@ -4,25 +4,14 @@ import { useQuery } from "@tanstack/react-query";
 import {
   Alert,
   Box,
-  Card,
-  Chip,
-  CircularProgress,
-  Divider,
   LinearProgress,
+  Skeleton,
   ToggleButton,
   ToggleButtonGroup,
   Tooltip,
   Typography,
 } from "@mui/material";
-import {
-  Activity,
-  AlertTriangle,
-  Cpu,
-  Database,
-  HardDrive,
-  MemoryStick,
-  Network,
-} from "lucide-react";
+import { AlertTriangle, Database } from "lucide-react";
 import type { GetSystemStatusResponse, SeriesResult } from "@/gen/api";
 import { MetricSeries, systemApi, TIME_RANGES, type TimeRangeKey } from "@/api";
 import { toAppError } from "@/api/transport";
@@ -30,7 +19,8 @@ import { MetricChart } from "@/components/MetricChart";
 import { formatBytes, formatDuration, formatMetricValue, usageSeverity } from "@/lib/metric-format";
 import { MetricUnit } from "@/gen/api";
 import { useTranslation } from "@/i18n";
-import { sp } from "@/styles/glass";
+import { PageFrame } from "@/components/PageFrame";
+import { font, hairline, ink, sp, state } from "@/styles/tokens";
 
 export const Route = createFileRoute("/system")({
   component: SystemPage,
@@ -100,23 +90,52 @@ function SystemPage() {
   const chartsReady = !metrics.isLoading && !infra.isLoading;
   const metricsAvailable = metrics.data?.metricsBackendAvailable ?? true;
 
+  const build = status.data?.build;
+  const uptime = status.data?.process?.uptime;
+
   return (
-    <Box
-      sx={{
-        maxWidth: 1180,
-        mx: "auto",
-        width: "100%",
-        display: "flex",
-        flexDirection: "column",
-        gap: sp[4],
-      }}
+    <PageFrame
+      title={t("system.title")}
+      subtitle={t("system.subtitle")}
+      actions={
+        <ToggleButtonGroup
+          size="small"
+          exclusive
+          value={range}
+          onChange={(_, value) => value && setRange(value as TimeRangeKey)}
+          aria-label={t("system.range")}
+        >
+          {RANGE_KEYS.map((key) => (
+            <ToggleButton key={key} value={key} sx={{ fontFamily: font.mono }}>
+              {key}
+            </ToggleButton>
+          ))}
+        </ToggleButtonGroup>
+      }
     >
-      <Header
-        status={status.data}
-        range={range}
-        onRangeChange={setRange}
-        loading={status.isLoading}
-      />
+      {/* 构建信息:一行 mono,不做成 chip */}
+      {status.isLoading ? (
+        <Skeleton variant="text" width={420} />
+      ) : build ? (
+        <Typography
+          sx={{
+            fontFamily: font.mono,
+            fontSize: 12.5,
+            color: ink.muted,
+            display: "flex",
+            flexWrap: "wrap",
+            gap: sp[3],
+            "& b": { fontWeight: 500, color: ink.body },
+          }}
+        >
+          <span>
+            <b>{build.serviceName}</b> {build.version}
+          </span>
+          <span>{build.environment}</span>
+          <span>{build.goVersion}</span>
+          {uptime && <span>{t("system.uptime", { value: formatDuration(Number(uptime.seconds)) })}</span>}
+        </Typography>
+      ) : null}
 
       {status.isError ? (
         <Alert severity="error">
@@ -135,8 +154,7 @@ function SystemPage() {
         <Alert severity="info">{t("system.metricsUnavailable")}</Alert>
       ) : (
         <>
-          <SectionTitle text={t("system.section.process")} />
-          <ChartGrid>
+          <Section title={t("system.section.process")}>
             <MetricChart
               title={t("system.chart.processCpu")}
               result={chart(byS, MetricSeries.PROCESS_CPU, chartsReady)}
@@ -157,10 +175,9 @@ function SystemPage() {
               result={chart(byS, MetricSeries.PROCESS_NETWORK, chartsReady)}
               emptyHint={t("system.noData")}
             />
-          </ChartGrid>
+          </Section>
 
-          <SectionTitle text={t("system.section.api")} hint={t("system.section.apiHint")} />
-          <ChartGrid>
+          <Section title={t("system.section.api")} hint={t("system.section.apiHint")}>
             <MetricChart
               title={t("system.chart.apiLatency")}
               result={chart(byS, MetricSeries.API_LATENCY, chartsReady)}
@@ -186,10 +203,9 @@ function SystemPage() {
               result={chart(byS, MetricSeries.DB_POOL, chartsReady)}
               emptyHint={t("system.noData")}
             />
-          </ChartGrid>
+          </Section>
 
-          <SectionTitle text={t("system.section.host")} hint={t("system.section.hostHint")} />
-          <ChartGrid>
+          <Section title={t("system.section.host")} hint={t("system.section.hostHint")}>
             <MetricChart
               title={t("system.chart.hostCpu")}
               result={chart(byS, MetricSeries.HOST_CPU, chartsReady)}
@@ -210,10 +226,10 @@ function SystemPage() {
               result={chart(byS, MetricSeries.HOST_NETWORK, chartsReady)}
               emptyHint={t("system.noData")}
             />
-          </ChartGrid>
+          </Section>
         </>
       )}
-    </Box>
+    </PageFrame>
   );
 }
 
@@ -222,71 +238,6 @@ function SystemPage() {
 function chart(map: Map<MetricSeries, SeriesResult>, series: MetricSeries, ready: boolean) {
   if (!ready) return undefined;
   return map.get(series) ?? ({ series, lines: [], error: "" } as unknown as SeriesResult);
-}
-
-function Header({
-  status,
-  range,
-  onRangeChange,
-  loading,
-}: {
-  status?: GetSystemStatusResponse;
-  range: TimeRangeKey;
-  onRangeChange: (value: TimeRangeKey) => void;
-  loading: boolean;
-}) {
-  const { t } = useTranslation();
-  const build = status?.build;
-  const uptime = status?.process?.uptime;
-
-  return (
-    <Card sx={{ p: sp[4] }}>
-      <Box
-        sx={{
-          display: "flex",
-          flexDirection: { xs: "column", sm: "row" },
-          alignItems: { sm: "center" },
-          gap: sp[2],
-        }}
-      >
-        <Box sx={{ flex: 1 }}>
-          <Typography variant="h5" sx={{ fontWeight: 800 }}>
-            {t("system.title")}
-          </Typography>
-          <Typography color="text.secondary">{t("system.subtitle")}</Typography>
-        </Box>
-        {loading && <CircularProgress size={18} />}
-        <ToggleButtonGroup
-          size="small"
-          exclusive
-          value={range}
-          onChange={(_, value) => value && onRangeChange(value as TimeRangeKey)}
-        >
-          {RANGE_KEYS.map((key) => (
-            <ToggleButton key={key} value={key}>
-              {key}
-            </ToggleButton>
-          ))}
-        </ToggleButtonGroup>
-      </Box>
-
-      {build && (
-        <Box sx={{ display: "flex", flexWrap: "wrap", gap: sp[1], mt: sp[3] }}>
-          <Chip size="small" variant="outlined" label={build.serviceName} />
-          <Chip size="small" variant="outlined" label={build.version} />
-          <Chip size="small" variant="outlined" label={build.environment} />
-          <Chip size="small" variant="outlined" label={build.goVersion} />
-          {uptime && (
-            <Chip
-              size="small"
-              variant="outlined"
-              label={t("system.uptime", { value: formatDuration(Number(uptime.seconds)) })}
-            />
-          )}
-        </Box>
-      )}
-    </Card>
-  );
 }
 
 function InstantCards({ process }: { process: NonNullable<GetSystemStatusResponse["process"]> }) {
@@ -301,49 +252,53 @@ function InstantCards({ process }: { process: NonNullable<GetSystemStatusRespons
       {/* 限额没读到时必须说出来。开发机上分母是整机规格,那里看到的 0.3%
           与生产上同一个进程的表现毫无关系,不标注的话会被当成性能结论。 */}
       {!process.limitsFromCgroup && (
-        <Alert severity="info" icon={<AlertTriangle size={18} />}>
+        <Alert severity="info" icon={<AlertTriangle size={16} />}>
           {t("system.hostScopeLimits")}
         </Alert>
       )}
 
+      {/* 即时读数:一张四行的读数表 —— 项目 · 当前值 · 分母 · 占比条,不是四张卡片 */}
       <Box
+        component="table"
         sx={{
-          display: "grid",
-          gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr", lg: "repeat(4, 1fr)" },
-          gap: sp[3],
+          borderCollapse: "separate",
+          borderSpacing: 0,
+          width: "100%",
+          border: hairline,
+          borderRadius: "8px",
+          "& td": { px: sp[3], height: 36, borderBottom: hairline, fontSize: 13, verticalAlign: "middle" },
+          "& tr:last-child td": { borderBottom: "none" },
         }}
       >
-        <StatCard
-          icon={<Cpu size={18} />}
-          label={t("system.card.cpu")}
-          value={`${process.cpuPercent.toFixed(1)}%`}
-          caption={t("system.card.cpuCaption", { cores: process.cpuLimitCores })}
-          percent={process.cpuPercent}
-          degraded={degraded.has("cpu")}
-        />
-        <StatCard
-          icon={<MemoryStick size={18} />}
-          label={t("system.card.memory")}
-          value={formatBytes(Number(process.memoryRssBytes))}
-          caption={`/ ${formatBytes(Number(process.memoryLimitBytes))}`}
-          percent={memoryPercent}
-          degraded={degraded.has("memory")}
-        />
-        <StatCard
-          icon={<HardDrive size={18} />}
-          label={t("system.card.disk")}
-          value={formatBytes(Number(process.diskUsedBytes))}
-          caption={`/ ${formatBytes(Number(process.diskTotalBytes))} · ${process.diskPath}`}
-          percent={diskPercent}
-          degraded={degraded.has("disk")}
-        />
-        <StatCard
-          icon={<Network size={18} />}
-          label={t("system.card.network")}
-          value={`↓ ${formatMetricValue(process.netRxBytesPerSec, MetricUnit.BYTES_PER_SECOND)}`}
-          caption={`↑ ${formatMetricValue(process.netTxBytesPerSec, MetricUnit.BYTES_PER_SECOND)}`}
-          degraded={degraded.has("network")}
-        />
+        <tbody>
+          <StatRow
+            label={t("system.card.cpu")}
+            value={`${process.cpuPercent.toFixed(1)}%`}
+            caption={t("system.card.cpuCaption", { cores: process.cpuLimitCores })}
+            percent={process.cpuPercent}
+            degraded={degraded.has("cpu")}
+          />
+          <StatRow
+            label={t("system.card.memory")}
+            value={formatBytes(Number(process.memoryRssBytes))}
+            caption={`/ ${formatBytes(Number(process.memoryLimitBytes))}`}
+            percent={memoryPercent}
+            degraded={degraded.has("memory")}
+          />
+          <StatRow
+            label={t("system.card.disk")}
+            value={formatBytes(Number(process.diskUsedBytes))}
+            caption={`/ ${formatBytes(Number(process.diskTotalBytes))} · ${process.diskPath}`}
+            percent={diskPercent}
+            degraded={degraded.has("disk")}
+          />
+          <StatRow
+            label={t("system.card.network")}
+            value={`↓ ${formatMetricValue(process.netRxBytesPerSec, MetricUnit.BYTES_PER_SECOND)}`}
+            caption={`↑ ${formatMetricValue(process.netTxBytesPerSec, MetricUnit.BYTES_PER_SECOND)}`}
+            degraded={degraded.has("network")}
+          />
+        </tbody>
       </Box>
 
       {process.degraded.length > 0 && (
@@ -352,7 +307,7 @@ function InstantCards({ process }: { process: NonNullable<GetSystemStatusRespons
           <Box component="ul" sx={{ m: 0, pl: sp[4] }}>
             {process.degraded.map((item) => (
               <li key={item}>
-                <Typography variant="caption" sx={{ fontFamily: "monospace" }}>
+                <Typography variant="caption" sx={{ fontFamily: font.mono, color: "inherit" }}>
                   {item}
                 </Typography>
               </li>
@@ -364,15 +319,13 @@ function InstantCards({ process }: { process: NonNullable<GetSystemStatusRespons
   );
 }
 
-function StatCard({
-  icon,
+function StatRow({
   label,
   value,
   caption,
   percent,
   degraded,
 }: {
-  icon: React.ReactNode;
   label: string;
   value: string;
   caption: string;
@@ -381,41 +334,41 @@ function StatCard({
 }) {
   const { t } = useTranslation();
   const severity = percent === undefined ? "success" : usageSeverity(percent);
-
-  const card = (
-    <Card
-      sx={{
-        p: sp[3],
-        display: "flex",
-        flexDirection: "column",
-        gap: sp[1],
-        opacity: degraded ? 0.5 : 1,
-      }}
-    >
-      <Box sx={{ display: "flex", alignItems: "center", gap: sp[1], color: "text.secondary" }}>
-        {icon}
-        <Typography variant="caption">{label}</Typography>
+  const row = (
+    <Box component="tr" sx={{ opacity: degraded ? 0.55 : 1 }}>
+      <Box component="td" sx={{ width: 120, color: ink.muted }}>
+        {label}
       </Box>
-      <Typography variant="h5" sx={{ fontWeight: 700 }}>
+      <Box
+        component="td"
+        sx={{ width: 140, fontFamily: font.mono, fontSize: 13.5, color: ink.strong, fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}
+      >
         {degraded ? "—" : value}
-      </Typography>
-      <Typography variant="caption" color="text.secondary">
+      </Box>
+      <Box component="td" sx={{ color: ink.faint, fontSize: 12.5, whiteSpace: "nowrap" }} title={caption}>
         {degraded ? t("system.notSampled") : caption}
-      </Typography>
-      {percent !== undefined && !degraded && (
-        <LinearProgress
-          variant="determinate"
-          value={Math.min(100, Math.max(0, percent))}
-          color={severity}
-          sx={{ height: 6, borderRadius: 3, mt: sp[1] }}
-        />
-      )}
-    </Card>
+      </Box>
+      <Box component="td" sx={{ width: "40%" }}>
+        {percent !== undefined && !degraded && (
+          <Box sx={{ display: "flex", alignItems: "center", gap: sp[2] }}>
+            <LinearProgress
+              variant="determinate"
+              value={Math.min(100, Math.max(0, percent))}
+              color={severity}
+              sx={{ flex: 1 }}
+            />
+            <Box component="span" sx={{ fontSize: 11.5, color: ink.faint, fontVariantNumeric: "tabular-nums", width: 40, textAlign: "right" }}>
+              {percent.toFixed(0)}%
+            </Box>
+          </Box>
+        )}
+      </Box>
+    </Box>
   );
 
-  // 采样失败的卡片标灰并给出解释。显示 0 是错的 ——
+  // 采样失败的行标灰并给出解释。显示 0 是错的 ——
   // 「没采到」和「真的是 0」在页面上必须能区分开。
-  return degraded ? <Tooltip title={t("system.notSampledHint")}>{card}</Tooltip> : card;
+  return degraded ? <Tooltip title={t("system.notSampledHint")}>{row}</Tooltip> : row;
 }
 
 function Dependencies({ status }: { status: GetSystemStatusResponse }) {
@@ -423,49 +376,61 @@ function Dependencies({ status }: { status: GetSystemStatusResponse }) {
   if (status.dependencies.length === 0) return null;
 
   return (
-    <Card sx={{ p: sp[3] }}>
-      <Box sx={{ display: "flex", alignItems: "center", gap: sp[1], mb: sp[2] }}>
-        <Database size={18} />
-        <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
-          {t("system.dependencies")}
-        </Typography>
+    <Box sx={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: sp[3] }}>
+      <Box sx={{ display: "flex", alignItems: "center", gap: sp[1], color: ink.faint }}>
+        <Database size={14} />
+        <Typography sx={{ fontSize: 12.5, color: ink.muted }}>{t("system.dependencies")}</Typography>
       </Box>
-      <Divider />
-      <Box sx={{ display: "flex", flexWrap: "wrap", gap: sp[2], mt: sp[2] }}>
-        {status.dependencies.map((dep) => (
-          <Tooltip key={dep.name} title={dep.detail || ""}>
-            <Chip
-              size="small"
-              icon={<Activity size={14} />}
-              color={dep.healthy ? "success" : "error"}
-              label={`${dep.name}: ${dep.healthy ? t("system.healthy") : t("system.unhealthy")}`}
+      {status.dependencies.map((dep) => (
+        <Tooltip key={dep.name} title={dep.detail || ""}>
+          <Box
+            sx={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: sp[2],
+              px: sp[2],
+              height: 24,
+              border: hairline,
+              borderRadius: "4px",
+              fontSize: 12.5,
+              color: ink.body,
+            }}
+          >
+            <Box
+              component="span"
+              aria-hidden
+              sx={{
+                width: 7,
+                height: 7,
+                borderRadius: "50%",
+                bgcolor: dep.healthy ? state.success : state.danger,
+              }}
             />
-          </Tooltip>
-        ))}
-      </Box>
-    </Card>
-  );
-}
-
-function SectionTitle({ text, hint }: { text: string; hint?: string }) {
-  return (
-    <Box>
-      <Typography variant="subtitle1" sx={{ fontWeight: 800 }}>
-        {text}
-      </Typography>
-      {hint && (
-        <Typography variant="caption" color="text.secondary">
-          {hint}
-        </Typography>
-      )}
+            <Box component="span" sx={{ fontFamily: font.mono }}>
+              {dep.name}
+            </Box>
+            <Box component="span" sx={{ color: dep.healthy ? state.success : state.danger }}>
+              {dep.healthy ? t("system.healthy") : t("system.unhealthy")}
+            </Box>
+          </Box>
+        </Tooltip>
+      ))}
     </Box>
   );
 }
 
-function ChartGrid({ children }: { children: React.ReactNode }) {
+function Section({ title, hint, children }: { title: string; hint?: string; children: React.ReactNode }) {
   return (
-    <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "1fr 1fr" }, gap: sp[3] }}>
-      {children}
+    <Box component="section" sx={{ pt: sp[3] }}>
+      <Typography component="h2" sx={{ fontSize: 15, fontWeight: 500, color: ink.strong }}>
+        {title}
+      </Typography>
+      {hint && (
+        <Typography sx={{ fontSize: 12.5, color: ink.muted, mt: "2px", maxWidth: "80ch" }}>{hint}</Typography>
+      )}
+      <Box sx={{ mt: sp[3], display: "grid", gridTemplateColumns: { xs: "1fr", md: "1fr 1fr" }, gap: sp[3] }}>
+        {children}
+      </Box>
     </Box>
   );
 }

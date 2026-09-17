@@ -223,6 +223,21 @@ describe("Machine token management", () => {
     expect(api.issueMachineToken).not.toHaveBeenCalled();
   });
 
+  test("筛选器可折叠，并明确提示可下拉或输入匹配", async () => {
+    const api = buildApi();
+    await renderPage(api);
+
+    const filters = findButton("Filters");
+    expect(filters?.getAttribute("aria-expanded")).toBe("false");
+    expect(document.body.textContent).toContain("Choose from the list or type to match");
+
+    await act(async () => {
+      clickButton("Filters");
+    });
+    expect(findButton("Filters")?.getAttribute("aria-expanded")).toBe("true");
+    expect(document.querySelector('input[placeholder="Pick or type"]')).toBeTruthy();
+  });
+
   test("列表将 service 和 environment 筛选参数传给 RPC", async () => {
     const api = buildApi();
     await renderPage(api, { initialFilters: { serviceName: "gateway", environment: "pre" } });

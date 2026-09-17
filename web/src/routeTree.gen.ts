@@ -9,32 +9,22 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as IndexRouteImport } from './routes/index'
+import { Route as WorkspaceRouteImport } from './routes/_workspace'
 import { Route as ConnectionsRouteImport } from './routes/connections'
-import { Route as EditRouteImport } from './routes/edit'
-import { Route as HistoryRouteImport } from './routes/history'
 import { Route as SystemRouteImport } from './routes/system'
 import { Route as TokensRouteImport } from './routes/tokens'
+import { Route as WorkspaceIndexRouteImport } from './routes/_workspace/index'
+import { Route as WorkspaceEditRouteImport } from './routes/_workspace/edit'
+import { Route as WorkspaceHistoryRouteImport } from './routes/_workspace/history'
 import { Route as CallbackIndexRouteImport } from './routes/callback/index'
 
-const IndexRoute = IndexRouteImport.update({
-  id: '/',
-  path: '/',
+const WorkspaceRoute = WorkspaceRouteImport.update({
+  id: '/_workspace',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ConnectionsRoute = ConnectionsRouteImport.update({
   id: '/connections',
   path: '/connections',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const EditRoute = EditRouteImport.update({
-  id: '/edit',
-  path: '/edit',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const HistoryRoute = HistoryRouteImport.update({
-  id: '/history',
-  path: '/history',
   getParentRoute: () => rootRouteImport,
 } as any)
 const SystemRoute = SystemRouteImport.update({
@@ -47,6 +37,21 @@ const TokensRoute = TokensRouteImport.update({
   path: '/tokens',
   getParentRoute: () => rootRouteImport,
 } as any)
+const WorkspaceIndexRoute = WorkspaceIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => WorkspaceRoute,
+} as any)
+const WorkspaceEditRoute = WorkspaceEditRouteImport.update({
+  id: '/edit',
+  path: '/edit',
+  getParentRoute: () => WorkspaceRoute,
+} as any)
+const WorkspaceHistoryRoute = WorkspaceHistoryRouteImport.update({
+  id: '/history',
+  path: '/history',
+  getParentRoute: () => WorkspaceRoute,
+} as any)
 const CallbackIndexRoute = CallbackIndexRouteImport.update({
   id: '/callback/',
   path: '/callback/',
@@ -54,31 +59,32 @@ const CallbackIndexRoute = CallbackIndexRouteImport.update({
 } as any)
 
 export interface FileRoutesByFullPath {
-  '/': typeof IndexRoute
+  '/': typeof WorkspaceIndexRoute
   '/connections': typeof ConnectionsRoute
-  '/edit': typeof EditRoute
-  '/history': typeof HistoryRoute
   '/system': typeof SystemRoute
   '/tokens': typeof TokensRoute
+  '/edit': typeof WorkspaceEditRoute
+  '/history': typeof WorkspaceHistoryRoute
   '/callback/': typeof CallbackIndexRoute
 }
 export interface FileRoutesByTo {
-  '/': typeof IndexRoute
   '/connections': typeof ConnectionsRoute
-  '/edit': typeof EditRoute
-  '/history': typeof HistoryRoute
   '/system': typeof SystemRoute
   '/tokens': typeof TokensRoute
+  '/edit': typeof WorkspaceEditRoute
+  '/history': typeof WorkspaceHistoryRoute
+  '/': typeof WorkspaceIndexRoute
   '/callback': typeof CallbackIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
-  '/': typeof IndexRoute
+  '/_workspace': typeof WorkspaceRouteWithChildren
   '/connections': typeof ConnectionsRoute
-  '/edit': typeof EditRoute
-  '/history': typeof HistoryRoute
   '/system': typeof SystemRoute
   '/tokens': typeof TokensRoute
+  '/_workspace/edit': typeof WorkspaceEditRoute
+  '/_workspace/history': typeof WorkspaceHistoryRoute
+  '/_workspace/': typeof WorkspaceIndexRoute
   '/callback/': typeof CallbackIndexRoute
 }
 export interface FileRouteTypes {
@@ -86,36 +92,35 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/connections'
-    | '/edit'
-    | '/history'
     | '/system'
     | '/tokens'
+    | '/edit'
+    | '/history'
     | '/callback/'
   fileRoutesByTo: FileRoutesByTo
   to:
-    | '/'
     | '/connections'
-    | '/edit'
-    | '/history'
     | '/system'
     | '/tokens'
+    | '/edit'
+    | '/history'
+    | '/'
     | '/callback'
   id:
     | '__root__'
-    | '/'
+    | '/_workspace'
     | '/connections'
-    | '/edit'
-    | '/history'
     | '/system'
     | '/tokens'
+    | '/_workspace/edit'
+    | '/_workspace/history'
+    | '/_workspace/'
     | '/callback/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
-  IndexRoute: typeof IndexRoute
+  WorkspaceRoute: typeof WorkspaceRouteWithChildren
   ConnectionsRoute: typeof ConnectionsRoute
-  EditRoute: typeof EditRoute
-  HistoryRoute: typeof HistoryRoute
   SystemRoute: typeof SystemRoute
   TokensRoute: typeof TokensRoute
   CallbackIndexRoute: typeof CallbackIndexRoute
@@ -123,11 +128,11 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/': {
-      id: '/'
-      path: '/'
+    '/_workspace': {
+      id: '/_workspace'
+      path: ''
       fullPath: '/'
-      preLoaderRoute: typeof IndexRouteImport
+      preLoaderRoute: typeof WorkspaceRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/connections': {
@@ -135,20 +140,6 @@ declare module '@tanstack/react-router' {
       path: '/connections'
       fullPath: '/connections'
       preLoaderRoute: typeof ConnectionsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/edit': {
-      id: '/edit'
-      path: '/edit'
-      fullPath: '/edit'
-      preLoaderRoute: typeof EditRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/history': {
-      id: '/history'
-      path: '/history'
-      fullPath: '/history'
-      preLoaderRoute: typeof HistoryRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/system': {
@@ -165,6 +156,27 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof TokensRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/_workspace/': {
+      id: '/_workspace/'
+      path: '/'
+      fullPath: '/'
+      preLoaderRoute: typeof WorkspaceIndexRouteImport
+      parentRoute: typeof WorkspaceRoute
+    }
+    '/_workspace/edit': {
+      id: '/_workspace/edit'
+      path: '/edit'
+      fullPath: '/edit'
+      preLoaderRoute: typeof WorkspaceEditRouteImport
+      parentRoute: typeof WorkspaceRoute
+    }
+    '/_workspace/history': {
+      id: '/_workspace/history'
+      path: '/history'
+      fullPath: '/history'
+      preLoaderRoute: typeof WorkspaceHistoryRouteImport
+      parentRoute: typeof WorkspaceRoute
+    }
     '/callback/': {
       id: '/callback/'
       path: '/callback'
@@ -175,11 +187,25 @@ declare module '@tanstack/react-router' {
   }
 }
 
+interface WorkspaceRouteChildren {
+  WorkspaceEditRoute: typeof WorkspaceEditRoute
+  WorkspaceHistoryRoute: typeof WorkspaceHistoryRoute
+  WorkspaceIndexRoute: typeof WorkspaceIndexRoute
+}
+
+const WorkspaceRouteChildren: WorkspaceRouteChildren = {
+  WorkspaceEditRoute: WorkspaceEditRoute,
+  WorkspaceHistoryRoute: WorkspaceHistoryRoute,
+  WorkspaceIndexRoute: WorkspaceIndexRoute,
+}
+
+const WorkspaceRouteWithChildren = WorkspaceRoute._addFileChildren(
+  WorkspaceRouteChildren,
+)
+
 const rootRouteChildren: RootRouteChildren = {
-  IndexRoute: IndexRoute,
+  WorkspaceRoute: WorkspaceRouteWithChildren,
   ConnectionsRoute: ConnectionsRoute,
-  EditRoute: EditRoute,
-  HistoryRoute: HistoryRoute,
   SystemRoute: SystemRoute,
   TokensRoute: TokensRoute,
   CallbackIndexRoute: CallbackIndexRoute,

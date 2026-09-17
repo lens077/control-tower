@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- 云纸颗粒:程序化生成(feTurbulence),不是照片或素材库图片。用作雾面板与弹层纸面的细微纹理。 -->
+<svg xmlns="http://www.w3.org/2000/svg" width="160" height="160" viewBox="0 0 160 160">
+  <filter id="g" x="0" y="0" width="100%" height="100%">
+    <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" stitchTiles="stitch" seed="7"/>
+    <feColorMatrix type="matrix" values="0 0 0 0 0.36  0 0 0 0 0.39  0 0 0 0 0.44  0 0 0 0.11 0"/>
+  </filter>
+  <rect width="160" height="160" filter="url(#g)"/>
+</svg>

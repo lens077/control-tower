@@ -5,7 +5,10 @@
     "signOut": "Sign out",
     "switchAccount": "Switch account",
     "loginRequired": "Sign in to manage configuration.",
-    "accessDenied": "This Casdoor account cannot administer Config Center. Switch account first ends the current single sign-on session."
+    "accessDenied": "This Casdoor account cannot administer Config Center. Switch account first ends the current single sign-on session.",
+    "nav": {
+      "config": "Configuration"
+    }
   },
   "action": {
     "save": "Save",
@@ -75,7 +78,9 @@
       "local": "Redis aggregation is disabled. This list only includes clients handled by the current Config Center process.",
       "redis_ttl": "Redis TTL aggregation is enabled. This list includes active SDK clients across Config Center replicas; stale records expire automatically.",
       "redis_ttl_degraded": "Redis aggregation is enabled but unavailable. The page is temporarily showing only the current process view."
-    }
+    },
+    "totalLabel": "known clients",
+    "activeLabel": "active watches"
   },
   "tokens": {
     "nav": "Machine tokens",
@@ -85,6 +90,9 @@
     "issue": "Issue token",
     "service": "Service name",
     "environment": "Environment",
+    "filters": "Filters",
+    "filterHint": "Choose from the list or type to match",
+    "filterPlaceholder": "Pick or type",
     "namespaces": "Allowed namespaces",
     "role": "Role",
     "roleService": "Service (read-only)",
@@ -136,13 +144,19 @@
       "submit": "Revoke token",
       "revoking": "Revoking…",
       "failed": "Failed to revoke token: {{message}}"
-    }
+    },
+    "count": "{{count}} tokens",
+    "ownNamespaceOnly": "own namespace only"
   },
   "newKey": {
     "title": "New config key",
     "keyLabel": "Key (hierarchical path, e.g. gateway/config.yaml)",
     "format": "Format",
-    "submit": "Create and edit"
+    "submit": "Create and edit",
+    "location": "Location",
+    "keyHelp": "Use / for hierarchy; the explorer groups keys by directory.",
+    "exists": "A key with this name exists; it will be opened instead.",
+    "open": "Open"
   },
   "edit": {
     "loadFailed": "Failed to load: {{message}}",
@@ -163,7 +177,24 @@
     "comment": "Change note",
     "secret": "Secret",
     "saveFailed": "Failed to save: {{message}}",
-    "secretWarning": "This entry is a secret; its value is masked as {{masked}}. Enter a new value before saving; the server rejects the masked placeholder."
+    "secretWarning": "This entry is a secret; its value is masked as {{masked}}. Enter a new value before saving; the server rejects the masked placeholder.",
+    "unsaved": "Unsaved",
+    "savedPushed": "Saved and pushed",
+    "secretHint": "Masked as ****** in reads and history",
+    "commentHint": "Recorded with this version in history",
+    "properties": "Properties",
+    "meta": {
+      "version": "Version",
+      "updatedBy": "Updated by",
+      "updatedAt": "Updated",
+      "createdAt": "Created"
+    },
+    "leave": {
+      "title": "Unsaved changes",
+      "body": "Changes to {{key}} are not saved. Leaving discards them.",
+      "stay": "Keep editing",
+      "discard": "Discard and leave"
+    }
   },
   "history": {
     "title": "Version history",
@@ -194,13 +225,7 @@
     "alreadyCurrent": "This is already the current version",
     "rollbackDialogTitle": "Roll back to v{{version}}?",
     "rollbackDialogBody": "The content of v{{version}} will be written as a new version v{{next}} (history is kept) and pushed to running services immediately.",
-    "confirmRollback": "Confirm rollback",
-    "relative": {
-      "justNow": "just now",
-      "minutes": "{{value}} min ago",
-      "hours": "{{value}} h ago",
-      "days": "{{value}} d ago"
-    }
+    "confirmRollback": "Confirm rollback"
   },
   "callback": {
     "responseInvalid": "Unexpected sign-in response",
@@ -253,7 +278,8 @@
       "hostMemory": "Node memory",
       "hostDisk": "Node disk (root filesystem)",
       "hostNetwork": "Node network rate"
-    }
+    },
+    "range": "Time range"
   },
   "errors": {
     "requestFailed": "Request failed",
@@ -279,6 +305,45 @@
         "maxItems": "{{field}} may contain at most {{limit}} items.",
         "required": "{{field}} is required."
       }
+    }
+  },
+  "explorer": {
+    "aria": "Explorer",
+    "keyCount": "{{count}} keys",
+    "envEmpty": "empty",
+    "filter": "Filter keys…",
+    "clearFilter": "Clear filter",
+    "keys": "Keys",
+    "emptyHere": "No entries under {{namespace}} / {{environment}}; this namespace has entries in:",
+    "noMatch": "No key matches “{{filter}}”.",
+    "rowDetail": "v{{version}} · {{by}} · {{when}}",
+    "namespacePlaceholder": "Pick or type"
+  },
+  "time": {
+    "justNow": "just now",
+    "minutes": "{{value}} min ago",
+    "hours": "{{value}} h ago",
+    "days": "{{value}} d ago"
+  },
+  "overview": {
+    "noNamespace": "No namespace yet",
+    "namespaceSummary": "{{count}} keys, with entries in {{envs}}.",
+    "namespaceNew": "“{{namespace}}” does not exist yet; it appears here after its first key is created.",
+    "matrixTitle": "Namespaces × environments",
+    "matrixSummary": "{{namespaces}} namespaces · {{keys}} keys",
+    "matrixHint": "A band means the environment has entries; click a cell to move the explorer there.",
+    "selectCell": "Switch to {{namespace}} / {{environment}}",
+    "step1": {
+      "title": "Locate on the left",
+      "body": "Pick a namespace and environment; the filter narrows keys by name as you type."
+    },
+    "step2": {
+      "title": "Edit and save",
+      "body": "Content is validated locally before saving; saving pushes to every subscribed service."
+    },
+    "step3": {
+      "title": "Review and roll back",
+      "body": "History shows what each version changed; a rollback writes a new version and keeps history intact."
     }
   }
 }

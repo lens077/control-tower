@@ -2,33 +2,35 @@ import { useEffect, useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Alert,
+  Autocomplete,
   Box,
   Button,
   Card,
+  Collapse,
   Chip,
-  CircularProgress,
   Dialog,
   DialogActions,
   DialogContent,
   DialogTitle,
-  Divider,
   IconButton,
   MenuItem,
+  Skeleton,
   Stack,
   TextField,
   Tooltip,
   Typography,
 } from "@mui/material";
-import { Copy, Eye, KeyRound, Plus, RefreshCw, ShieldX, X } from "lucide-react";
+import { ChevronDown, Copy, Eye, KeyRound, Plus, RefreshCw, ShieldX, X } from "lucide-react";
+import { EnvBand } from "@/components/Explorer";
+import { Meta, PageFrame } from "@/components/PageFrame";
+import { fmtAbsolute, fmtRelative } from "@/lib/time";
 import { useSnapshot } from "valtio";
 import { configApi } from "@/api";
 import { describeError, isSlug } from "@/api/validation";
 import { MachineTokenRole, type MachineTokenMeta } from "@/gen/api";
 import { useTranslation } from "@/i18n";
 import { forgetIssuedToken, issuedTokenStore, rememberIssuedToken } from "@/store/issued-tokens";
-import { sp } from "@/styles/glass";
-
-type Timestamp = { seconds: bigint; nanos: number };
+import { font, ground, hairline, ink, sp, state } from "@/styles/tokens";
 
 interface IssueForm {
   serviceName: string;
@@ -46,11 +48,6 @@ const EMPTY_ISSUE_FORM: IssueForm = {
   role: MachineTokenRole.SERVICE,
 };
 
-function formatTime(value?: Timestamp): string {
-  if (!value) return "-";
-  return new Date(Number(value.seconds) * 1000 + Math.floor(value.nanos / 1e6)).toLocaleString();
-}
-
 function parseNamespaces(value: string): string[] {
   return [...new Set(value.split(/[\n,]/).map((item) => item.trim()).filter(Boolean))];
 }
@@ -67,6 +64,7 @@ export function TokensPage({ api = configApi, initialIssueOpen = false, initialI
   const queryClient = useQueryClient();
   const [serviceName, setServiceName] = useState(initialFilters?.serviceName ?? "");
   const [environment, setEnvironment] = useState(initialFilters?.environment ?? "");
+  const [filtersOpen, setFiltersOpen] = useState(Boolean(initialFilters?.serviceName || initialFilters?.environment));
   const [issueOpen, setIssueOpen] = useState(initialIssueOpen);
   const [issueForm, setIssueForm] = useState<IssueForm>({ ...EMPTY_ISSUE_FORM, ...initialIssueForm });
   // 弹窗里正在展示的明文。关闭弹窗只是收起视图，明文仍留在 issuedTokenStore 里可再次打开。
@@ -114,6 +112,8 @@ export function TokensPage({ api = configApi, initialIssueOpen = false, initialI
   useEffect(() => () => setIssuedView(null), []);
 
   const tokens = tokensQuery.data?.tokens ?? [];
+  const serviceOptions = [...new Set(tokens.map((token) => token.serviceName).filter(Boolean))].sort();
+  const environmentOptions = [...new Set(tokens.map((token) => token.environment).filter(Boolean))].sort();
   // 服务名/环境在 proto 里是 `^[a-z][a-z0-9-]*$`（见 IssueMachineTokenRequest）。
   // 本地先拦一次：中文或大写在这里就红字提示，不用换一个来回去换一句英文正则。
   const serviceNameInvalid = issueForm.serviceName.trim() !== "" && !isSlug(issueForm.serviceName.trim());
@@ -161,54 +161,93 @@ export function TokensPage({ api = configApi, initialIssueOpen = false, initialI
   };
 
   return (
-    <Box sx={{ maxWidth: 1180, mx: "auto", width: "100%", display: "flex", flexDirection: "column", gap: sp[4] }}>
-      <Card sx={{ p: sp[4] }}>
-        <Box sx={{ display: "flex", flexDirection: { xs: "column", sm: "row" }, alignItems: { sm: "center" }, gap: sp[2] }}>
-          <Box sx={{ flex: 1 }}>
-            <Typography variant="h5" sx={{ fontWeight: 800 }}>{t("tokens.title")}</Typography>
-            <Typography color="text.secondary">{t("tokens.subtitle")}</Typography>
+    <PageFrame
+      title={t("tokens.title")}
+      subtitle={t("tokens.subtitle")}
+      actions={
+        <>
+          <Button variant="outlined" startIcon={<RefreshCw size={14} />} onClick={() => tokensQuery.refetch()}>
+            {t("tokens.refresh")}
+          </Button>
+          <Button variant="contained" startIcon={<Plus size={14} />} onClick={() => setIssueOpen(true)}>
+            {t("tokens.issue")}
+          </Button>
+        </>
+      }
+    >
+      {/* 筛选默认收起;展开后既可下拉选择,也可输入关键字匹配。 */}
+      <Box sx={{ borderBottom: hairline, pb: sp[2] }}>
+        <Button
+          variant="text"
+          onClick={() => setFiltersOpen((open) => !open)}
+          endIcon={<ChevronDown size={15} style={{ transform: filtersOpen ? "rotate(180deg)" : undefined, transition: "transform 150ms ease-out" }} />}
+          aria-expanded={filtersOpen}
+          aria-controls="token-filters"
+          sx={{ px: 0, color: ink.body }}
+        >
+          {t("tokens.filters")}
+        </Button>
+        <Typography component="span" sx={{ ml: sp[2], fontSize: 12.5, color: ink.faint }}>
+          {t("tokens.filterHint")}
+        </Typography>
+        <Collapse in={filtersOpen}>
+          <Box id="token-filters" sx={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: sp[2], pt: sp[2] }}>
+            <Autocomplete
+              freeSolo
+              size="small"
+              options={serviceOptions}
+              value={serviceName}
+              onInputChange={(_, value) => setServiceName(value)}
+              onChange={(_, value) => setServiceName(value ?? "")}
+              sx={{ width: { xs: "100%", sm: 220 } }}
+              renderInput={(params) => <TextField {...params} label={t("tokens.service")} placeholder={t("tokens.filterPlaceholder")} />}
+            />
+            <Autocomplete
+              freeSolo
+              size="small"
+              options={environmentOptions}
+              value={environment}
+              onInputChange={(_, value) => setEnvironment(value)}
+              onChange={(_, value) => setEnvironment(value ?? "")}
+              sx={{ width: { xs: "100%", sm: 160 } }}
+              renderInput={(params) => <TextField {...params} label={t("tokens.environment")} placeholder={t("tokens.filterPlaceholder")} />}
+            />
+            <Box sx={{ flex: 1 }} />
+            {tokensQuery.data && <Typography sx={{ fontSize: 12.5, color: ink.faint, fontVariantNumeric: "tabular-nums" }}>{t("tokens.count", { count: tokens.length })}</Typography>}
           </Box>
-          <Button startIcon={<RefreshCw size={17} />} onClick={() => tokensQuery.refetch()}>{t("tokens.refresh")}</Button>
-          <Button variant="contained" startIcon={<Plus size={17} />} onClick={() => setIssueOpen(true)}>{t("tokens.issue")}</Button>
-        </Box>
-        <Stack direction={{ xs: "column", sm: "row" }} spacing={sp[2]} sx={{ mt: sp[3] }}>
-          <TextField
-            size="small"
-            label={t("tokens.service")}
-            value={serviceName}
-            onChange={(event) => setServiceName(event.target.value)}
-          />
-          <TextField
-            size="small"
-            label={t("tokens.environment")}
-            value={environment}
-            onChange={(event) => setEnvironment(event.target.value)}
-          />
-        </Stack>
-      </Card>
+        </Collapse>
+      </Box>
 
       {tokensQuery.isLoading ? (
-        <Box sx={{ p: sp[6], textAlign: "center" }}><CircularProgress /></Box>
+        <Box sx={{ display: "grid", gap: sp[2] }}>
+          {[0, 1].map((i) => (
+            <Skeleton key={i} variant="rounded" height={96} />
+          ))}
+        </Box>
       ) : tokensQuery.isError ? (
         <Alert severity="error">{t("tokens.loadFailed", { message: describeError(tokensQuery.error, t) })}</Alert>
       ) : tokens.length === 0 ? (
-        <Card sx={{ p: sp[6], textAlign: "center" }}>
-          <KeyRound size={28} opacity={0.45} />
-          <Typography sx={{ mt: sp[2] }}>{t(serviceName || environment ? "tokens.emptyFiltered" : "tokens.empty")}</Typography>
-        </Card>
+        <Box sx={{ py: sp[10], textAlign: "center", border: `1px dashed ${ground.lineStrong}`, borderRadius: "8px" }}>
+          <KeyRound size={22} color={ink.faint} />
+          <Typography sx={{ mt: sp[2], fontSize: 13, color: ink.muted }}>
+            {t(serviceName || environment ? "tokens.emptyFiltered" : "tokens.empty")}
+          </Typography>
+        </Box>
       ) : (
-        tokens.map((token) => (
-          <TokenCard
-            key={token.id}
-            token={token}
-            plaintext={issuedPlaintexts[token.id]}
-            onView={(plaintext) => {
-              setIssuedView({ id: token.id, token: plaintext });
-              setCopied(false);
-            }}
-            onRevoke={() => setRevokeTarget(token)}
-          />
-        ))
+        <Box sx={{ display: "grid", gap: sp[2] }}>
+          {tokens.map((token) => (
+            <TokenCard
+              key={token.id}
+              token={token}
+              plaintext={issuedPlaintexts[token.id]}
+              onView={(plaintext) => {
+                setIssuedView({ id: token.id, token: plaintext });
+                setCopied(false);
+              }}
+              onRevoke={() => setRevokeTarget(token)}
+            />
+          ))}
+        </Box>
       )}
 
       <Dialog open={issueOpen} onClose={() => !issueMutation.isPending && setIssueOpen(false)} fullWidth maxWidth="sm">
@@ -356,7 +395,7 @@ export function TokensPage({ api = configApi, initialIssueOpen = false, initialI
           </Button>
         </DialogActions>
       </Dialog>
-    </Box>
+    </PageFrame>
   );
 }
 
@@ -372,38 +411,79 @@ function TokenCard({
   onRevoke: () => void;
 }) {
   const { t } = useTranslation();
+  const isOperator = token.role === MachineTokenRole.OPERATOR;
   return (
-    <Card>
-      <Box sx={{ p: sp[3], display: "flex", flexWrap: "wrap", alignItems: "center", gap: sp[2] }}>
-        <KeyRound size={18} color={token.disabled ? "#64748b" : "#14866d"} />
-        <Typography sx={{ fontFamily: "monospace", fontWeight: 700 }}>{token.serviceName}</Typography>
-        <Chip size="small" variant="outlined" label={token.environment} />
-        <Chip size="small" color={token.disabled ? "default" : "success"} label={t(token.disabled ? "tokens.status.revoked" : "tokens.status.active")} />
+    <Card sx={{ opacity: token.disabled ? 0.72 : 1 }}>
+      <Box sx={{ px: sp[4], py: sp[3], display: "flex", flexWrap: "wrap", alignItems: "center", gap: sp[2] }}>
+        <KeyRound size={15} color={token.disabled ? ink.faint : state.active} />
+        <Typography sx={{ fontFamily: font.mono, fontSize: 13.5, fontWeight: 500, color: ink.strong }}>
+          {token.serviceName}
+        </Typography>
+        <Box sx={{ display: "inline-flex", alignItems: "center", gap: sp[1], fontFamily: font.mono, fontSize: 12.5, color: ink.muted }}>
+          <EnvBand env={token.environment} height={12} />
+          {token.environment}
+        </Box>
+        <Chip size="small" variant="outlined" label={t(isOperator ? "tokens.roleOperator" : "tokens.roleService")} />
+        <Chip
+          size="small"
+          color={token.disabled ? undefined : "success"}
+          variant={token.disabled ? "outlined" : "filled"}
+          label={t(token.disabled ? "tokens.status.revoked" : "tokens.status.active")}
+        />
         <Box sx={{ flex: 1 }} />
         {plaintext !== undefined && (
-          <Button color="inherit" startIcon={<Eye size={16} />} onClick={() => onView(plaintext)}>
+          <Button startIcon={<Eye size={14} />} onClick={() => onView(plaintext)}>
             {t("tokens.issued.view")}
           </Button>
         )}
-        <Button color="error" startIcon={<ShieldX size={16} />} disabled={token.disabled} onClick={onRevoke}>{t("tokens.revoke.action")}</Button>
+        <Button color="error" startIcon={<ShieldX size={14} />} disabled={token.disabled} onClick={onRevoke}>
+          {t("tokens.revoke.action")}
+        </Button>
       </Box>
-      <Divider />
-      <Box sx={{ p: sp[3], display: "grid", gridTemplateColumns: { xs: "1fr", md: "repeat(3, 1fr)" }, gap: sp[2] }}>
-        <Info label={t("tokens.createdAt")} value={formatTime(token.createdAt)} />
-        <Info label={t("tokens.revokedAt")} value={formatTime(token.revokedAt)} />
-        <Info label={t("tokens.lastUsedAt")} value={formatTime(token.lastUsedAt)} />
-        <Box sx={{ gridColumn: { md: "span 2" } }}>
-          <Typography variant="caption" color="text.secondary">{t("tokens.namespaces")}</Typography>
+      <Box
+        sx={{
+          px: sp[4],
+          py: sp[3],
+          borderTop: hairline,
+          display: "grid",
+          gridTemplateColumns: { xs: "1fr 1fr", md: "repeat(3, minmax(0, 1fr)) 2fr" },
+          gap: sp[3],
+        }}
+      >
+        <Meta label={t("tokens.createdAt")} value={fmtAbsolute(token.createdAt)} />
+        <Meta label={t("tokens.lastUsedAt")} value={<Tooltip title={fmtAbsolute(token.lastUsedAt, "")}><span>{fmtRelative(token.lastUsedAt)}</span></Tooltip>} />
+        <Meta label={t("tokens.revokedAt")} value={fmtAbsolute(token.revokedAt)} />
+        <Box sx={{ gridColumn: { xs: "1 / -1", md: "auto" } }}>
+          <Typography sx={{ fontSize: 11.5, color: ink.faint, lineHeight: 1.3 }}>{t("tokens.namespaces")}</Typography>
           <Box sx={{ display: "flex", flexWrap: "wrap", gap: sp[1], mt: sp[1] }}>
-            {token.allowedNamespaces.map((namespace) => <Chip key={namespace} size="small" variant="outlined" label={namespace} />)}
+            {token.allowedNamespaces.length === 0 && (
+              <Typography sx={{ fontSize: 13, color: ink.faint }}>{t("tokens.ownNamespaceOnly")}</Typography>
+            )}
+            {token.allowedNamespaces.map((namespace) => (
+              <Box
+                key={namespace}
+                component="span"
+                sx={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  px: sp[2],
+                  height: 22,
+                  border: hairline,
+                  borderRadius: "4px",
+                  fontFamily: font.mono,
+                  fontSize: 12,
+                  color: ink.body,
+                }}
+              >
+                {namespace}
+              </Box>
+            ))}
           </Box>
         </Box>
-        <Info label={t("tokens.note")} value={token.note || t("tokens.noNote")} />
+        <Box sx={{ gridColumn: "1 / -1" }}>
+          <Meta label={t("tokens.note")} value={token.note || t("tokens.noNote")} />
+        </Box>
       </Box>
     </Card>
   );
-}
-
-function Info({ label, value }: { label: string; value: string }) {
-  return <Box><Typography variant="caption" color="text.secondary">{label}</Typography><Typography variant="body2">{value}</Typography></Box>;
 }

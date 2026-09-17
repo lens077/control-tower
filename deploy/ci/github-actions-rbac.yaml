@@ -1,0 +1,67 @@
+# Least-privilege identity for the public-dev deployment job.
+# Apply once with an existing cluster-admin kubeconfig, then generate the CI kubeconfig.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: control-tower-deployer
+  namespace: config-center
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: control-tower-deployer
+  namespace: config-center
+rules:
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    verbs: ["get", "patch"]
+  - apiGroups: ["apps"]
+    resources: ["deployments/status", "replicasets"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: control-tower-deployer
+  namespace: config-center
+subjects:
+  - kind: ServiceAccount
+    name: control-tower-deployer
+    namespace: config-center
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: control-tower-deployer
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: control-tower-deployer
+  namespace: ecommerce
+rules:
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    verbs: ["get", "patch"]
+  - apiGroups: ["apps"]
+    resources: ["deployments/status", "replicasets"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: control-tower-deployer
+  namespace: ecommerce
+subjects:
+  - kind: ServiceAccount
+    name: control-tower-deployer
+    namespace: config-center
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: control-tower-deployer

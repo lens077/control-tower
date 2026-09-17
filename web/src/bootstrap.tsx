@@ -4,16 +4,14 @@ import { createRouter, RouterProvider } from "@tanstack/react-router";
 import { StrictMode, useMemo, type ReactNode } from "react";
 import ReactDOM from "react-dom/client";
 import { useLocale } from "@/i18n";
-import { CssBaseline, GlobalStyles, ThemeProvider } from "@mui/material";
+import { CssBaseline, ThemeProvider } from "@mui/material";
 import { enUS, zhCN } from "@mui/material/locale";
 import { Code, ConnectError } from "@connectrpc/connect";
-import "@fontsource/roboto/300.css";
-import "@fontsource/roboto/400.css";
-import "@fontsource/roboto/500.css";
-import "@fontsource/roboto/700.css";
+// 字体自托管:生产 CSP 是 script-src/font-src 'self',不能走 Google Fonts。
+import "@fontsource-variable/source-sans-3";
+import "@fontsource-variable/jetbrains-mono";
 import { routeTree } from "./routeTree.gen";
 import { createAppTheme } from "@/styles/theme";
-import { appBackground } from "@/styles/glass";
 import { AuthProvider, useAuthActions, useAuthState } from "@/providers/AuthProvider";
 
 const router = createRouter({
@@ -78,24 +76,17 @@ if (rootElement && !rootElement.innerHTML) {
     <StrictMode>
       <LocalizedTheme>
         <CssBaseline />
-        <GlobalStyles
-          styles={{
-            body: {
-              minHeight: "100vh",
-              background: appBackground,
-              backgroundAttachment: "fixed",
-            },
-          }}
-        />
         <QueryClientProvider client={queryClient}>
           <AuthProvider router={router}>
             <InnerApp />
           </AuthProvider>
-          <ReactQueryDevtools
-            initialIsOpen={false}
-            buttonPosition="bottom-right"
-            position="bottom"
-          />
+          {!(import.meta.env.DEV && sessionStorage.getItem("cc_mock") === "1") && (
+            <ReactQueryDevtools
+              initialIsOpen={false}
+              buttonPosition="bottom-right"
+              position="bottom"
+            />
+          )}
         </QueryClientProvider>
       </LocalizedTheme>
     </StrictMode>,

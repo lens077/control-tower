@@ -18,6 +18,13 @@ import configEn from "./locales/en/config.json";
 import configZh from "./locales/zh-CN/config.json";
 
 await loadRuntimeConfig();
+// 开发用假后端:仅 DEV 构建 + `?mock`(或本会话已开启)时加载,生产包里不存在这段代码
+if (
+  import.meta.env.DEV &&
+  (new URLSearchParams(window.location.search).has("mock") || sessionStorage.getItem("cc_mock") === "1")
+) {
+  await import("./dev/mock");
+}
 await initI18n({
   ns: "config",
   resources: { "zh-CN": configZh, en: configEn },
