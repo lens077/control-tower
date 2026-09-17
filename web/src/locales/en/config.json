@@ -104,6 +104,8 @@
     },
     "issueDialog": {
       "title": "Issue machine token",
+      "slugHelp": "Lowercase letters, digits, and hyphens; must start with a lowercase letter — e.g. observability-admin.",
+      "slugInvalid": "Only lowercase letters, digits, and hyphens, starting with a lowercase letter — e.g. observability-admin.",
       "namespacesHelp": "Enter multiple values separated by commas or new lines. Leave empty to allow only the service's own namespace.",
       "submit": "Issue",
       "issuing": "Issuing…",
@@ -251,6 +253,32 @@
       "hostMemory": "Node memory",
       "hostDisk": "Node disk (root filesystem)",
       "hostNetwork": "Node network rate"
+    }
+  },
+  "errors": {
+    "requestFailed": "Request failed",
+    "validation": {
+      "fallback": "{{field}} is invalid: {{detail}}",
+      "fields": {
+        "service_name": "Service name",
+        "environment": "Environment",
+        "allowed_namespaces": "Allowed namespaces",
+        "note": "Note",
+        "namespace": "Namespace",
+        "key": "Key",
+        "value": "Value",
+        "comment": "Comment",
+        "description": "Description",
+        "version": "Version",
+        "id": "ID"
+      },
+      "rules": {
+        "slug": "{{field}} may only contain lowercase letters, digits, and hyphens, and must start with a lowercase letter — for example observability-admin. Non-ASCII text, uppercase letters, spaces, and underscores are not allowed.",
+        "minLength": "{{field}} needs at least {{limit}} characters.",
+        "maxLength": "{{field}} may be at most {{limit}} characters.",
+        "maxItems": "{{field}} may contain at most {{limit}} items.",
+        "required": "{{field}} is required."
+      }
     }
   }
 }

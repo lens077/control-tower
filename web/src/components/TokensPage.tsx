@@ -22,7 +22,7 @@ import {
 import { Copy, Eye, KeyRound, Plus, RefreshCw, ShieldX, X } from "lucide-react";
 import { useSnapshot } from "valtio";
 import { configApi } from "@/api";
-import { toAppError } from "@/api/transport";
+import { describeError, isSlug } from "@/api/validation";
 import { MachineTokenRole, type MachineTokenMeta } from "@/gen/api";
 import { useTranslation } from "@/i18n";
 import { forgetIssuedToken, issuedTokenStore, rememberIssuedToken } from "@/store/issued-tokens";
@@ -114,7 +114,15 @@ export function TokensPage({ api = configApi, initialIssueOpen = false, initialI
   useEffect(() => () => setIssuedView(null), []);
 
   const tokens = tokensQuery.data?.tokens ?? [];
-  const issueValid = issueForm.serviceName.trim() !== "" && issueForm.environment.trim() !== "";
+  // 服务名/环境在 proto 里是 `^[a-z][a-z0-9-]*$`（见 IssueMachineTokenRequest）。
+  // 本地先拦一次：中文或大写在这里就红字提示，不用换一个来回去换一句英文正则。
+  const serviceNameInvalid = issueForm.serviceName.trim() !== "" && !isSlug(issueForm.serviceName.trim());
+  const environmentInvalid = issueForm.environment.trim() !== "" && !isSlug(issueForm.environment.trim());
+  const issueValid =
+    issueForm.serviceName.trim() !== "" &&
+    issueForm.environment.trim() !== "" &&
+    !serviceNameInvalid &&
+    !environmentInvalid;
 
   // 收起弹窗：明文继续留在内存里，列表卡片上的「查看明文」可以再次打开。
   const hideIssuedToken = () => {
@@ -182,7 +190,7 @@ export function TokensPage({ api = configApi, initialIssueOpen = false, initialI
       {tokensQuery.isLoading ? (
         <Box sx={{ p: sp[6], textAlign: "center" }}><CircularProgress /></Box>
       ) : tokensQuery.isError ? (
-        <Alert severity="error">{t("tokens.loadFailed", { message: toAppError(tokensQuery.error).message })}</Alert>
+        <Alert severity="error">{t("tokens.loadFailed", { message: describeError(tokensQuery.error, t) })}</Alert>
       ) : tokens.length === 0 ? (
         <Card sx={{ p: sp[6], textAlign: "center" }}>
           <KeyRound size={28} opacity={0.45} />
@@ -208,18 +216,26 @@ export function TokensPage({ api = configApi, initialIssueOpen = false, initialI
           <DialogTitle>{t("tokens.issueDialog.title")}</DialogTitle>
           <DialogContent>
             <Stack spacing={sp[3]} sx={{ pt: sp[1] }}>
-              {issueMutation.isError && <Alert severity="error">{t("tokens.issueDialog.failed", { message: toAppError(issueMutation.error).message })}</Alert>}
+              {issueMutation.isError && (
+                <Alert severity="error">
+                  {t("tokens.issueDialog.failed", { message: describeError(issueMutation.error, t) })}
+                </Alert>
+              )}
               <TextField
                 required
                 autoFocus
                 label={t("tokens.service")}
                 value={issueForm.serviceName}
+                error={serviceNameInvalid}
+                helperText={serviceNameInvalid ? t("tokens.issueDialog.slugInvalid") : t("tokens.issueDialog.slugHelp")}
                 onChange={(event) => setIssueForm((form) => ({ ...form, serviceName: event.target.value }))}
               />
               <TextField
                 required
                 label={t("tokens.environment")}
                 value={issueForm.environment}
+                error={environmentInvalid}
+                helperText={environmentInvalid ? t("tokens.issueDialog.slugInvalid") : undefined}
                 onChange={(event) => setIssueForm((form) => ({ ...form, environment: event.target.value }))}
               />
               <TextField
@@ -324,7 +340,7 @@ export function TokensPage({ api = configApi, initialIssueOpen = false, initialI
       <Dialog open={revokeTarget !== null} onClose={() => !revokeMutation.isPending && setRevokeTarget(null)} fullWidth maxWidth="sm">
         <DialogTitle>{t("tokens.revoke.title")}</DialogTitle>
         <DialogContent>
-          {revokeMutation.isError && <Alert severity="error" sx={{ mb: sp[2] }}>{t("tokens.revoke.failed", { message: toAppError(revokeMutation.error).message })}</Alert>}
+          {revokeMutation.isError && <Alert severity="error" sx={{ mb: sp[2] }}>{t("tokens.revoke.failed", { message: describeError(revokeMutation.error, t) })}</Alert>}
           <Typography>{t("tokens.revoke.body", { service: revokeTarget?.serviceName, environment: revokeTarget?.environment })}</Typography>
           <Alert severity="warning" sx={{ mt: sp[3] }}>{t("tokens.revoke.watchWarning")}</Alert>
         </DialogContent>

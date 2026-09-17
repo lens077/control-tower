@@ -206,6 +206,23 @@ describe("Machine token management", () => {
     ));
   });
 
+  test("服务名不合法时本地就拦住，不发签发请求", async () => {
+    const api = buildApi();
+    await renderPage(api, {
+      initialIssueOpen: true,
+      initialIssueForm: { serviceName: "observability管理员", environment: "prod" },
+    });
+
+    await vi.waitFor(() => expect(findButton("Issue")).toBeTruthy());
+    expect(findButton("Issue")?.disabled).toBe(true);
+    // 提示必须说清怎么写，而不是把后端的英文正则甩出来。
+    expect(document.body.textContent).toContain("lowercase letters");
+    expect(document.body.textContent).not.toContain("^[a-z][a-z0-9-]*$");
+
+    clickButton("Issue");
+    expect(api.issueMachineToken).not.toHaveBeenCalled();
+  });
+
   test("列表将 service 和 environment 筛选参数传给 RPC", async () => {
     const api = buildApi();
     await renderPage(api, { initialFilters: { serviceName: "gateway", environment: "pre" } });

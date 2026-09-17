@@ -104,6 +104,8 @@
     },
     "issueDialog": {
       "title": "签发 Machine Token",
+      "slugHelp": "小写字母、数字和连字符，须以小写字母开头，例如 observability-admin。",
+      "slugInvalid": "只能用小写字母、数字和连字符，且必须以小写字母开头，例如 observability-admin。",
       "namespacesHelp": "可输入多个值，用逗号或换行分隔；留空时仅允许访问服务自身的命名空间。",
       "submit": "签发",
       "issuing": "签发中…",
@@ -251,6 +253,32 @@
       "hostMemory": "节点内存使用率",
       "hostDisk": "节点磁盘使用率(根分区)",
       "hostNetwork": "节点网络速率"
+    }
+  },
+  "errors": {
+    "requestFailed": "请求失败",
+    "validation": {
+      "fallback": "{{field}} 不合法：{{detail}}",
+      "fields": {
+        "service_name": "服务名",
+        "environment": "环境",
+        "allowed_namespaces": "允许的命名空间",
+        "note": "备注",
+        "namespace": "命名空间",
+        "key": "键名",
+        "value": "值",
+        "comment": "变更备注",
+        "description": "描述",
+        "version": "版本",
+        "id": "ID"
+      },
+      "rules": {
+        "slug": "{{field}}只能用小写字母、数字和连字符，且必须以小写字母开头，例如 observability-admin。不支持中文、大写字母、空格与下划线。",
+        "minLength": "{{field}}至少需要 {{limit}} 个字符。",
+        "maxLength": "{{field}}最多 {{limit}} 个字符。",
+        "maxItems": "{{field}}最多 {{limit}} 项。",
+        "required": "{{field}}为必填项。"
+      }
     }
   }
 }
