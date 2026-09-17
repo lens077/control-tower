@@ -252,38 +252,3 @@ jobs:
             VERSION=${{ steps.meta.outputs.release }}
             GOPROXY=https://proxy.golang.org,direct
           tags: ${{ steps.meta.outputs.tags }}
-
-  # 公网当前使用 ecommerce/dev gateway + config-center 三个 Deployment。
-  # 仅 main 自动滚动线上；版本 tag 只发布镜像，避免发布追溯 tag 意外切流。
-  deploy-public:
-    name: deploy public dev
-    if: github.ref == 'refs/heads/main'
-    needs: [image]
-    runs-on: ubuntu-24.04
-    environment: production
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v5
-
-      - name: Set up kubectl
-        uses: azure/setup-kubectl@v4
-
-      - name: Configure kubeconfig
-        env:
-          KUBECONFIG_B64: ${{ secrets.KUBECONFIG_B64 }}
-        run: |
-          test -n "$KUBECONFIG_B64" || { echo "KUBECONFIG_B64 is required for public deployment" >&2; exit 1; }
-          install -d -m 700 "$RUNNER_TEMP/kube"
-          printf '%s' "$KUBECONFIG_B64" | base64 --decode > "$RUNNER_TEMP/kube/config"
-          chmod 600 "$RUNNER_TEMP/kube/config"
-          echo "KUBECONFIG=$RUNNER_TEMP/kube/config" >> "$GITHUB_ENV"
-
-      - name: Roll out immutable commit images
-        run: |
-          IMAGE_TAG="sha-${GITHUB_SHA::7}"
-          kubectl -n ecommerce set image deployment/control-tower-gateway gateway=ccr.ccs.tencentyun.com/sumery/control-tower-gateway:$IMAGE_TAG
-          kubectl -n config-center set image deployment/config-center config-center=ccr.ccs.tencentyun.com/sumery/control-tower-config:$IMAGE_TAG
-          kubectl -n config-center set image deployment/config-center-web config-center-web=ccr.ccs.tencentyun.com/sumery/control-tower-config-web:$IMAGE_TAG
-          kubectl -n ecommerce rollout status deployment/control-tower-gateway --timeout=5m
-          kubectl -n config-center rollout status deployment/config-center --timeout=5m
-          kubectl -n config-center rollout status deployment/config-center-web --timeout=5m
