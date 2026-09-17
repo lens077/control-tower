@@ -32,7 +32,7 @@ scope 只到 pre；读 dev 会 `permission_denied`），走 `x-config-center-ser
 | 服务 | 集群状态 | 备注 |
 |---|---|---|
 | config | `config-center/config-center` **运行中**（`0.2.11`，TCR） | `config-center.config-center.svc:30010`；来自 `deploy/pre/config/deployment.yaml` |
-| config web | `config-center/config-center-web` **运行中**（`0.2.14`，TCR） | `config-center-web.config-center.svc:80`；来自 `deploy/pre/config/web-deployment.yaml` |
+| config web | `config-center/config-center-web` **运行中**（`0.2.15`，TCR） | `config-center-web.config-center.svc:80`；来自 `deploy/pre/config/web-deployment.yaml` |
 | gateway | `ecommerce/control-tower-gateway` **运行中**（`0.2.10`，TCR，2 副本） | `ecommerce-gateway-service.ecommerce.svc:8080`；**来自 `deploy/dev/gateway/deployment.yaml`**（见下）；`/healthz`、`/readyz` 均 200 |
 
 重新收敛公网入口：
