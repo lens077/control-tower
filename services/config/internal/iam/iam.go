@@ -213,7 +213,7 @@ func (a *Authorizer) authorize(r *http.Request) (Principal, error) {
 		// 只允许数据面只读 procedure。
 		if len(a.serviceToken) > 0 && hmac.Equal([]byte(candidate), a.serviceToken) {
 			if !machineReadProcedure(r.URL.Path) {
-				return Principal{}, forbidden("service token cannot mutate configuration")
+				return Principal{}, forbidden("service token is limited to GetKey and WatchKeys; this procedure needs an operator token or an administrator JWT")
 			}
 			a.legacyHits.Add(1)
 			a.log.Warn("legacy shared service token used; rotate to per-service machine token",
@@ -239,14 +239,14 @@ func (a *Authorizer) authorize(r *http.Request) (Principal, error) {
 					return Principal{Name: "operator:" + scope.Service, Machine: true, Scope: &scope}, nil
 				}
 				if !machineReadProcedure(r.URL.Path) {
-					return Principal{}, forbidden("service token cannot mutate configuration")
+					return Principal{}, forbidden("service token is limited to GetKey and WatchKeys; this procedure needs an operator token or an administrator JWT")
 				}
 				a.tokens.TouchLastUsed(r.Context(), scope.TokenID)
 				return Principal{Name: "service:" + scope.Service, Machine: true, Scope: &scope}, nil
 			}
 		}
 		if !machineReadProcedure(r.URL.Path) {
-			return Principal{}, forbidden("service token cannot mutate configuration")
+			return Principal{}, forbidden("service token is limited to GetKey and WatchKeys; this procedure needs an operator token or an administrator JWT")
 		}
 		return Principal{}, unauthorized("invalid service token")
 	}
