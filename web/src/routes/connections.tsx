@@ -57,9 +57,6 @@ function ConnectionsPage() {
               {t("connections.active", { count: watching })}
             </Box>
           </Typography>
-          <Typography sx={{ fontSize: 12.5, color: degraded ? state.warning : ink.faint }}>
-            {modeDescription(t, mode)}
-          </Typography>
         </Box>
       )}
 

@@ -361,6 +361,8 @@ function EditPage() {
           fontLigatures: false,
           minimap: { enabled: false },
           scrollBeyondLastLine: false,
+          // 窄屏上把长 URL/target 折行,避免代码区在首屏右侧被截断。
+          wordWrap: "on",
           tabSize: 2,
           automaticLayout: true,
           padding: { top: 12, bottom: 12 },
@@ -563,7 +565,7 @@ function EditPage() {
           flexDirection: { xs: "column", lg: "row" },
         }}
       >
-        <Box sx={{ flex: 1, minWidth: 0, minHeight: { xs: 360, lg: 0 }, display: "flex", flexDirection: "column" }}>
+        <Box sx={{ flex: 1, minWidth: 0, minHeight: { xs: 240, lg: 0 }, display: "flex", flexDirection: "column" }}>
           {/* 工具轨:只放「对着编辑器本身」的操作 */}
           <Box
             sx={{

@@ -24,7 +24,7 @@ import { useAuthState } from "@/providers/AuthProvider";
 import { editorStore, setEnvironment, setNamespace } from "@/store/editor";
 import { ENV_OPTIONS, formatLabel } from "@/lib/format";
 import { fmtRelative } from "@/lib/time";
-import { envTone, font, grain, ground, hairline, ink, sp, state } from "@/styles/tokens";
+import { band, envTone, font, grain, ground, hairline, ink, sheen, sp, state } from "@/styles/tokens";
 import { NewKeyDialog } from "./NewKeyDialog";
 
 export const EXPLORER_WIDTH = 288;
@@ -286,9 +286,13 @@ export function Explorer() {
             aria-label={t("browser.newKey")}
             onClick={() => setNewOpen(true)}
             sx={{
-              bgcolor: state.active,
-              color: "#fff",
-              "&:hover": { bgcolor: "#5A4AC8", color: "#fff" },
+              color: ink.strong,
+              border: "1px solid transparent",
+              background: `linear-gradient(${band.violet}66, ${band.violet}66) padding-box, ${sheen} border-box`,
+              "&:hover": {
+                color: ink.strong,
+                background: `linear-gradient(${band.violet}99, ${band.violet}99) padding-box, ${sheen} border-box`,
+              },
             }}
           >
             <Plus size={15} />
