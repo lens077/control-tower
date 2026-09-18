@@ -18,6 +18,7 @@ spec:
       sectionName: https
   hostnames:
     - "config.app.com"
+    - "config.apikv.com"
   rules:
     - matches:
         - path:
@@ -39,6 +40,7 @@ spec:
       sectionName: https
   hostnames:
     - "config-api.app.com"
+    - "config-api.apikv.com"
   rules:
     - matches:
         - path:
