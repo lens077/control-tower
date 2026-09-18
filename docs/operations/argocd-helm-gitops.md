@@ -42,4 +42,42 @@ Argo CD 应持有集群内权限，而不是 GitHub Actions。建议为每个线
 5. 将镜像 tag 更新作为 GitOps 提交，或使用 Argo CD Image Updater；推荐提交 digest 以保留审计记录。
 6. 稳定运行后删除旧的手工部署入口和临时权限。
 
-当前仓库暂未自动生成 Helm chart 或 Argo CD Application，因为这会涉及线上资源接管、字段归属和 GitOps 仓库位置，不能在没有确认这些边界时直接接管生产资源。
+## 当前实机状态
+
+GitOps 仓库已创建并推送到 `https://gitlab.com/sumery/control-tower-gitops`，线上 Argo CD Application 为 `argocd/control-tower-public-dev`。
+
+集群已经安装 Gateway API，`httproutes.gateway.networking.k8s.io` CRD 存在，Cilium Gateway Controller 已将应用 HTTPRoute 标记为 `Accepted=True`、`ResolvedRefs=True`。因此本次 Argo CD 的差异不是缺少 Gateway API 支持，而是 Kubernetes API 为 HTTPRoute 补齐默认的 `group`、`kind`、`weight` 字段后造成的比较差异；Application 已通过 `ignoreDifferences` 忽略这些服务端默认字段，目前状态为 `Synced / Healthy`。
+
+Argo CD 自身已有独立 HTTPRoute：
+
+- `argocd/argocd`：`argocd.dev.test`、`argocd.apikv.com`
+- `argocd/argocd-redirect`：HTTP 到 HTTPS 跳转
+
+## Mac 本地访问 Argo CD
+
+`argocd.dev.test` 是集群 Gateway 的开发主机名，不是公网 DNS。当前 Gateway 地址为 `10.10.31.240`；如果 Mac 不在该网段，直接访问会超时，即使 HTTPRoute 本身是 Accepted。
+
+优先使用公网域名：
+
+```bash
+curl -kI https://argocd.apikv.com
+```
+
+本地临时访问可以使用端口转发：
+
+```bash
+kubectl -n argocd port-forward svc/argocd-server 8080:80
+open http://127.0.0.1:8080
+```
+
+如果 Mac 已经能路由到 `10.10.31.240`，再把开发域名解析到 Gateway 地址后访问：
+
+```text
+10.10.31.240 argocd.dev.test
+```
+
+不要把 `argocd.dev.test` 指向 `argocd-server` 的 ClusterIP；Gateway API 的 HTTPRoute 必须经由共享的 `default/cilium-gateway`。
+
+## 后续发布
+
+当前 Argo CD 已接管资源，后续应通过 GitOps 仓库提交 Helm values 的镜像 tag/digest 更新。GitHub Actions 不再持有 Kubernetes 凭据，也不直接执行 `kubectl`。
