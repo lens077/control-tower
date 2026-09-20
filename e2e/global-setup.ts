@@ -25,7 +25,12 @@ async function globalSetup(_config: FullConfig) {
   const page = await browser.newPage();
 
   await page.goto(CONFIG_URL, { waitUntil: "domcontentloaded" });
-  await page.getByRole("button", { name: "登录" }).click();
+  // ⚠️ 必须限定在 <main> 里。0.2.16 的控制台改版给 header 也放了一个「登录」按钮
+  // （`web/src/routes/__root.tsx`：header 一个、SignedOut 落地页一个，点击行为相同），
+  // 不限定作用域会撞 Playwright 严格模式：`resolved to 2 elements`，
+  // 从 2026-09-18 起每次 6 小时巡检都挂在这一行。
+  // 取 <main> 里那个而不是 .first()：未登录落地页的 CTA 才是这条链路要走的入口。
+  await page.getByRole("main").getByRole("button", { name: "登录" }).click();
 
   // Casdoor 的登录页。已有会话时它会直接跳回来，所以这两个框可能根本不出现。
   // ⚠️ 这里必须用 waitFor 而不是 isVisible():isVisible() **不接受 timeout**,

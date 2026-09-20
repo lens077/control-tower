@@ -21,8 +21,13 @@ machine token 的 `role` 列（`service`|`operator`，见 `docs/design/machine-t
 pre 环境的 operator token 存于 Secret `config-center/config-center-operator`（主体 `operator:harvest`，
 scope 只到 pre；读 dev 会 `permission_denied`），走 `x-config-center-service-token` 头，
 2026-09-15 用它完成 `gateway/pre/routes.yaml` 的 PutKey（v2）实测放行。
-`machine_token_legacy_hits` 的零命中窗口从 `2026-08-31T16:05:03Z` 起算，最早于
-`2026-09-07T16:05:03Z` 删除回退；任何非零命中都会重置窗口。
+`machine_token_legacy_hits` 的零命中窗口 2026-09-20 重算过：从 `2026-09-14T18:30:00Z` 起算，
+最早于 `2026-09-21T18:30:00Z` 删除回退；任何非零增量都会重置窗口。
+旧的 `2026-09-07` 结论作废——pre 旧实例 `0db7e519` 带着累计值 12 停在 `2026-09-15T10:00:00Z`，
+且 `2026-09-07 → 2026-09-14` 指标整段没采样，命中时刻不可考，只能从恢复采样的第一个样本重新起算。
+窗口查询同时从 `max_over_time` 换成 `increase`：累计计数器用 `max_over_time` 问的是
+「历史上有没有命中过」，Pod 重启后旧实例那条 stale 时序会让门禁一直红。细节见
+`docs/design/machine-token.md`「当前烘烤窗口」。
 
 **公网入口已恢复**：三条 HTTPRoute 均为 `Accepted=True`、`ResolvedRefs=True`。
 `config.apikv.com/` 返回 200，`config-api.apikv.com/healthz`、

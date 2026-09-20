@@ -110,7 +110,7 @@ artifact 上传，保留 7 天。
 | `WatchKeys` 收到 SNAPSHOT 与 PUT | 只测 unary 读写发现不了长流被代理或 `WriteTimeout` 截断，也发现不了 PG 通知链路失效 |
 | `/connections` 显示真实 watching client | 页面能导航不代表 presence 记录、client identity 与目标 key 能正确汇总和展示 |
 | 吊销 token 后断流并拒绝读取 | 只测按钮存在不代表吊销落库、心跳复验和后续 401 真正生效 |
-| `machine_token_legacy_hits` 当前值与 7 天窗口均为零 | 空查询不能证明零命中；指标必须存在，且任何 legacy 请求都会让退役门禁保持失败 |
+| `machine_token_legacy_hits` 当前值与 7 天窗口增量均为零 | 空查询不能证明零命中；指标必须存在，且任何 legacy 请求都会让退役门禁保持失败 |
 | gateway `/healthz` `/readyz` | 网关没部署，或 HTTPRoute 的 backendRef 指向不存在的 Service |
 | 受保护路由 fail-close | 鉴权被绕过（2xx）或网关自身出错（5xx） |
 | `/config.v1.*` 不经网关暴露 | 路由边界被破坏 |
@@ -131,3 +131,11 @@ artifact 上传，保留 7 天。
   抢在回填前输入会被覆盖，最后表现成「保存了但版本号没动」。
 - **图表空 ≠ 后端不可用**：后端不可用时前端会显式提示；查询成功但零序列则是指标名或标签对不上，
   两者要分开断言。
+- **累计计数器的「窗口内零命中」不能用 `max_over_time`**：它取的是窗口内最大累计值，回答的是
+  「这个实例历史上有没有命中过」。Pod 重启后旧实例会变成一条带着历史总数的 stale 时序，只要
+  最后一个样本没滑出窗口，断言就一直红，和窗口内的真实行为无关（2026-09-20 实测：pre 旧实例
+  `0db7e519` 带着 12 停在 `2026-09-15T10:00Z`，此后所有实例当前值都是 0）。用 `increase`，
+  它处理计数器重置、只看窗口内增量。
+- **UI 改版会悄悄多出同名按钮**：`0.2.16` 给 header 加了第二个「登录」，`global-setup` 里未限定
+  作用域的 `getByRole` 立刻撞 Playwright 严格模式（`resolved to 2 elements`），登录阶段就挂，
+  16 条用例一条都跑不到。断言跨越整页的控件时限定 `getByRole("main")` / `getByRole("banner")`。

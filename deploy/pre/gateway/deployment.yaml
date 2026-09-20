@@ -94,6 +94,63 @@ spec:
             # 高危路由在线校验凭据（可选；未配置时 online_check 路由 fail-close）。
             - name: CASDOOR_URL
               value: https://casdoor.apikv.com
+            # ── BFF 会话轨（ADR-0002）。SESSION_REDIS_ADDR / CASDOOR_CLIENT_ID /
+            # CASDOOR_CLIENT_SECRET / BFF_PUBLIC_BASE_URL 四项齐备才启用（main.go 的
+            # 降级分支），缺任一项就静默退回纯 legacy bearer —— 表现是**站点根本没有登录入口**，
+            # 不是报错。所以这一整块在 pre 不能省。
+            #
+            # 2026-09-20 事故：本文件此前完全没有 BFF 环境变量，而集群 ns=ecommerce 里
+            # 长期跑的是 dev 那一份（DEPLOYMENT_MODE=dev 实测），于是线上 shop.apikv.com
+            # 点登录被 Casdoor 送去 http://localhost:3000/auth/callback —— dev 的值上了公网。
+            - name: SESSION_REDIS_ADDR
+              value: dragonfly.dragonfly.svc:6379
+            - name: SESSION_REDIS_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: dragonfly-session
+                  key: username
+            - name: SESSION_REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: dragonfly-session
+                  key: password
+            # Dragonfly 以 --tls 启动，明文连不上；证书 SAN 含 dragonfly.dragonfly.svc，
+            # 故正常验 CA，不用 InsecureSkipVerify。
+            - name: SESSION_REDIS_TLS
+              value: "true"
+            - name: SESSION_REDIS_CA_FILE
+              value: /etc/control-tower/session-tls/ca.crt
+            # pre 全程 HTTPS：**不设** SESSION_COOKIE_INSECURE，会话 cookie 保持
+            # DefaultCookieConfig 的 __Secure- 前缀 + Secure 属性。
+            # 也**不设** SESSION_COOKIE_DOMAIN：cookie 按 host-only 落在 gateway.apikv.com，
+            # 前端 shop.apikv.com 与它同站（同一 eTLD+1 apikv.com），SameSite=Lax 不拦；
+            # 跨源取用靠 routes.yaml 的 cors.allow_credentials + allow_origins 放行。
+            # 设成 .apikv.com 只会把 cookie 多发给一堆不需要它的子域。
+            #
+            # 回调基地址必须是**网关自己的公网源**：OAuth 回调打的是网关的 /auth/callback
+            # （redirectURI() = BFF_PUBLIC_BASE_URL + "/auth/callback"），不是前端路由。
+            # ⚠️ Casdoor 应用 ecommerce 的 Redirect URLs 必须含 https://gateway.apikv.com/auth/callback。
+            - name: BFF_PUBLIC_BASE_URL
+              value: https://gateway.apikv.com
+            # 登录完跳回前端。网关 redirectAllowed() 无条件放行相对路径，而相对路径会按
+            # **网关的源**解析（回调末尾直接 http.Redirect），所以前端必须传绝对地址
+            # （frontend packages/configs/src/auth/bff.ts 的 startBffLogin 已归一化），
+            # 这里逐条列出允许跳回的前端源。
+            - name: BFF_ALLOWED_REDIRECTS
+              value: https://shop.apikv.com
+            # optional=true：Secret 缺失时 env 不注入，会话轨自动保持关闭而不是 CrashLoop。
+            - name: CASDOOR_CLIENT_ID
+              valueFrom:
+                secretKeyRef:
+                  name: casdoor-bff
+                  key: client-id
+                  optional: true
+            - name: CASDOOR_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: casdoor-bff
+                  key: client-secret
+                  optional: true
             # 可观测：推 OTLP；采样跟随父，根按比例。
             - name: OTEL_EXPORTER_OTLP_ENDPOINT
               valueFrom:
@@ -116,6 +173,9 @@ spec:
           volumeMounts:
             - name: config-source
               mountPath: /etc/control-tower/config-source
+              readOnly: true
+            - name: session-tls
+              mountPath: /etc/control-tower/session-tls
               readOnly: true
           startupProbe:
             httpGet:
@@ -142,6 +202,15 @@ spec:
               cpu: 300m
               memory: 512Mi
       volumes:
+        # 会话存储的 CA。Secret dragonfly-session 同时带 username/password/ca.crt，
+        # 这里只挂 ca.crt。
+        - name: session-tls
+          secret:
+            secretName: dragonfly-session
+            items:
+              - key: ca.crt
+                path: ca.crt
+            defaultMode: 0444
         - name: config-source
           secret:
             secretName: control-tower-config-source-pre
@@ -168,5 +237,8 @@ data:
   # 逗号分隔的 Casdoor client id 白名单：consumer/merchant/admin/desktop。
   # 占位值，P5 切流前以实际 client id 填充（非机密）。
   JWT_AUDIENCES: "baxf6718e392099b7915"
-  # OTLP 三种信号统一交给 collector 分流；Jaeger 只接 trace，指标发过去会持续 404。
+  # 2026-08-24 修正：原值是 jaeger.observability.svc:4318 —— 网关把**指标**也发到了
+  # Jaeger 的 OTLP 端口，而 Jaeger 只收 trace，日志里一直在刷
+  #   failed to send metrics to http://jaeger.observability.svc:4318/v1/metrics: 404
+  # OTLP 三种信号要发给 collector 统一分流，不能直连某个后端。
   OTEL_EXPORTER_OTLP_ENDPOINT: "otel-opentelemetry-collector.opentelemetry.svc:4318"
