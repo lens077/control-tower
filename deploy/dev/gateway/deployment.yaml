@@ -1,6 +1,17 @@
 # control-tower 网关（dev）。与旧网关并行部署在同一 namespace，
 # 切流 = 把 ecommerce-gateway-service 的 selector 从 app: ecommerce-gateway
 # 改为 app: control-tower-gateway；回滚 = 改回（手顺：docs/design/cutover.md）。
+#
+# ⚠️ 本 overlay 只服务**本地开发**：下面的 BFF 三项（BFF_PUBLIC_BASE_URL /
+#    BFF_ALLOWED_REDIRECTS = http://localhost:3000，SESSION_COOKIE_INSECURE=true）
+#    只有在「前端 vite dev server 与网关同源」的前提下才成立。
+#    namespace 与 HTTPRoute 主机名（gateway.apikv.com）两份 overlay 完全相同，
+#    所以把这份 apply 进集群 = 把 localhost 值推上公网，kubectl 不会有任何提示。
+#
+#    2026-09-20 事故：集群里长期跑的正是这一份（DEPLOYMENT_MODE=dev 实测），
+#    线上 shop.apikv.com 点登录被 Casdoor 送去 http://localhost:3000/auth/callback，
+#    整条登录不可用。**对外可达的环境一律 apply deploy/pre/**。
+#    守门测试见 deploy/manifest_test.go 的 TestPreGatewayEnablesBFFWithPublicOrigins。
 apiVersion: apps/v1
 kind: Deployment
 metadata:
