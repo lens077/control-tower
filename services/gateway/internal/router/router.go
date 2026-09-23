@@ -35,6 +35,7 @@ type Table struct {
 	byPackage map[string]Route
 	anonymous map[string]struct{}
 	guest     map[string]struct{}
+	optional  map[string]struct{}
 	online    map[string]struct{}
 }
 
@@ -48,6 +49,7 @@ func Build(cfg *confv1.RouteConfig) (*Table, error) {
 		byPackage: make(map[string]Route, len(cfg.GetRoutes())),
 		anonymous: make(map[string]struct{}, len(cfg.GetAnonymous())),
 		guest:     make(map[string]struct{}, len(cfg.GetGuest())),
+		optional:  make(map[string]struct{}, len(cfg.GetOptionalAuth())),
 		online:    make(map[string]struct{}),
 	}
 	for _, r := range cfg.GetRoutes() {
@@ -71,6 +73,17 @@ func Build(cfg *confv1.RouteConfig) (*Table, error) {
 			return nil, fmt.Errorf("router: procedure %q is in both anonymous and guest lists", p)
 		}
 		t.guest[p] = struct{}{}
+	}
+	for _, p := range cfg.GetOptionalAuth() {
+		// 三类清单两两互斥：鉴权中间件按固定顺序判定，重叠时只有排在前面的那类生效，
+		// 另一边的配置会静默失效。
+		if _, dup := t.anonymous[p]; dup {
+			return nil, fmt.Errorf("router: procedure %q is in both anonymous and optional_auth lists", p)
+		}
+		if _, dup := t.guest[p]; dup {
+			return nil, fmt.Errorf("router: procedure %q is in both guest and optional_auth lists", p)
+		}
+		t.optional[p] = struct{}{}
 	}
 	for _, p := range cfg.GetAuth().GetOnlineCheckProcedures() {
 		t.online[p] = struct{}{}
@@ -107,6 +120,12 @@ func (t *Table) IsAnonymous(procedure string) bool {
 // IsGuest 判定 procedure 是否属访客清单（B 级：不验 JWT，但注入访客身份）。
 func (t *Table) IsGuest(procedure string) bool {
 	_, ok := t.guest[procedure]
+	return ok
+}
+
+// IsOptionalAuth 判定 procedure 是否属可选认证清单：认得出身份就注入，认不出按匿名放行。
+func (t *Table) IsOptionalAuth(procedure string) bool {
+	_, ok := t.optional[procedure]
 	return ok
 }
 

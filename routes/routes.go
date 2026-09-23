@@ -48,6 +48,9 @@ type Parsed struct {
 	// Guest 是匿名购物的访客清单（B 级：不验 JWT，但网关注入访客身份）。
 	// 与 Anonymous 语义互斥，网关 Build 时会拒绝同一路径同时出现在两者。
 	Guest []string `yaml:"guest"`
+	// OptionalAuth 是可选认证清单：认得出会话就注入身份，认不出按匿名放行。
+	// 与 Anonymous、Guest 两两互斥，网关 Build 时拒绝重叠。
+	OptionalAuth []string `yaml:"optional_auth"`
 }
 
 // Parse 解析指定环境的路由模板。

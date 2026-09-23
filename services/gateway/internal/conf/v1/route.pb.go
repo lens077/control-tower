@@ -46,7 +46,20 @@ type RouteConfig struct {
 	// ⚠️ 下游服务判定「必须登录」的 C 级 RPC 时必须检查 x-md-global-anonymous，
 	// 不能只看 user-id 是否非空——访客也有 user-id。
 	Guest []string `protobuf:"bytes,6,rep,name=guest,proto3" json:"guest,omitempty"`
-	Auth  *Auth    `protobuf:"bytes,4,opt,name=auth,proto3" json:"auth,omitempty"`
+	// 可选认证清单：对所有人开放，但「认得出是谁就告诉下游」。
+	// 有效会话（cookie / 会话头 / legacy bearer）→ 注入与普通登录路由相同的身份头；
+	// 没带凭据、凭据无效或过期、cookie 会话的 Origin 不可信 → 按匿名放行，不注入任何身份头，
+	// 也不返回 401。不做 RBAC：这类 RPC 本来就对匿名开放，身份只用于归属，不用于授权。
+	//
+	// 为什么需要它（2026-09-23）：behavior 的 Track/Recommend/SimilarItems 原本放在 anonymous，
+	// 网关对匿名路径先剥身份头、再跳过认证，于是登录用户的行为也只能按浏览器里的 anonId 记，
+	// 推荐画像既跨不了设备，也没法把登录前的匿名行为并到真实用户。
+	//
+	// ⚠️ 下游不得把这类路由上的 user-id 当成「已登录」的授权依据来放行敏感操作：
+	// 它只保证「有值时可信」，不保证「一定有值」。
+	// 与 anonymous、guest 互斥，Build 时拒绝重叠。
+	OptionalAuth []string `protobuf:"bytes,7,rep,name=optional_auth,json=optionalAuth,proto3" json:"optional_auth,omitempty"`
+	Auth         *Auth    `protobuf:"bytes,4,opt,name=auth,proto3" json:"auth,omitempty"`
 	// CORS 必填：网关是浏览器流量入口，漏配 CORS 等于对前端不可用。
 	Cors          *Cors `protobuf:"bytes,5,opt,name=cors,proto3" json:"cors,omitempty"`
 	unknownFields protoimpl.UnknownFields
@@ -107,6 +120,13 @@ func (x *RouteConfig) GetAnonymous() []string {
 func (x *RouteConfig) GetGuest() []string {
 	if x != nil {
 		return x.Guest
+	}
+	return nil
+}
+
+func (x *RouteConfig) GetOptionalAuth() []string {
+	if x != nil {
+		return x.OptionalAuth
 	}
 	return nil
 }
@@ -311,7 +331,7 @@ var File_services_gateway_internal_conf_v1_route_proto protoreflect.FileDescript
 
 const file_services_gateway_internal_conf_v1_route_proto_rawDesc = "" +
 	"\n" +
-	"-services/gateway/internal/conf/v1/route.proto\x12\x0fgateway.conf.v1\x1a\x1egoogle/protobuf/duration.proto\x1a#third_party/validate/validate.proto\"\xae\x02\n" +
+	"-services/gateway/internal/conf/v1/route.proto\x12\x0fgateway.conf.v1\x1a\x1egoogle/protobuf/duration.proto\x1a#third_party/validate/validate.proto\"\xea\x02\n" +
 	"\vRouteConfig\x12#\n" +
 	"\aversion\x18\x01 \x01(\tB\t\xbaH\x06r\x04R\x02v2R\aversion\x12:\n" +
 	"\x06routes\x18\x02 \x03(\v2\x16.gateway.conf.v1.RouteB\n" +
@@ -319,7 +339,9 @@ const file_services_gateway_internal_conf_v1_route_proto_rawDesc = "" +
 	"\tanonymous\x18\x03 \x03(\tB\x15\xbaH\x12\x92\x01\x0f\x10\x80\x01\"\n" +
 	"r\b\x10\x03\x18\x80\x02:\x01/R\tanonymous\x12+\n" +
 	"\x05guest\x18\x06 \x03(\tB\x15\xbaH\x12\x92\x01\x0f\x10\x80\x01\"\n" +
-	"r\b\x10\x03\x18\x80\x02:\x01/R\x05guest\x12)\n" +
+	"r\b\x10\x03\x18\x80\x02:\x01/R\x05guest\x12:\n" +
+	"\roptional_auth\x18\a \x03(\tB\x15\xbaH\x12\x92\x01\x0f\x10\x80\x01\"\n" +
+	"r\b\x10\x03\x18\x80\x02:\x01/R\foptionalAuth\x12)\n" +
 	"\x04auth\x18\x04 \x01(\v2\x15.gateway.conf.v1.AuthR\x04auth\x121\n" +
 	"\x04cors\x18\x05 \x01(\v2\x15.gateway.conf.v1.CorsB\x06\xbaH\x03\xc8\x01\x01R\x04cors\"\xdb\x01\n" +
 	"\x05Route\x126\n" +

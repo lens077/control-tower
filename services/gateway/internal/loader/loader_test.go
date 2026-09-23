@@ -82,6 +82,17 @@ func TestEmbeddedTemplatesAreValid(t *testing.T) {
 		if !tbl.IsAnonymous("/payment.v1.PaymentService/HandlePaymentNotify") {
 			t.Fatal("payment notify must be anonymous (verbatim migration)")
 		}
+		// behavior 三个 RPC 必须走可选认证：挪回 anonymous 会让网关剥掉身份头，
+		// 登录用户的行为又只能按 anon_id 记（2026-09-23 修复的就是这个）。
+		for _, p := range []string{
+			"/behavior.v1.BehaviorService/Track",
+			"/behavior.v1.BehaviorService/Recommend",
+			"/behavior.v1.BehaviorService/SimilarItems",
+		} {
+			if !tbl.IsOptionalAuth(p) || tbl.IsAnonymous(p) {
+				t.Fatalf("%s: %s must be optional_auth, not anonymous", env, p)
+			}
+		}
 	}
 }
 

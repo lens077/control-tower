@@ -79,6 +79,8 @@ routes:
     timeout: 2s
 anonymous:
   - /echo.v1.EchoService/Ping
+optional_auth:
+  - /echo.v1.EchoService/Observe
 cors:
   allow_credentials: true
   allow_origins: ["http://localhost:3000"]
@@ -233,6 +235,45 @@ func TestProtectedWithTokenProxiesIdentity(t *testing.T) {
 	}
 	if e.lastBackendHeaders.Get("x-md-global-role") != "customer" {
 		t.Fatalf("role not injected: %v", e.lastBackendHeaders)
+	}
+}
+
+// 可选认证端到端：YAML 字段经 loader + protovalidate 生效，身份由真实 proxy 注入。
+// Observe 不在 Casbin 策略里（策略只放 customer 的 /echo.v1.EchoService/*），
+// 所以用无权限角色的令牌也能证明「放行不依赖 RBAC」。
+func TestOptionalAuthProxiesIdentityWhenPresent(t *testing.T) {
+	e := setup(t)
+	tok := e.token(t, func(c *authn.Claims) { c.Roles = []authn.Role{{Name: "nobody"}} })
+
+	resp := e.post(t, "/echo.v1.EchoService/Observe", tok, nil)
+
+	if resp.StatusCode != 200 {
+		t.Fatalf("status=%d reason=%s", resp.StatusCode, resp.Header.Get(gwerrors.HeaderReason))
+	}
+	if e.lastBackendHeaders.Get("x-md-global-user-id") != "u-alice" {
+		t.Fatalf("有效令牌应注入用户身份: %v", e.lastBackendHeaders)
+	}
+}
+
+func TestOptionalAuthPassesAnonymousWhenMissingOrInvalid(t *testing.T) {
+	e := setup(t)
+	expired := e.token(t, func(c *authn.Claims) {
+		c.IssuedAt = jwt.NewNumericDate(time.Now().Add(-time.Hour))
+		c.ExpiresAt = jwt.NewNumericDate(time.Now().Add(-time.Minute))
+	})
+
+	for name, bearer := range map[string]string{"无令牌": "", "过期令牌": expired} {
+		t.Run(name, func(t *testing.T) {
+			resp := e.post(t, "/echo.v1.EchoService/Observe", bearer, map[string]string{
+				"x-md-global-user-id": "forged",
+			})
+			if resp.StatusCode != 200 {
+				t.Fatalf("认不出身份也应放行，status=%d reason=%s", resp.StatusCode, resp.Header.Get(gwerrors.HeaderReason))
+			}
+			if got := e.lastBackendHeaders.Get("x-md-global-user-id"); got != "" {
+				t.Fatalf("匿名放行不得带身份头，后端收到 %q", got)
+			}
+		})
 	}
 }
 

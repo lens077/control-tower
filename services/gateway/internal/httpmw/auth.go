@@ -120,6 +120,20 @@ func Auth(d AuthDeps) func(http.Handler) http.Handler {
 				return
 			}
 
+			// 可选认证轨：认得出是谁就挂 claims（proxy 据此注入身份头），认不出按匿名放行。
+			//   - 任何识别失败都不写错误响应：这类 RPC 本来对匿名开放，返回 401 只会让埋点丢数据；
+			//   - cookie 会话的 Origin 不可信时同样降级为匿名，而不是拒绝——否则第三方站点
+			//     借用户 cookie 调用就能把行为记到该用户头上（污染画像），降级后只记成匿名；
+			//   - 不进 RBAC、不做在线校验：身份只用于归属，不用于授权。
+			// 触发原因见 route.proto 的 optional_auth 注释（2026-09-23，behavior 拿不到登录身份）。
+			if t.IsOptionalAuth(path) {
+				if res, fail := d.identify(r, ctx, now()); fail == nil && d.originTrusted(r, res) {
+					ctx = gwctx.WithClaims(ctx, res.claims)
+				}
+				next.ServeHTTP(w, r.WithContext(ctx))
+				return
+			}
+
 			if !t.IsAnonymous(path) {
 				res, ok := d.authenticate(w, r, ctx, now())
 				if !ok {
@@ -127,14 +141,9 @@ func Auth(d AuthDeps) func(http.Handler) http.Handler {
 				}
 				claims := res.claims
 
-				// CSRF 第一道防线：cookie 是「环境凭据」，浏览器会自动附带，
-				// 因此 cookie 轨的状态变更请求必须校验 Origin。
-				// header/bearer 轨不是环境凭据，攻击者拿不到，无需此校验。
-				if res.viaCookie && !safeMethod(r.Method) && d.OriginAllowed != nil {
-					if !d.OriginAllowed(r.Header.Get("Origin")) {
-						d.Errors.Write(w, r, connect.CodePermissionDenied, "CSRF_ORIGIN_REJECTED", "origin not allowed for state-changing request")
-						return
-					}
+				if !d.originTrusted(r, res) {
+					d.Errors.Write(w, r, connect.CodePermissionDenied, "CSRF_ORIGIN_REJECTED", "origin not allowed for state-changing request")
+					return
 				}
 
 				if t.NeedsOnlineCheck(path) {
@@ -172,38 +181,62 @@ type authResult struct {
 	viaCookie   bool   // 仅 cookie 轨需要 CSRF 校验
 }
 
+// authFailure 描述一次身份识别失败。写 401 还是降级为匿名由调用方决定。
+type authFailure struct {
+	code    connect.Code
+	reason  string
+	message string
+}
+
+// originTrusted 是 CSRF 的第一道防线：cookie 是「环境凭据」，浏览器会自动附带，
+// 因此 cookie 轨的状态变更请求必须校验 Origin。
+// header/bearer 轨不是环境凭据，攻击者拿不到，无需此校验。
+func (d AuthDeps) originTrusted(r *http.Request, res authResult) bool {
+	if !res.viaCookie || safeMethod(r.Method) || d.OriginAllowed == nil {
+		return true
+	}
+	return d.OriginAllowed(r.Header.Get("Origin"))
+}
+
 // authenticate 按 cookie → session header → legacy bearer 顺序识别身份。
 // 返回 ok=false 时错误响应已写出。
 func (d AuthDeps) authenticate(w http.ResponseWriter, r *http.Request, ctx context.Context, now time.Time) (authResult, bool) {
+	res, fail := d.identify(r, ctx, now)
+	if fail != nil {
+		d.Errors.Write(w, r, fail.code, fail.reason, fail.message)
+		return authResult{}, false
+	}
+	return res, true
+}
+
+// identify 是 authenticate 去掉「写错误响应」之后的部分，供可选认证轨复用：
+// 同一套三轨识别逻辑，失败时只返回原因。
+func (d AuthDeps) identify(r *http.Request, ctx context.Context, now time.Time) (authResult, *authFailure) {
 	// ── 轨一/轨二：BFF 会话（Sessions 为 nil 时整轨关闭，退化为纯 legacy）
 	if d.Sessions != nil {
 		if id, viaCookie := d.sessionID(r); id != "" {
 			sess, err := d.Sessions.Get(ctx, id)
 			if err != nil {
-				d.Errors.Write(w, r, connect.CodeUnauthenticated, "SESSION_INVALID", "session not found or expired")
-				return authResult{}, false
+				return authResult{}, &authFailure{connect.CodeUnauthenticated, "SESSION_INVALID", "session not found or expired"}
 			}
 			sess, err = d.ensureFresh(ctx, sess, now)
 			if err != nil {
 				// 续期被 IdP 拒 = 账户禁用/会话已撤，会话已在 ensureFresh 里删除。
-				d.Errors.Write(w, r, connect.CodeUnauthenticated, "SESSION_REVOKED", "session rejected by identity provider")
-				return authResult{}, false
+				return authResult{}, &authFailure{connect.CodeUnauthenticated, "SESSION_REVOKED", "session rejected by identity provider"}
 			}
-			return authResult{claims: claimsFromSession(sess), accessToken: sess.AccessToken, viaCookie: viaCookie}, true
+			return authResult{claims: claimsFromSession(sess), accessToken: sess.AccessToken, viaCookie: viaCookie}, nil
 		}
 	}
 
 	// ── 轨三：legacy bearer JWT。桌面端切换完成后按 bff-migration.md P4 拆除。
 	token := bearerToken(r)
 	if token == "" {
-		d.Errors.Write(w, r, connect.CodeUnauthenticated, "JWT_MISSING", "missing session cookie or bearer token")
-		return authResult{}, false
+		return authResult{}, &authFailure{connect.CodeUnauthenticated, "JWT_MISSING", "missing session cookie or bearer token"}
 	}
 	claims, err := d.Verifier.Verify(token, now)
 	if err != nil {
 		code, reason := classifyAuthnErr(err)
-		d.Errors.Write(w, r, code, reason, "authentication failed")
-		return authResult{}, false
+		return authResult{}, &authFailure{code, reason, "authentication failed"}
 	}
 	// 角色回退源：仅 legacy 轨需要（会话轨在登录时取一次，热路径零回源）。
 	if len(claims.RoleNames()) == 0 && d.Roles != nil {
@@ -213,7 +246,7 @@ func (d AuthDeps) authenticate(w http.ResponseWriter, r *http.Request, ctx conte
 			}
 		}
 	}
-	return authResult{claims: claims, accessToken: token}, true
+	return authResult{claims: claims, accessToken: token}, nil
 }
 
 // sessionID 取会话标识；第二个返回值标明是否来自 cookie（决定要不要查 Origin）。

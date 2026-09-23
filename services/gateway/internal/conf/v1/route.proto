@@ -45,6 +45,25 @@ message RouteConfig {
     }
   }];
 
+  // 可选认证清单：对所有人开放，但「认得出是谁就告诉下游」。
+  // 有效会话（cookie / 会话头 / legacy bearer）→ 注入与普通登录路由相同的身份头；
+  // 没带凭据、凭据无效或过期、cookie 会话的 Origin 不可信 → 按匿名放行，不注入任何身份头，
+  // 也不返回 401。不做 RBAC：这类 RPC 本来就对匿名开放，身份只用于归属，不用于授权。
+  //
+  // 为什么需要它（2026-09-23）：behavior 的 Track/Recommend/SimilarItems 原本放在 anonymous，
+  // 网关对匿名路径先剥身份头、再跳过认证，于是登录用户的行为也只能按浏览器里的 anonId 记，
+  // 推荐画像既跨不了设备，也没法把登录前的匿名行为并到真实用户。
+  //
+  // ⚠️ 下游不得把这类路由上的 user-id 当成「已登录」的授权依据来放行敏感操作：
+  // 它只保证「有值时可信」，不保证「一定有值」。
+  // 与 anonymous、guest 互斥，Build 时拒绝重叠。
+  repeated string optional_auth = 7 [(buf.validate.field).repeated = {
+    max_items: 128,
+    items: {
+      string: {min_len: 3, max_len: 256, prefix: "/"}
+    }
+  }];
+
   Auth auth = 4;
 
   // CORS 必填：网关是浏览器流量入口，漏配 CORS 等于对前端不可用。

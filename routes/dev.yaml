@@ -61,11 +61,6 @@ anonymous:
   # 可信性靠报文签名验证（payment 侧 DecodeNotification），不走网关认证。
   - /payment.v1.PaymentService/HandlePaymentNotify
   - /payment.v1.PaymentService/HandlePaymentCallback
-  # 行为埋点和推荐读取必须对未登录用户开放；身份用请求体里的 anon_id，
-  # 登录后网关注入的 x-md-global-user-id 自动接管。
-  - /behavior.v1.BehaviorService/Track
-  - /behavior.v1.BehaviorService/Recommend
-  - /behavior.v1.BehaviorService/SimilarItems
   # 性能上报同理：未登录用户的 LCP/卡顿同样要采，且 sendBeacon 带不了 JWT 头。
   - /telemetry.v1.TelemetryService/CollectWebVitals
   # 行政区划是公开只读字典：未登录也要能在地址表单选省市区。
@@ -81,6 +76,17 @@ guest:
   - /cart.v1.CartService/AddProductToCart
   - /cart.v1.CartService/RemoveCartItem
   - /cart.v1.CartService/UpdateCartItemQuantity
+
+# 可选认证清单：对所有人开放，认得出会话就注入与登录路由相同的身份头，
+# 认不出（没凭据 / 过期 / cookie 的 Origin 不可信）按匿名放行，不返回 401、不做 RBAC。
+# 行为埋点与推荐读取放这里：未登录用户靠请求体里的 anon_id，登录用户由网关注入的
+# x-md-global-user-id 接管，behavior 据此把登录前的匿名行为并到真实用户。
+# 2026-09-23 前它们在 anonymous 里，网关会剥掉身份头，登录用户也只能记成 anon:。
+# ⚠️ 这里的 user-id 只保证「有值时可信」，下游不得据此放行需要登录的操作。
+optional_auth:
+  - /behavior.v1.BehaviorService/Track
+  - /behavior.v1.BehaviorService/Recommend
+  - /behavior.v1.BehaviorService/SimilarItems
 
 auth:
   # 高危路由实时在线校验（fail-close），初始为空；候选见 docs/design/auth.md。

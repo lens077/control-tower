@@ -10,8 +10,12 @@ Client（Connect/JSON 或 gRPC-Web）
 → recover → otelhttp → access log
 → CORS（OPTIONS 短路）
 → 身份头剥离（无条件删除入站 x-md-global-*）
-→ 路由匹配（一级 proto 包名，如 /user.v1.UserService/SignIn 取 user）→ 匿名清单判定
-→ [非匿名] JWT 验签（iss/aud/tokenType/sub/iat/exp + 60s leeway）
+→ 路由匹配（一级 proto 包名，如 /user.v1.UserService/SignIn 取 user）→ 路由类别判定
+→ [访客 guest] 识别/签发访客 cookie，注入访客身份，不验 JWT、不进 RBAC
+→ [可选认证 optional_auth] 走同一套会话/JWT 识别；成功且（cookie 轨）Origin 可信则注入用户身份，
+   任何失败都按匿名放行、不写错误；不进 RBAC、不做在线校验
+→ [匿名 anonymous] 不识别、不注入
+→ [其余] JWT 验签（iss/aud/tokenType/sub/iat/exp + 60s leeway）
    → 撤销名单查表（内存，Watch 秒级更新）
    → [online_check 路由] Casdoor 实时校验（fail-close）
    → Casbin（角色数组 × procedure）
@@ -29,6 +33,8 @@ Client（Connect/JSON 或 gRPC-Web）
 - 重试默认关闭；无请求体缓存。
 - `RawPath != Path`（含转义）直接 404；路径长度设上限；大小写敏感；`/healthz`、`/readyz` 先于包路由注册，永不代理。
 - `/readyz` 就绪条件 = 路由表 + JWT 公钥 + Casbin 模型/策略全部加载成功。
+- 路由类别四选一：`anonymous`（完全无身份）、`guest`（访客身份）、`optional_auth`（认得出就注入用户身份，认不出按匿名）、其余（必须登录 + RBAC）。前三类清单两两互斥，Build 时拒绝重叠。
+- `optional_auth` 上的 `x-md-global-user-id` 只保证「有值时可信」：下游只能用它做归属（如行为画像），不得据此放行需要登录的操作。当前只有 behavior 的 Track/Recommend/SimilarItems（2026-09-23 从 anonymous 挪入：留在 anonymous 时网关剥掉身份头，登录用户也只能按匿名记，推荐画像跨不了设备）。
 - `GET /admin/health/services` 是固定本地只读管理端点：复用现有身份认证，显式要求 `admin`，不进入业务匿名/访客清单，也不放宽 RPC 的 POST-only Casbin 规则；探测口径、响应字段和资源上限见 [service-health.md](service-health.md)。
 
 ## 配置与自举
