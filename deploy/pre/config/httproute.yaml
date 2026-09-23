@@ -17,7 +17,7 @@ spec:
       namespace: default
       sectionName: https
   hostnames:
-    - "config.app.com"
+    - "config.dev.test"
     - "config.apikv.com"
   rules:
     - matches:
@@ -39,7 +39,7 @@ spec:
       namespace: default
       sectionName: https
   hostnames:
-    - "config-api.app.com"
+    - "config-api.dev.test"
     - "config-api.apikv.com"
   rules:
     - matches:

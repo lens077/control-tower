@@ -29,8 +29,8 @@ spec:
     - digital signature
     - key encipherment
   dnsNames:
-    - "config.app.com"
-    - "config-api.app.com"
+    - "config.dev.test"
+    - "config-api.dev.test"
     # 集群内直连用的 Service DNS —— server.tls 开启后,SDK 校验证书时用得上
     - "config-center.config-center.svc"
     - "config-center.config-center.svc.cluster.local"
