@@ -1,6 +1,7 @@
 # 鉴权设计：JWT 信任域、混合撤权与操作手册
 
-> 「为什么是 bearer JWT 而不是 cookie session」的权衡、翻案触发条件与迁移代价见 [ADR-0001](adr-0001-token-model.md)。
+> 现行鉴权决策是 [ADR-0002](adr-0002-bff-session.md)（BFF + 服务端 session），实施进度见 [bff-migration.md](bff-migration.md)。
+> 本文描述的 bearer JWT 与撤销名单是 legacy 轨，在 bff-migration P4 拆除前仍在服务。
 
 ## 结论摘要
 

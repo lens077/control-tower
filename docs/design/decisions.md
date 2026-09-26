@@ -28,9 +28,9 @@
 
 ## 鉴权侧
 
-> token 载体选型见 [ADR-0002](adr-0002-bff-session.md)（BFF + 服务端 session），它取代了 [ADR-0001](adr-0001-token-model.md)。
+> token 载体选型见 [ADR-0002](adr-0002-bff-session.md)（BFF + 服务端 session），它取代了早先的 bearer JWT 方案（ADR-0001，已删除，见 git 历史）。
 >
-> ⚠️ **本节下列条目处于翻案过渡期**：ADR-0002 已拍板但尚未实施（手顺见 [bff-migration.md](bff-migration.md)）。
+> ⚠️ **本节下列条目处于翻案过渡期**：ADR-0002 的 P1/P3 已真机验证，P2 已在 consumer-next 上线（BFF 登录），P4（拆除 legacy bearer 轨）尚未执行（手顺见 [bff-migration.md](bff-migration.md)）。
 > 在 P4 拆除阶段完成前，撤销名单机制与 `CasdoorRoleSource` 仍服务于 legacy bearer 轨，**不得提前删除**。
 
 | 能力 | 处置 | 原因 | 重新引入触发条件 |

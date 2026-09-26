@@ -1,6 +1,4 @@
-# control-tower 网关（dev）。与旧网关并行部署在同一 namespace，
-# 切流 = 把 ecommerce-gateway-service 的 selector 从 app: ecommerce-gateway
-# 改为 app: control-tower-gateway；回滚 = 改回（手顺：docs/design/cutover.md）。
+# control-tower 网关（dev）。
 #
 # ⚠️ 本 overlay 只服务**本地开发**：下面的 BFF 三项（BFF_PUBLIC_BASE_URL /
 #    BFF_ALLOWED_REDIRECTS = http://localhost:3000，SESSION_COOKIE_INSECURE=true）

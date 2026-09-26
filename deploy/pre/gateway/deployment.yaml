@@ -1,6 +1,4 @@
-# control-tower 网关（pre）。与旧网关并行部署在同一 namespace，
-# 切流 = 把 ecommerce-gateway-service 的 selector 从 app: ecommerce-gateway
-# 改为 app: control-tower-gateway；回滚 = 改回（手顺：docs/design/cutover.md）。
+# control-tower 网关（pre）。对外环境只 apply 这一份；前置对象见 deploy/README.md。
 apiVersion: apps/v1
 kind: Deployment
 metadata:

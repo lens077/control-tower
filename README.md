@@ -9,7 +9,7 @@
 
 由 ecommerce 旧网关（go-kratos/gateway fork）与 config-center 合并重写而来。前端与后端 10 服务经网关的调用路径、错误契约保持不变；迁移决策与对抗评审档案见工作区 `.migration-scratch/`。
 
-**两个服务都已切流上线**：gateway 在 `ecommerce` 命名空间（`control-tower-gateway`，LB `192.168.3.131:8080`），config 与 config-web 在 `config-center` 命名空间。
+部署现状（哪些在跑、地址、前置对象）以 `AGENTS.md`「部署现状」为准，本文不重复。
 
 > ⚠️ `config-center` 这个命名空间与 Deployment 名只是**没改的遗留标签**，里面跑的镜像是本仓的 `control-tower-config` / `control-tower-config-web`。看到这个名字不要以为旧 config-center 仓还在跑——它已退役。
 
@@ -20,7 +20,7 @@
 - `docs/design/auth.md` — JWT 信任域、混合撤权三场景操作手册
 - `docs/design/machine-token.md` — 数据面凭据设计
 - `docs/design/decisions.md` — 砍掉/不做清单及原因
-- `docs/design/cutover.md` — 切流与回滚手顺
+- `docs/operations/configctl.md` — 命令行写 Config Center
 - `AGENTS.md` — 协作基线与硬约束
 
 ## 常用命令
@@ -32,25 +32,19 @@ make breaking-legacy   # wire 冻结门禁：对旧 config-center 仓 WIRE_JSON 
 make test-crossversion # 旧 SDK v0.1.0 → 新服务的跨版本实测（需本机 docker）
 ```
 
-## 本地开发（Mac 直连内网集群）
+## 本地开发
 
 ```bash
-scripts/dev-local.sh config     # config 服务：PG 端口转发 + Dragonfly/Consul LAN 直连
-scripts/dev-local.sh gateway    # 网关：file 模式（见下）
+make config                     # 等价于 scripts/dev-local.sh config
 scripts/dev-local.sh print      # 只渲染配置看结构（口令脱敏）
 ```
 
-凭据运行时从集群 Secret 取、渲染进临时文件（0600）、退出即删——不进仓库也不进日志。三条依赖通路各不相同：
+`dev-local.sh config` 读 sibling kubernetes 仓 `components/{postgres,dragonfly}/component.env` 的依赖契约，
+从 K8s Secret 取账密与 CA，渲染 0600 临时配置、退出即删，凭据不进仓库也不进日志。
+PostgreSQL 走 `pg-dev.apikv.com:30001`，Redis（Dragonfly）走 `redis-dev.apikv.com:30005`，均为 TLS 直通；
+System 页面的历史曲线查 `https://metrics.apikv.com`（`METRIC_QUERY_ENDPOINT` 可覆盖）。
 
-| 依赖 | 通路 | 原因 |
-|---|---|---|
-| PostgreSQL | `kubectl port-forward svc/pg-main-rw`（脚本自动起） | 集群里只有 ClusterIP，LAN 不可达 |
-| Dragonfly（Redis） | LAN 直连 `192.168.3.122:6380`（TLS，skip verify） | Cilium Gateway 已暴露；按 IP 访问证书不匹配 |
-| Consul | LAN 直连 `192.168.3.120:8500` + ACL token | `consul-expose-servers` LoadBalancer；**无 token 会静默返回 `{}`** 而不是报错 |
-
-本地跑 config 服务时 `CONSUL_ENABLED=false` 是硬要求：本机实例注册进集群目录后，集群内客户端可能把流量解析到你的 Mac。
-
-**网关本地跑的限制**：Consul 里注册的是 Pod IP（`10.244.x.x`），Mac 路由不到，`discovery:///` 在本机无效。脚本的 `gateway` 子命令用 file 模式（自动从集群拉 public.pem/policies/model），把 `routes.yaml` 的 target 改成 `direct://127.0.0.1:<端口>` 并自行 `kubectl port-forward` 对应后端即可。
+本地跑 config 服务时 `CONSUL_ENABLED=false` 是硬要求（脚本已内置）：本机实例注册进集群目录后，集群内客户端可能把流量解析到你的 Mac。
 
 完全离线（不碰集群）：`make test-crossversion` 那套 throwaway Postgres/Redis，或手写 `CONFIG_FILE` 指向 `services/config/tests/oldsdk/harness-config.yaml`。
 
@@ -58,7 +52,7 @@ web 控制台：`cd web && pnpm install && pnpm dev`（端口 3005，已在上�
 
 ## 发布
 
-CI 由裸 semver tag（`X.Y.Z`）触发：质量门禁 + 三镜像（gateway/config/config-web）推 GHCR（配置 TCR Secrets 后双推）。PR 只跑质量门禁；push main 不构建。部署清单在 `deploy/{dev,pre}`，切流手顺见 `docs/design/cutover.md`。
+PR 只跑质量门禁；push main 与裸 semver tag（`X.Y.Z`）通过门禁后构建三镜像（gateway/config/config-web）并双推 GHCR + TCR，集群从 TCR 拉。部署清单在 `deploy/{dev,pre}`，对外环境只用 `deploy/pre/`，前置操作见 `deploy/README.md`。
 
 ## 许可
 

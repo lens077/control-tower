@@ -5,7 +5,7 @@
 ## 为什么打真环境
 
 这套用例的价值全在于覆盖只有真环境才会暴露的东西：CSP 响应头、Pangolin 隧道、
-Casdoor 单点登录、node3 上的 PostgreSQL / Redis / VictoriaMetrics。本地起 mock 一个都测不到。
+Casdoor 单点登录、集群内的 PostgreSQL / Redis / VictoriaMetrics。本地起 mock 一个都测不到。
 代价是它依赖外部可用性，因此失败要先看是不是环境抖动，再看是不是代码回归。
 
 ## 跑起来
@@ -26,7 +26,7 @@ E2E_USERNAME=<账号> E2E_PASSWORD=<口令> pnpm test
 | `E2E_CONFIG_URL` | `https://config.apikv.com` |
 | `E2E_CONFIG_API_URL` | `https://config-api.apikv.com` |
 | `E2E_GATEWAY_URL` | `https://gateway.apikv.com` |
-| `E2E_METRICS_URL` | `http://metrics.apikv.com` |
+| `E2E_METRICS_URL` | `http://metrics.apikv.com`（现在 302 跳 https，可直接设成 `https://metrics.apikv.com`） |
 | `E2E_ADMIN_MUTATIONS` | `false`；设为 `true` 时运行 Machine Token 签发/吊销测试 |
 
 管理面变更测试需要显式打开：
