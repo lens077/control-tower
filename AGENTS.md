@@ -9,8 +9,8 @@ node3（Pigsty）已于 2026-09-03 退役，数据面全部回到集群内。重
 
 | 服务 | 集群状态 | 备注 |
 |---|---|---|
-| config | `config-center/config-center` **运行中**（`0.2.11`，TCR，1 副本） | `config-center.config-center.svc:30010`；按 `deploy/pre/config/deployment.yaml` 手工 `kubectl apply`（`DEPLOYMENT_MODE=pre`），2026-09-23 起 |
-| config web | `config-center/config-center-web` **运行中**（`0.2.15`，TCR） | `config-center-web.config-center.svc:80`；来自 `deploy/pre/config/web-deployment.yaml` |
+| config | `config-center/config-center` **运行中**（`sha-68386e8`，TCR，1 副本） | `config-center.config-center.svc:30010`；按 `deploy/pre/config/deployment.yaml` 手工 `kubectl apply`（`DEPLOYMENT_MODE=pre`），2026-09-27 由 `0.2.11` 升级 |
+| config web | `config-center/config-center-web` **运行中**（`sha-68386e8`，TCR） | `config-center-web.config-center.svc:80`，即 `config.apikv.com`；来自 `deploy/pre/config/web-deployment.yaml`，2026-09-27 由 `0.2.15` 升级 |
 | gateway | **未部署**：`ecommerce` ns 里没有 `control-tower-gateway`，也没有 `ecommerce-gateway-service` | 仓库 manifest 已是 `0.2.17`；缺的前置对象见下 |
 
 公网探活（2026-09-27）：`config.apikv.com/` 200、`config-api.apikv.com/healthz` 200；
