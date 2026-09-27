@@ -35,7 +35,8 @@ make test-crossversion # 旧 SDK v0.1.0 → 新服务的跨版本实测（需本
 ## 本地开发
 
 ```bash
-make config                     # 等价于 scripts/dev-local.sh config
+make dev                        # config 服务（:30010）+ 控制台（:3005）一起起，Ctrl-C 一起停
+make config                     # 只起 config 服务，等价于 scripts/dev-local.sh config
 make gateway                    # 等价于 scripts/dev-local.sh gateway，监听 :8080
 scripts/dev-local.sh print      # 只渲染配置看结构（口令脱敏）
 ```
