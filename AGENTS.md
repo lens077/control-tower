@@ -70,6 +70,9 @@ git tag X.Y.Z && git push origin X.Y.Z
   release job 用 GitHub Secret `GITLAB_PUSH_TOKEN`（GitLab 项目访问令牌
   `github-actions-release-20260927`，Developer / write_repository，2027-09-27 到期）推过去；
   平时改代码只推 GitHub，GitLab 只在发布时更新。GitLab 领先于 GitHub 时 release job 拒绝推送。
+  **两次发布之间 GitLab 落后于 GitHub main 是正常状态，不是漂移**——GitLab 不由人改，永远是 GitHub main
+  某个提交的副本。只改 `deploy/chart/` 或 `deploy/argocd/` 又不想发版本时，`git push gitlab main` 手动同步
+  即可（本地 remote `gitlab` 已配），详见 `docs/operations/argocd-helm-gitops.md`「GitHub 与 GitLab 什么时候同步」。
 - Argo 对象在 `deploy/argocd/`（AppProject + 两个 Application + repo），由人 `kubectl apply`；
   Secret 与 Namespace 不归 Argo 管。ecommerce ns 的网关与 config-center 的 config 是两个 Application。
 - 提交说明里不要出现跳过 CI 的字面标记（连引用都不行）：GitHub 按 head 提交判断，tag 推送也会被整个跳过。

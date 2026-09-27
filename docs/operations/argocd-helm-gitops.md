@@ -49,6 +49,30 @@ git tag X.Y.Z → push
 Argo CD 本身：`argocd` ns，v3.5.3，公网 `https://argocd.apikv.com`。本机用 CLI 不必登录：
 把 context 的 namespace 切到 `argocd` 后加 `--core`（直接用 kubeconfig）。
 
+## GitHub 与 GitLab 什么时候同步
+
+常见疑问：「GitLab 是不是要人手同步？」不需要，但同步**只发生在打发布 tag 时**，不是每次 push main。
+
+| 你做的事 | GitHub main | GitLab main | Argo CD / 线上 |
+|---|---|---|---|
+| `git push origin main`（改代码、改文档、改 chart） | 更新 | **不动** | 不动 |
+| `git tag X.Y.Z && git push origin X.Y.Z` | release job 提交 `release: X.Y.Z → pre` | release job fast-forward 推过去 | webhook 触发，同步上线 |
+
+这是刻意的：线上只跟发布走，不跟每次 push 走。所以两次发布之间 GitLab 落后于 GitHub main 是**正常状态**，
+不是漂移——GitLab 从来不由人改，内容永远是 GitHub main 某个提交的字节级副本。
+
+由此带来的一个边界：**只改了 `deploy/chart/` 或 `deploy/argocd/`（副本数、资源、HTTPRoute……）但不发版本**，
+Argo 不会看到，因为 GitLab 还是旧的。两个选择：等下一个 tag 一起生效；或立即手动同步：
+
+```bash
+git push gitlab main        # 本地已配 remote gitlab = git@gitlab.com:sumery/control-tower.git
+```
+
+手动推也必须是 fast-forward。GitLab 领先于 GitHub 的唯一原因是有人直接往 GitLab 推了东西，
+这不该发生；出现时把那个提交挪回 GitHub，再 `git push --force-with-lease gitlab main` 对齐。
+
+需要人介入的只有两种情况：上述 GitLab 领先；`GITLAB_PUSH_TOKEN` 到期（2027-09-27）。
+
 ## 正常发布
 
 ```bash
