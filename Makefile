@@ -1,6 +1,6 @@
 # control-tower 聚合入口。目标保持幂等；CI 与本地共用。
 
-.PHONY: api api-go api-ts tools check-gen lint build test tidy verify config sync-ecommerce-schemas
+.PHONY: api api-go api-ts tools check-gen lint build test tidy verify config dev gateway sync-ecommerce-schemas
 
 # 重新生成 proto 产物：Go + Connect（buf.gen.yaml）与控制台 TS（buf.gen.ts.yaml → web/src/gen）。
 # 两份必须一起出：只跑 Go 那份会让 web/src/gen 悄悄落后于 proto（2026-09-15 实测 system.proto
@@ -48,6 +48,14 @@ verify: build lint test
 # 本机启动配置中心；脚本负责渲染临时配置并关闭不适用的本地依赖。
 config:
 	./scripts/dev-local.sh config
+
+# 本机同时启动配置中心（:30010）与控制台（:3005），Ctrl-C 一起停。
+dev:
+	./scripts/dev-local.sh dev
+
+# 本机启动网关：工件取自 Config Center，业务后端自动 port-forward，BFF 会话走 redis-dev。
+gateway:
+	./scripts/dev-local.sh gateway
 
 # 从 sibling ecommerce 仓同步 10 个服务的 Bootstrap Schema 快照。
 sync-ecommerce-schemas:

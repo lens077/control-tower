@@ -2,6 +2,7 @@
 # 在 Mac 上跑 control-tower。
 #
 #   scripts/dev-local.sh config     # 起 config 服务
+#   scripts/dev-local.sh dev        # 同时起 config 服务与控制台（见 run_dev 上方说明）
 #   scripts/dev-local.sh gateway    # 起网关（file 模式，见 run_gateway 上方说明）
 #   scripts/dev-local.sh print      # 只渲染配置并打印路径，不启动
 #
@@ -38,9 +39,27 @@ CFG=""
 CASDOOR_PEM=""
 GW_DIR=""
 PF_PIDS=""
+# dev 模式下后端与控制台各自的进程组号（= 组长 pid）。停要停整组：
+# go run 与 pnpm 都会再派生真正的服务进程，只杀父进程会留下孤儿继续占着端口。
+DEV_PGIDS=""
+
+stop_dev_groups() {
+  local pgid i
+  [ -n "$DEV_PGIDS" ] || return 0
+  for pgid in $DEV_PGIDS; do kill -TERM -- "-$pgid" 2>/dev/null || true; done
+  # 给 3 秒优雅退出，还在的直接 KILL
+  for i in 1 2 3 4 5 6; do
+    for pgid in $DEV_PGIDS; do kill -0 -- "-$pgid" 2>/dev/null && break; pgid=""; done
+    [ -z "$pgid" ] && break
+    sleep 0.5
+  done
+  for pgid in $DEV_PGIDS; do kill -KILL -- "-$pgid" 2>/dev/null || true; done
+  DEV_PGIDS=""
+}
 
 cleanup() {
   local pid
+  stop_dev_groups
   for pid in $PF_PIDS; do kill "$pid" 2>/dev/null || true; done
   [ -n "$CFG" ] && rm -f "$CFG" || true
   [ -n "$CASDOOR_PEM" ] && rm -f "$CASDOOR_PEM" || true
@@ -428,6 +447,91 @@ run_gateway() {
     go run ./services/gateway/cmd/server
 }
 
+# 起 config 服务（前台执行，调用方决定是否放后台）。需要先 prepare_config。
+run_config_server() {
+  cd "$ROOT"
+  # 本机实例不能注册进集群 Consul，否则集群内客户端可能解析到 Mac。
+  CONFIG_FILE="$CFG" \
+  CASDOOR_CERTIFICATE_FILE="$CASDOOR_CERTIFICATE_FILE" \
+  CASDOOR_ISSUER="$CASDOOR_ISSUER" \
+  CASDOOR_AUDIENCE="$CASDOOR_AUDIENCE" \
+  CONSUL_ENABLED=false \
+  go run ./services/config/cmd/server
+}
+
+# ─── 后端 + 控制台一起起 ───────────────────────────────────────────────────
+#
+# 两个进程共用一个终端，输出按 [config] / [web] 加前缀。Ctrl-C 两个一起停；
+# 任何一个自己退出，另一个也会被停掉，不会留下「前端还开着、后端早没了」的半套环境。
+#
+# 端口必须是 30010 与 3005：web/public/config.json 的 apiUrl 写死 30010，
+# config 服务的 CORS 白名单与 Casdoor 回调只登记了 localhost:3005。
+# 控制台自己的配置是端口被占就顺延（strictPort: false），这里显式加 --strictPort，
+# 并在启动前检查，被占就直接报错，不让它悄悄换到 3006 然后登录失败。
+
+CONFIG_HTTP_PORT=30010
+WEB_PORT=3005
+
+# 给子进程输出加前缀；awk 逐行 fflush，避免两路输出攒着一起出。
+prefix() { awk -v p="$1" '{ print p $0; fflush() }'; }
+
+wait_until() {
+  local what=$1 seconds=$2 check=$3 i=0
+  until eval "$check"; do
+    for pgid in $DEV_PGIDS; do
+      kill -0 -- "-$pgid" 2>/dev/null || die "$what 未就绪进程就退出了，看上面的输出"
+    done
+    i=$((i + 1))
+    [ "$i" -lt $((seconds * 2)) ] || die "$what ${seconds} 秒内未就绪"
+    sleep 0.5
+  done
+}
+
+run_dev() {
+  local config_pid web_pid pgid
+  need pnpm
+  need lsof
+  need curl
+  [ -d "$ROOT/web/node_modules" ] || die "控制台依赖未安装：先 cd web && pnpm install"
+  port_in_use "$CONFIG_HTTP_PORT" && die ":$CONFIG_HTTP_PORT 已被占用（是不是已经开着 make config？）：$(lsof -nP -iTCP:"$CONFIG_HTTP_PORT" -sTCP:LISTEN | awk 'NR==2 {print $1" pid "$2}')"
+  port_in_use "$WEB_PORT" && die ":$WEB_PORT 已被占用（是不是已经开着 pnpm dev？）：$(lsof -nP -iTCP:"$WEB_PORT" -sTCP:LISTEN | awk 'NR==2 {print $1" pid "$2}')"
+
+  prepare_config
+
+  # 打开作业控制：每个后台作业自成一个进程组，便于整组停止。
+  # 代价是终端的 Ctrl-C 只发给脚本自己，所以下面自己接 INT/TERM 再统一收尾。
+  set -m
+  trap 'echo; echo "→ 正在停止后端与控制台…"; exit 130' INT
+  trap 'exit 143' TERM
+
+  run_config_server > >(prefix "[config] ") 2>&1 &
+  config_pid=$!
+  DEV_PGIDS="$config_pid"
+
+  (cd "$ROOT/web" && exec pnpm dev --strictPort) > >(prefix "[web]    ") 2>&1 &
+  web_pid=$!
+  DEV_PGIDS="$DEV_PGIDS $web_pid"
+
+  echo "→ 等待后端 http://localhost:$CONFIG_HTTP_PORT/healthz（首次 go run 需要编译）…"
+  wait_until "后端" 180 "curl -sf -o /dev/null http://localhost:$CONFIG_HTTP_PORT/healthz"
+  wait_until "控制台" 60 "port_in_use $WEB_PORT"
+  echo
+  echo "✓ 后端 http://localhost:$CONFIG_HTTP_PORT   控制台 http://localhost:$WEB_PORT"
+  echo "  打开 http://localhost:$WEB_PORT ；Ctrl-C 同时停止两者"
+  echo
+
+  # Bash 3.2 没有 wait -n，轮询两个进程组，任一退出就收尾
+  while :; do
+    for pgid in $DEV_PGIDS; do
+      if ! kill -0 -- "-$pgid" 2>/dev/null; then
+        [ "$pgid" = "$config_pid" ] && echo "→ 后端已退出，停止控制台" || echo "→ 控制台已退出，停止后端"
+        exit 1
+      fi
+    done
+    sleep 1
+  done
+}
+
 case "${1:-config}" in
   print)
     prepare_config
@@ -437,21 +541,18 @@ case "${1:-config}" in
 
   config)
     prepare_config
-    echo "→ 服务将监听 http://127.0.0.1:30010（只启动后端）"
-    echo "→ 控制台不随本命令启动：另开终端 cd web && pnpm dev，再打开 http://localhost:3005（已在 CORS 白名单）"
-    cd "$ROOT"
-    # 本机实例不能注册进集群 Consul，否则集群内客户端可能解析到 Mac。
-    CONFIG_FILE="$CFG" \
-    CASDOOR_CERTIFICATE_FILE="$CASDOOR_CERTIFICATE_FILE" \
-    CASDOOR_ISSUER="$CASDOOR_ISSUER" \
-    CASDOOR_AUDIENCE="$CASDOOR_AUDIENCE" \
-    CONSUL_ENABLED=false \
-    go run ./services/config/cmd/server
+    echo "→ 服务将监听 http://127.0.0.1:$CONFIG_HTTP_PORT（只启动后端）"
+    echo "→ 控制台不随本命令启动：另开终端 cd web && pnpm dev，或改用 make dev 一起启动"
+    run_config_server
+    ;;
+
+  dev)
+    run_dev
     ;;
 
   gateway)
     run_gateway
     ;;
 
-  *) echo "用法: $0 [config|gateway|print]"; exit 64 ;;
+  *) echo "用法: $0 [config|dev|gateway|print]"; exit 64 ;;
 esac
