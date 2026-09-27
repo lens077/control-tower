@@ -10,6 +10,16 @@
       "config": "Configuration"
     }
   },
+  "settings": {
+    "title": "Settings",
+    "appearance": "Appearance",
+    "colorMode": {
+      "system": "System",
+      "light": "Light",
+      "dark": "Dark"
+    },
+    "systemHint": "Follows your operating system's appearance; currently {{mode}}."
+  },
   "action": {
     "save": "Save",
     "delete": "Delete",

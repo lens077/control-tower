@@ -228,7 +228,7 @@ export function TokensPage({ api = configApi, initialIssueOpen = false, initialI
         <Alert severity="error">{t("tokens.loadFailed", { message: describeError(tokensQuery.error, t) })}</Alert>
       ) : tokens.length === 0 ? (
         <Box sx={{ py: sp[10], textAlign: "center", border: `1px dashed ${ground.lineStrong}`, borderRadius: "8px" }}>
-          <KeyRound size={22} color={ink.faint} />
+          <KeyRound size={22} style={{ color: ink.faint }} />
           <Typography sx={{ mt: sp[2], fontSize: 13, color: ink.muted }}>
             {t(serviceName || environment ? "tokens.emptyFiltered" : "tokens.empty")}
           </Typography>
@@ -415,7 +415,7 @@ function TokenCard({
   return (
     <Card sx={{ opacity: token.disabled ? 0.72 : 1 }}>
       <Box sx={{ px: sp[4], py: sp[3], display: "flex", flexWrap: "wrap", alignItems: "center", gap: sp[2] }}>
-        <KeyRound size={15} color={token.disabled ? ink.faint : state.active} />
+        <KeyRound size={15} style={{ color: token.disabled ? ink.faint : state.active }} />
         <Typography sx={{ fontFamily: font.mono, fontSize: 13.5, fontWeight: 500, color: ink.strong }}>
           {token.serviceName}
         </Typography>

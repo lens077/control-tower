@@ -24,7 +24,7 @@ import { useAuthState } from "@/providers/AuthProvider";
 import { editorStore, setEnvironment, setNamespace } from "@/store/editor";
 import { ENV_OPTIONS, formatLabel } from "@/lib/format";
 import { fmtRelative } from "@/lib/time";
-import { band, envTone, font, grain, ground, hairline, ink, sheen, sp, state } from "@/styles/tokens";
+import { envTone, font, grain, ground, hairline, ink, sheen, sp, state, ui } from "@/styles/tokens";
 import { NewKeyDialog } from "./NewKeyDialog";
 
 export const EXPLORER_WIDTH = 288;
@@ -288,10 +288,10 @@ export function Explorer() {
             sx={{
               color: ink.strong,
               border: "1px solid transparent",
-              background: `linear-gradient(${band.violet}66, ${band.violet}66) padding-box, ${sheen} border-box`,
+              background: `linear-gradient(${ui.primaryVeil}, ${ui.primaryVeil}) padding-box, ${sheen} border-box`,
               "&:hover": {
                 color: ink.strong,
-                background: `linear-gradient(${band.violet}99, ${band.violet}99) padding-box, ${sheen} border-box`,
+                background: `linear-gradient(${ui.primaryVeilHover}, ${ui.primaryVeilHover}) padding-box, ${sheen} border-box`,
               },
             }}
           >
@@ -339,8 +339,7 @@ export function Explorer() {
         {narrow && onKeyRoute && (
           <ChevronDown
             size={14}
-            color={ink.faint}
-            style={{ transform: listCollapsed ? "rotate(-90deg)" : "none", transition: "transform 150ms ease-out" }}
+            style={{ color: ink.faint, transform: listCollapsed ? "rotate(-90deg)" : "none", transition: "transform 150ms ease-out" }}
           />
         )}
       </Box>
@@ -558,7 +557,7 @@ function KeyRow({
               sx={{ width: 6, height: 6, borderRadius: "50%", bgcolor: state.active, flexShrink: 0 }}
             />
           )}
-          {entry.isSecret && <Lock size={11} color={ink.faint} aria-label={t("edit.secret")} />}
+          {entry.isSecret && <Lock size={11} style={{ color: ink.faint }} aria-label={t("edit.secret")} />}
           <Box
             component="span"
             sx={{ fontSize: 10.5, color: ink.faint, letterSpacing: "0.04em", flexShrink: 0 }}

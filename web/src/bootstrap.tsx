@@ -12,6 +12,7 @@ import "@fontsource-variable/source-sans-3";
 import "@fontsource-variable/jetbrains-mono";
 import { routeTree } from "./routeTree.gen";
 import { createAppTheme } from "@/styles/theme";
+import { useColorMode } from "@/styles/color-mode";
 import { AuthProvider, useAuthActions, useAuthState } from "@/providers/AuthProvider";
 
 const router = createRouter({
@@ -55,10 +56,11 @@ const queryClient = new QueryClient({
 
 const MUI_LOCALES = { "zh-CN": zhCN, en: enUS } as const;
 
-/** 主题跟着语言重建,把 MUI 内置组件的文案也带上。 */
+/** 主题跟着配色模式(默认跟随系统)与语言重建,把 MUI 内置组件的文案也带上。 */
 function LocalizedTheme({ children }: { children: ReactNode }) {
   const { locale } = useLocale();
-  const theme = useMemo(() => createAppTheme(MUI_LOCALES[locale]), [locale]);
+  const { mode } = useColorMode();
+  const theme = useMemo(() => createAppTheme(mode, MUI_LOCALES[locale]), [mode, locale]);
   return <ThemeProvider theme={theme}>{children}</ThemeProvider>;
 }
 

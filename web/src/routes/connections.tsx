@@ -70,7 +70,7 @@ function ConnectionsPage() {
         <Alert severity="error">{t("connections.loadFailed", { message: toAppError(query.error).message })}</Alert>
       ) : connections.length === 0 ? (
         <Box sx={{ py: sp[10], textAlign: "center", border: `1px dashed ${ground.lineStrong}`, borderRadius: "8px" }}>
-          <Unplug size={22} color={ink.faint} />
+          <Unplug size={22} style={{ color: ink.faint }} />
           <Typography sx={{ mt: sp[2], fontSize: 13, color: ink.muted }}>{t("connections.empty")}</Typography>
         </Box>
       ) : (

@@ -29,7 +29,8 @@ import { formatToLanguage } from "@/lib/format";
 import { lineDelta } from "@/lib/linediff";
 import { fmtAbsolute, fmtRelative } from "@/lib/time";
 import { setEnvironment, setNamespace } from "@/store/editor";
-import { CLOUD_THEME, defineCloudTheme } from "@/monaco-theme";
+import { cloudTheme, defineCloudThemes } from "@/monaco-theme";
+import { useColorMode } from "@/styles/color-mode";
 import { envTone, font, grain, ground, hairline, ink, sp, state } from "@/styles/tokens";
 import { EnvBand } from "@/components/Explorer";
 
@@ -54,6 +55,7 @@ function HistoryPage() {
   const { ns, env, key } = Route.useSearch();
   const navigate = useNavigate();
   const qc = useQueryClient();
+  const { mode: colorMode } = useColorMode();
 
   const [selected, setSelected] = useState<number | null>(null);
   const [compareWith, setCompareWith] = useState<"current" | "prev">("current");
@@ -287,8 +289,8 @@ function HistoryPage() {
         <DiffEditor
           height="100%"
           language={language}
-          theme={CLOUD_THEME}
-          beforeMount={(monaco) => defineCloudTheme(monaco)}
+          theme={cloudTheme(colorMode)}
+          beforeMount={(monaco) => defineCloudThemes(monaco)}
           original={left?.value ?? ""}
           modified={rightValue}
           options={{

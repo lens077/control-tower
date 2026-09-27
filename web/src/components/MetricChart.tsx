@@ -4,7 +4,8 @@ import { LineChart } from "@mui/x-charts/LineChart";
 import type { SeriesResult } from "@/gen/api";
 import { formatMetricValue } from "@/lib/metric-format";
 import { buildChartData } from "@/lib/metric-series";
-import { ground, hairline, ink, sp, state } from "@/styles/tokens";
+import { useColorMode } from "@/styles/color-mode";
+import { ground, hairline, ink, palettes, sp } from "@/styles/tokens";
 
 interface Props {
   title: string;
@@ -14,8 +15,14 @@ interface Props {
   height?: number;
 }
 
-/** 曲线配色:与页面的状态色同一套,第一条永远是紫罗兰。 */
-const CHART_COLORS = [state.active, state.success, state.warning, state.danger, state.info, ink.muted];
+/**
+ * 曲线配色:与页面的状态色同一套,第一条永远是紫罗兰。
+ * 图表会把颜色写进 SVG 属性,不能用 CSS 变量,按当前模式取具体色值。
+ */
+function chartColors(mode: keyof typeof palettes): string[] {
+  const { state, ink: inkColors } = palettes[mode];
+  return [state.active, state.success, state.warning, state.danger, state.info, inkColors.muted];
+}
 
 /**
  * 一张折线图。
@@ -29,6 +36,7 @@ export function MetricChart({ title, result, emptyHint, height = 200 }: Props) {
     () => buildChartData(result?.lines ?? []),
     [result?.lines],
   );
+  const { mode } = useColorMode();
 
   return (
     <Box
@@ -63,7 +71,7 @@ export function MetricChart({ title, result, emptyHint, height = 200 }: Props) {
       ) : (
         <LineChart
           height={height}
-          colors={CHART_COLORS}
+          colors={chartColors(mode)}
           xAxis={[
             {
               data: xAxis,

@@ -48,7 +48,8 @@ import {
 } from "@/lib/validate";
 import { fmtAbsolute, fmtRelative } from "@/lib/time";
 import { editorStore, setDirty, setEnvironment, setNamespace } from "@/store/editor";
-import { CLOUD_THEME, defineCloudTheme } from "@/monaco-theme";
+import { cloudTheme, defineCloudThemes } from "@/monaco-theme";
+import { useColorMode } from "@/styles/color-mode";
 import { keyframes } from "@emotion/react";
 import { envTone, font, fullscreenOverlay, grain, ground, hairline, ink, sp, state } from "@/styles/tokens";
 import { EnvBand } from "@/components/Explorer";
@@ -331,15 +332,16 @@ function EditPage() {
     ? t("edit.saveBlocked", { format: formatLabel(format) })
     : "";
 
+  const { mode: colorMode } = useColorMode();
   const editorNode = useMemo(
     () => (
       <Editor
         height="100%"
         language={formatToLanguage(format)}
-        theme={CLOUD_THEME}
+        theme={cloudTheme(colorMode)}
         value={value}
         onChange={(v) => setValue(v ?? "")}
-        beforeMount={(monaco) => defineCloudTheme(monaco)}
+        beforeMount={(monaco) => defineCloudThemes(monaco)}
         onMount={(editor, monaco) => {
           editorRef.current = editor;
           monacoRef.current = monaco;
@@ -377,7 +379,7 @@ function EditPage() {
         }}
       />
     ),
-    [format, value],
+    [format, value, colorMode],
   );
 
   if (isLoading) {

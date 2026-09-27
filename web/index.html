@@ -8,6 +8,13 @@
     <meta name="color-scheme" content="light dark" />
     <link rel="icon" href="/vite.svg" type="image/svg+xml" />
     <title>配置中心 · Config Center</title>
+    <!-- 应用加载前的底色:系统是深色时先铺夜色,避免白屏闪一下。
+         生产 CSP 不允许内联脚本,读不到用户的显式选择;挂载后以 MuiCssBaseline 为准。 -->
+    <style>
+      @media (prefers-color-scheme: dark) {
+        html { background: #15181d; }
+      }
+    </style>
   </head>
   <body>
     <div id="app"></div>

@@ -10,6 +10,16 @@
       "config": "配置"
     }
   },
+  "settings": {
+    "title": "设置",
+    "appearance": "外观",
+    "colorMode": {
+      "system": "跟随系统",
+      "light": "白天",
+      "dark": "黑夜"
+    },
+    "systemHint": "随操作系统的深浅色设置自动切换,当前为{{mode}}。"
+  },
   "action": {
     "save": "保存",
     "delete": "删除",

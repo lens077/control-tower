@@ -3,6 +3,7 @@ import { Alert, Box, Button, Typography } from "@mui/material";
 import { useTranslation } from "@/i18n";
 import { LocaleSwitcher } from "@/components/LocaleSwitcher";
 import { BrandMark } from "@/components/BrandMark";
+import { SettingsMenu } from "@/components/SettingsMenu";
 import { useAuthActions, useAuthState } from "@/providers/AuthProvider";
 import { ground, ink, sheenEdge, sp, state } from "@/styles/tokens";
 
@@ -151,6 +152,7 @@ function RootLayout() {
         <Box sx={{ flex: 1 }} />
         <Box sx={{ display: "flex", alignItems: "center", gap: sp[2], minHeight: 44 }}>
           <LocaleSwitcher />
+          <SettingsMenu />
           {isAuthenticated ? (
             <Button variant="outlined" onClick={logout}>
               {t("app.signOut")}
