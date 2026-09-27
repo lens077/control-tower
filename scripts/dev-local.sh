@@ -2,7 +2,7 @@
 # 在 Mac 上跑 control-tower。
 #
 #   scripts/dev-local.sh config     # 起 config 服务
-#   scripts/dev-local.sh gateway    # 起网关（file 模式；见下方「为什么不用 discovery」）
+#   scripts/dev-local.sh gateway    # 起网关（file 模式，见 run_gateway 上方说明）
 #   scripts/dev-local.sh print      # 只渲染配置并打印路径，不启动
 #
 # config 服务的依赖契约来自 sibling kubernetes 仓：
@@ -12,15 +12,17 @@
 #   - Casdoor 公钥证书取自 Secret config-center/config-center-bootstrap 的 casdoor.pem，
 #     与集群 config 服务同源；也可用 CASDOOR_CERTIFICATE_FILE 指定本地文件。
 #
+# 网关模式的 file 工件从 Config Center 拉取（configctl + operator token），
+# 业务后端经 kubectl port-forward 到本机，BFF 会话走 redis-dev.apikv.com。
+#
 # KUBERNETES_REPO 可覆盖默认路径 ../kubernetes；KUBECONFIG 沿用 kubectl 的默认解析。
-# 临时配置文件为 0600，进程退出后删除。
+# 临时配置文件与目录为 0600/0700，进程退出后删除；port-forward 随脚本退出一起结束。
 # 兼容 macOS Bash 3.2。
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 KUBERNETES_REPO="${KUBERNETES_REPO:-$ROOT/../kubernetes}"
 KUBECTL="${KUBECTL:-kubectl}"
-SSH_HOST="${SSH_HOST:-node3}"
 # 控制台登录用的 Casdoor 公钥证书。集群 config 服务挂的是同一个 Secret 键，
 # 内容与 https://casdoor.apikv.com/.well-known/jwks 中 kid=lens 的 x5c 一致。
 CASDOOR_CERT_SECRET="${CASDOOR_CERT_SECRET:-config-center/config-center-bootstrap}"
@@ -34,10 +36,15 @@ CASDOOR_AUDIENCE="${CASDOOR_AUDIENCE:-baxf6718e392099b7915}"
 METRIC_QUERY_ENDPOINT="${METRIC_QUERY_ENDPOINT-https://metrics.apikv.com}"
 CFG=""
 CASDOOR_PEM=""
+GW_DIR=""
+PF_PIDS=""
 
 cleanup() {
+  local pid
+  for pid in $PF_PIDS; do kill "$pid" 2>/dev/null || true; done
   [ -n "$CFG" ] && rm -f "$CFG" || true
   [ -n "$CASDOOR_PEM" ] && rm -f "$CASDOOR_PEM" || true
+  [ -n "$GW_DIR" ] && rm -rf "$GW_DIR" || true
 }
 trap cleanup EXIT
 
@@ -215,9 +222,6 @@ EOF
   } >"$CFG"
 }
 
-# 网关模式仍从 node3 的 PostgreSQL 查询配置；config 模式不依赖 SSH。
-pgq() { ssh -o BatchMode=yes "$SSH_HOST" "su - postgres -c 'psql -d ecommerce -At'"; }
-
 # 准备 Casdoor 公钥证书文件。已显式设置 CASDOOR_CERTIFICATE_FILE 时直接沿用。
 prepare_casdoor_certificate() {
   if [ -n "${CASDOOR_CERTIFICATE_FILE:-}" ]; then
@@ -242,6 +246,188 @@ prepare_config() {
   prepare_casdoor_certificate
 }
 
+# ─── 网关本地调试 ───────────────────────────────────────────────────────────
+#
+# 网关用 CONFIG_SOURCE=file 从一个临时目录读五份工件，来源如下：
+#   - public.pem / policies.csv / model.conf / revocations.yaml：
+#       Config Center 的 gateway/<GATEWAY_ENV> 键，与集群网关读的是同一份。
+#       凭据是 Secret config-center/config-center-operator-<env> 的 operator token
+#       （已设 CONFIG_CENTER_SERVICE_TOKEN 时直接用它）；端点默认 https://config-api.apikv.com，
+#       CONFIG_CENTER_ENDPOINT 可改成本机 http://localhost:30010。
+#   - policies.csv 可用 GATEWAY_POLICIES_FILE 换成本地文件，便于先验证再写回 Config Center。
+#     网关只认 act 列字面 POST 的 p 行（authz.validatePolicyRow），有一行不合法就整表拒载、启动失败。
+#   - routes.yaml：GATEWAY_ROUTES_SOURCE=template（默认，仓库 routes/<env>.yaml，与本地代码同版本）
+#       | config-center（线上键）；或用 GATEWAY_ROUTES_FILE 直接指定文件。
+#
+# 路由 target 是 direct://<svc>.<ns>.svc:<port>，Mac 解析不了集群 DNS。脚本把它们改写成
+# direct://127.0.0.1:<port>，并对每个后端起一条 kubectl port-forward（GATEWAY_PORT_FORWARD=false 关闭）。
+# 本机端口已被占用时视为你自己转发过，跳过该后端。
+#
+# BFF 会话轨（GATEWAY_BFF=false 关闭）：会话存 Dragonfly 的 remote-dev 入口（组件契约的
+# REMOTE_HOST:REMOTE_PORT），账密与 CA 取 Secret ecommerce/dragonfly-session，Casdoor client
+# 取 ecommerce/casdoor-bff。回调与跳回都是 http://localhost:3000（前端 vite proxy 把 /auth 代到本网关），
+# Casdoor 应用的 Redirect URLs 需含 http://localhost:3000/auth/callback。
+
+GATEWAY_ENV="${GATEWAY_ENV:-dev}"
+GATEWAY_ROUTES_SOURCE="${GATEWAY_ROUTES_SOURCE:-template}"
+GATEWAY_PORT_FORWARD="${GATEWAY_PORT_FORWARD:-true}"
+GATEWAY_BFF="${GATEWAY_BFF:-true}"
+GATEWAY_HTTP_PORT="${GATEWAY_HTTP_PORT:-8080}"
+GATEWAY_FRONTEND_ORIGIN="${GATEWAY_FRONTEND_ORIGIN:-http://localhost:3000}"
+# 与 deploy/dev/gateway/deployment.yaml 的 control-tower-gateway-config 保持一致。
+GATEWAY_JWT_AUDIENCES="${GATEWAY_JWT_AUDIENCES:-baxf6718e392099b7915}"
+
+port_in_use() { lsof -nP -iTCP:"$1" -sTCP:LISTEN >/dev/null 2>&1; }
+
+# 从 Config Center 取一个 gateway 键写到文件。键不存在时返回非零。
+fetch_gateway_key() {
+  local key=$1 out=$2
+  "$GW_DIR/configctl" get -namespace gateway -environment "$GATEWAY_ENV" -key "$key" >"$out"
+}
+
+prepare_gateway_artifacts() {
+  local routes_src
+  GW_DIR="$(mktemp -d -t ct-gateway)"
+  chmod 700 "$GW_DIR"
+
+  if [ -z "${CONFIG_CENTER_SERVICE_TOKEN:-}" ]; then
+    CONFIG_CENTER_SERVICE_TOKEN="$(secret_value "config-center/config-center-operator-$GATEWAY_ENV" token)"
+  fi
+  export CONFIG_CENTER_SERVICE_TOKEN
+
+  (cd "$ROOT" && go build -o "$GW_DIR/configctl" ./services/config/cmd/configctl) \
+    || die "构建 configctl 失败"
+
+  fetch_gateway_key secrets/public.pem "$GW_DIR/public.pem" || die "取 gateway/$GATEWAY_ENV secrets/public.pem 失败"
+  if [ -n "${GATEWAY_POLICIES_FILE:-}" ]; then
+    [ -r "$GATEWAY_POLICIES_FILE" ] || die "GATEWAY_POLICIES_FILE 不可读: $GATEWAY_POLICIES_FILE"
+    cp "$GATEWAY_POLICIES_FILE" "$GW_DIR/policies.csv"
+    echo "→ 策略：$GATEWAY_POLICIES_FILE（GATEWAY_POLICIES_FILE 指定，不读 Config Center）"
+  else
+    fetch_gateway_key policies/policies.csv "$GW_DIR/policies.csv" || die "取 gateway/$GATEWAY_ENV policies/policies.csv 失败"
+  fi
+  fetch_gateway_key policies/model.conf "$GW_DIR/model.conf" || die "取 gateway/$GATEWAY_ENV policies/model.conf 失败"
+  # 撤销名单可缺省：键不存在时网关以空表启动。
+  fetch_gateway_key auth/revocations.yaml "$GW_DIR/revocations.yaml" 2>/dev/null \
+    || rm -f "$GW_DIR/revocations.yaml"
+
+  if [ -n "${GATEWAY_ROUTES_FILE:-}" ]; then
+    [ -r "$GATEWAY_ROUTES_FILE" ] || die "GATEWAY_ROUTES_FILE 不可读: $GATEWAY_ROUTES_FILE"
+    cp "$GATEWAY_ROUTES_FILE" "$GW_DIR/routes.src.yaml"
+    routes_src="$GATEWAY_ROUTES_FILE"
+  else
+    case "$GATEWAY_ROUTES_SOURCE" in
+      template)
+        [ -f "$ROOT/routes/$GATEWAY_ENV.yaml" ] || die "没有路由模板 routes/$GATEWAY_ENV.yaml"
+        cp "$ROOT/routes/$GATEWAY_ENV.yaml" "$GW_DIR/routes.src.yaml"
+        routes_src="routes/$GATEWAY_ENV.yaml"
+        ;;
+      config-center)
+        fetch_gateway_key routes.yaml "$GW_DIR/routes.src.yaml" || die "取 gateway/$GATEWAY_ENV routes.yaml 失败"
+        routes_src="Config Center gateway/$GATEWAY_ENV routes.yaml"
+        ;;
+      *) die "GATEWAY_ROUTES_SOURCE 只能是 template 或 config-center: $GATEWAY_ROUTES_SOURCE" ;;
+    esac
+  fi
+
+  # 集群 DNS 目标改写成本机回环，端口不变。
+  sed -E 's#direct://[a-z0-9-]+\.[a-z0-9-]+\.svc(\.cluster\.local)?:([0-9]+)#direct://127.0.0.1:\2#g' \
+    "$GW_DIR/routes.src.yaml" >"$GW_DIR/routes.yaml"
+  grep -Eq '^[[:space:]]*target:[[:space:]]*discovery:///' "$GW_DIR/routes.yaml" \
+    && echo "⚠️ 路由里仍有 discovery:/// 目标：本机连不到 Consul 注册的 Pod IP，这些路由会失败" >&2
+  echo "→ 网关工件：Config Center gateway/$GATEWAY_ENV（${CONFIG_CENTER_ENDPOINT:-https://config-api.apikv.com}）｜路由来自 $routes_src"
+}
+
+# 为路由里每个 direct://<svc>.<ns>.svc:<port> 起一条 port-forward。
+start_port_forwards() {
+  local svc ns port pid i
+  [ "$GATEWAY_PORT_FORWARD" = true ] || { echo "→ 已关闭自动 port-forward（GATEWAY_PORT_FORWARD=false）"; return; }
+  while read -r svc ns port; do
+    [ -n "$svc" ] || continue
+    if port_in_use "$port"; then
+      echo "→ :$port 已被占用，视为已转发，跳过 $ns/$svc"
+      continue
+    fi
+    "$KUBECTL" -n "$ns" port-forward "svc/$svc" "$port:$port" >"$GW_DIR/pf-$svc.log" 2>&1 &
+    pid=$!
+    PF_PIDS="$PF_PIDS $pid"
+    i=0
+    until port_in_use "$port"; do
+      kill -0 "$pid" 2>/dev/null || die "port-forward $ns/$svc 退出：$(tail -1 "$GW_DIR/pf-$svc.log")"
+      i=$((i + 1))
+      [ "$i" -lt 50 ] || die "port-forward $ns/$svc 10 秒内未就绪"
+      sleep 0.2
+    done
+    echo "→ 转发 $ns/$svc → 127.0.0.1:$port"
+  done <<EOF
+$(sed -nE 's#.*direct://([a-z0-9-]+)\.([a-z0-9-]+)\.svc(\.cluster\.local)?:([0-9]+).*#\1 \2 \4#p' "$GW_DIR/routes.src.yaml" | sort -u)
+EOF
+}
+
+# 输出 BFF 会话轨需要的环境变量（KEY=VALUE 每行一条），供 env 使用。
+bff_env() {
+  local redis_host redis_port redis_user redis_password client_id client_secret
+  load_component_contract "$KUBERNETES_REPO/components/dragonfly/component.env"
+  redis_host="$REMOTE_HOST"
+  redis_port="$REMOTE_PORT"
+  [ -n "$redis_host" ] && [ -n "$redis_port" ] || die "Dragonfly 契约缺少 REMOTE_HOST/REMOTE_PORT"
+  # 先逐个赋值：写在 printf 参数里的命令替换失败时 set -e 不会中止。
+  redis_user="$(secret_value ecommerce/dragonfly-session username)"
+  redis_password="$(secret_value ecommerce/dragonfly-session password)"
+  client_id="$(secret_value ecommerce/casdoor-bff client-id)"
+  client_secret="$(secret_value ecommerce/casdoor-bff client-secret)"
+  secret_value ecommerce/dragonfly-session ca.crt >"$GW_DIR/session-ca.crt"
+  printf '%s\n' \
+    "SESSION_REDIS_ADDR=$redis_host:$redis_port" \
+    "SESSION_REDIS_USERNAME=$redis_user" \
+    "SESSION_REDIS_PASSWORD=$redis_password" \
+    "SESSION_REDIS_TLS=true" \
+    "SESSION_REDIS_CA_FILE=$GW_DIR/session-ca.crt" \
+    "SESSION_COOKIE_INSECURE=true" \
+    "BFF_PUBLIC_BASE_URL=$GATEWAY_FRONTEND_ORIGIN" \
+    "BFF_ALLOWED_REDIRECTS=$GATEWAY_FRONTEND_ORIGIN" \
+    "CASDOOR_CLIENT_ID=$client_id" \
+    "CASDOOR_CLIENT_SECRET=$client_secret"
+}
+
+run_gateway() {
+  local env_file line
+  need "$KUBECTL"
+  need lsof
+  [ -d "$KUBERNETES_REPO" ] || die "找不到 Kubernetes 仓库: $KUBERNETES_REPO（可设置 KUBERNETES_REPO 覆盖）"
+  port_in_use "$GATEWAY_HTTP_PORT" && die ":$GATEWAY_HTTP_PORT 已被占用（可设置 GATEWAY_HTTP_PORT）"
+
+  prepare_gateway_artifacts
+  start_port_forwards
+
+  # 运行参数写进 0600 文件再交给 env，避免口令出现在命令行参数里。
+  env_file="$GW_DIR/gateway.env"
+  : >"$env_file"
+  chmod 600 "$env_file"
+  if [ "$GATEWAY_BFF" = true ]; then
+    bff_env >>"$env_file"
+    echo "→ BFF 会话轨：Dragonfly $(sed -n 's/^SESSION_REDIS_ADDR=//p' "$env_file") TLS｜回调 $GATEWAY_FRONTEND_ORIGIN/auth/callback"
+  else
+    echo "BFF_ENABLED=false" >>"$env_file"
+    echo "→ BFF 会话轨已关闭（GATEWAY_BFF=false），只接受 bearer JWT"
+  fi
+  echo "→ 网关将监听 http://127.0.0.1:$GATEWAY_HTTP_PORT（/healthz、/readyz）"
+
+  cd "$ROOT"
+  # 读 env 文件逐行 export；值里可能有空格或 =，不能用 source。
+  while IFS= read -r line; do
+    [ -n "$line" ] && export "${line?}"
+  done <"$env_file"
+  CONFIG_SOURCE=file CONFIG_DIR="$GW_DIR" \
+  DEPLOYMENT_MODE=dev \
+  JWT_ISSUER="$CASDOOR_ISSUER" \
+  JWT_AUDIENCES="$GATEWAY_JWT_AUDIENCES" \
+  CASDOOR_URL="$CASDOOR_ISSUER" \
+  HTTP_PORT=":$GATEWAY_HTTP_PORT" \
+  LOG_LEVEL="${LOG_LEVEL:-debug}" \
+    go run ./services/gateway/cmd/server
+}
+
 case "${1:-config}" in
   print)
     prepare_config
@@ -251,7 +437,8 @@ case "${1:-config}" in
 
   config)
     prepare_config
-    echo "→ 服务将监听 http://127.0.0.1:30010（web 控制台 pnpm dev 在 3005，已在 CORS 白名单）"
+    echo "→ 服务将监听 http://127.0.0.1:30010（只启动后端）"
+    echo "→ 控制台不随本命令启动：另开终端 cd web && pnpm dev，再打开 http://localhost:3005（已在 CORS 白名单）"
     cd "$ROOT"
     # 本机实例不能注册进集群 Consul，否则集群内客户端可能解析到 Mac。
     CONFIG_FILE="$CFG" \
@@ -263,33 +450,7 @@ case "${1:-config}" in
     ;;
 
   gateway)
-    need ssh
-    # 为什么不用 discovery：Consul 里注册的是 Pod IP（10.244.x.x），Mac 路由不到。
-    # 因此本地跑网关用 file 模式 + direct:// 目标，后端自己按需 kubectl port-forward。
-    DIR="${GATEWAY_CONFIG_DIR:-/tmp/ct-gateway-local}"
-    mkdir -p "$DIR"
-    # 网关配置存在 node3 的 config.entry 表里（PG 已从集群搬到 node3）。
-    pgq > "$DIR/public.pem" <<'SQL'
-SELECT value FROM config.entry WHERE namespace='gateway' AND environment='dev' AND key='secrets/public.pem';
-SQL
-    pgq > "$DIR/policies.csv" <<'SQL'
-SELECT value FROM config.entry WHERE namespace='gateway' AND environment='dev' AND key='policies/policies.csv';
-SQL
-    pgq > "$DIR/model.conf" <<'SQL'
-SELECT value FROM config.entry WHERE namespace='gateway' AND environment='dev' AND key='policies/model.conf';
-SQL
-    [ -f "$DIR/routes.yaml" ] || {
-      cp "$ROOT/routes/dev.yaml" "$DIR/routes.yaml"
-      echo "已复制 routes 模板到 $DIR/routes.yaml —— 把要打的后端 target 改成 direct://127.0.0.1:<你转发的端口>"
-      echo "例如： kubectl -n ecommerce port-forward svc/ecommerce-user-service 30001:30001"
-    }
-    cd "$ROOT"
-    CONFIG_SOURCE=file CONFIG_DIR="$DIR" \
-    JWT_ISSUER=https://casdoor.apikv.com \
-    JWT_AUDIENCES=baxf6718e392099b7915 \
-    CASDOOR_URL=https://casdoor.apikv.com \
-    HTTP_PORT=:8080 LOG_LEVEL=debug \
-    go run ./services/gateway/cmd/server
+    run_gateway
     ;;
 
   *) echo "用法: $0 [config|gateway|print]"; exit 64 ;;
