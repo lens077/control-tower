@@ -14,9 +14,10 @@ git tag X.Y.Z → push
   │    release job（只在 semver tag 上跑，needs image）：
   │      scripts/promote-release.sh X.Y.Z
   │        values-pre.yaml 三个镜像 tag = X.Y.Z → make deploy-render → go test ./deploy/ → check
-  │      commit "release: X.Y.Z → pre" → push main
+  │      commit "release: X.Y.Z → pre" → push GitHub main
+  │      fast-forward push → gitlab.com/sumery/control-tower（Argo CD 的 source）
   │
-  ├─ GitHub push webhook → https://argocd.apikv.com/api/webhook（轮询兜底 3 分钟）
+  ├─ GitLab push webhook → https://argocd.apikv.com/api/webhook（实测 8 秒；轮询兜底 3 分钟）
   │
   └─ Argo CD
        Application control-tower-config   → ns config-center（config + config-web）  自动同步 + selfHeal
@@ -33,11 +34,9 @@ git tag X.Y.Z → push
 | `deploy/chart/control-tower/values-pre.yaml` | 三个镜像 tag + pre 的主机名/回调 | tag 由 release job 回写；其余人改 |
 | `deploy/{dev,pre}/` | `make deploy-render` 的渲染产物 | 不手改；改 chart 后重新渲染并一起提交 |
 | `deploy/argocd/` | AppProject `control-tower`、Application ×2、repo Secret | 人，`kubectl apply -f` |
-| GitHub webhook `686513067` | push → Argo；校验密钥是 `argocd-secret` 的 `webhook.github.secret`（与 `webhook.gitlab.secret` 同值） | 人 |
-
-**为什么不经 GitLab**：ecommerce 仓的 Argo 读 GitLab 镜像，是当时假设集群拉不到 GitHub。本仓 2026-09-27
-在 `argocd-repo-server` 里实测 GitHub 可达（`git ls-remote` 5/5，~1.5s，与 GitLab 相同），并用一个临时
-Application 从 GitHub 渲染出全部 10 个对象后，把 source 直接切成 GitHub。少一个仓就少一处漂移。
+| GitLab `sumery/control-tower` | GitHub main 的镜像，只在发布时更新 | release job（也可手动 `git push gitlab main`，但要 fast-forward） |
+| GitLab webhook `90127735` | push main → Argo；token 是 `argocd-secret` 里现有的 `webhook.gitlab.secret`（与 ecommerce 共用） | 人 |
+| GitHub Secret `GITLAB_PUSH_TOKEN` | GitLab 项目访问令牌 `github-actions-release-20260927`，Developer + `write_repository`，**2027-09-27 到期** | 到期前用 `glab api ... access_tokens` 重签，`gh secret set` 写回 |
 
 Argo CD 本身：`argocd` ns，v3.5.3，公网 `https://argocd.apikv.com`。本机用 CLI 不必登录：
 把 context 的 namespace 切到 `argocd` 后加 `--core`（直接用 kubeconfig）。
@@ -61,7 +60,7 @@ Git 回滚，不在 Argo UI 上点：
 ```bash
 scripts/promote-release.sh <上一个版本>
 git commit -am "release: 回滚到 <版本>：<原因>"
-git push origin main
+git push origin main && git push gitlab main
 ```
 
 Argo 同步后 Deployment 滚回旧镜像。旧镜像 tag 永远在 TCR（发布 tag 不覆写）。
@@ -101,15 +100,16 @@ Application 不带 `resources-finalizer`：删除 Application 只是让 Argo 放
 | 症状 | 看哪里 |
 |---|---|
 | tag 推了但没有任何 CI run | head 提交说明含跳过标记；或 tag 不在 main 上 |
+| release job 在「Push main to GitLab」失败 | GitLab main 领先于 GitHub（有人直接推了 GitLab）：`git fetch gitlab && git log origin/main..gitlab/main`，手动对齐；或 `GITLAB_PUSH_TOKEN` 过期 |
 | Argo 一直 OutOfSync 但 diff 只有 HTTPRoute 的 `group/kind/weight` | API Server 补的默认值，`ignoreDifferences` 已列，检查 `RespectIgnoreDifferences=true` 还在 |
-| Argo 没跟上推送 | `kubectl -n argocd logs deploy/argocd-server \| grep webhook`；GitHub 仓 Settings → Webhooks 看投递记录（`gh api repos/lens077/control-tower/hooks/686513067/deliveries`）；轮询 3 分钟内总会追上 |
+| Argo 没跟上推送 | `kubectl -n argocd logs deploy/argocd-server \| grep webhook`；GitLab 项目 Settings → Webhooks 看投递记录；轮询 3 分钟内总会追上 |
 | VPA 同步失败 `updateMode InPlace` | admission-controller 没开 InPlace gate；values 里当前是 `Off`，不要为绕过改成 Recreate/Auto |
 | `check-deploy` 在 CI 红、本地绿 | helm 版本不同（CI 钉 v4.3.0）；本地 `helm version` 对齐 |
 
 ## 取舍
 
-- **chart 与源码同仓，Argo 直接读它**，没有第二个仓：旧 `control-tower-gitops` 是人手抄 `deploy/` 出来的 chart，
-  抄的那一刻就已不一致，2026-09-20 事故的载体就是它；中间一度用过 GitLab 镜像，实测 GitHub 可达后也去掉了。
+- **chart 与源码同仓，GitOps 仓是镜像**而不是独立仓：旧 `control-tower-gitops` 是人手抄 `deploy/` 出来的 chart，
+  抄的那一刻就已不一致，2026-09-20 事故的载体就是它。现在 chart 只有一份，Argo 读的是同一仓的 GitLab 镜像。
 - **渲染产物保留在仓库里**：11 条守门测试零改动继续读文本；`kubectl apply -f deploy/pre/` 仍是 Argo 故障时的兜底；
   PR 里能直接 review 渲染后的 diff。代价是 `make check-deploy` 门禁，与 `check-gen` 同一纪律。
 - **只有 semver tag 上线**：pre 是对外环境，未经审视的东西不该到线上；main 只出 `sha-` 镜像。

@@ -5,7 +5,7 @@
 ## 部署现状（2026-09-27，Argo CD 接管后）
 
 集群在 2026-09-21 前后**又重建了一次**（节点 k1/k2/k3），node3（Pigsty）已于 2026-09-03 退役，数据面全部回到集群内。
-2026-09-27 起三个服务由 **Argo CD** 直接从本仓 GitHub `main` 同步，不再手工 `kubectl apply`。
+2026-09-27 起 config 与 config web 由 **Argo CD** 从 GitLab 镜像仓同步，不再手工 `kubectl apply`。
 
 | 服务 | 集群状态 | 由谁管 |
 |---|---|---|
@@ -53,8 +53,8 @@ Pangolin 资源的 tlsServerName/Host 指向 `*.dev.test`（2026-09-23，5cbf2d5
 git tag X.Y.Z && git push origin X.Y.Z
   → CI：test / web / codegen → image ×3（TCR + GHCR，tag = X.Y.Z）
   → CI release job：values-pre.yaml 三个镜像 tag = X.Y.Z → 渲染 deploy/pre → 守门测试
-       → commit "release: X.Y.Z → pre" 到 main
-  → GitHub push webhook → Argo CD 秒级刷新 → 同步 config-center 与网关
+       → commit "release: X.Y.Z → pre" 到 GitHub main → fast-forward 推到 GitLab 镜像仓
+  → GitLab push webhook → Argo CD 秒级刷新 → 同步 config-center（与网关）
 ```
 
 - **只有裸 semver tag（`X.Y.Z`）会上线**。push main 只出 `sha-<7位>` 与 `dev` 镜像，不部署；
@@ -62,11 +62,10 @@ git tag X.Y.Z && git push origin X.Y.Z
 - **部署清单的真相源是 `deploy/chart/control-tower/`**（Helm）。`deploy/{dev,pre}/` 是 `make deploy-render`
   的渲染产物，守门测试读它、手工 `kubectl apply -f deploy/pre/` 是 Argo 故障时的兜底。改模板或
   values 后必须重新渲染并提交，CI 的 `make check-deploy` 与 `check-gen` 同一纪律。
-- **Argo CD 直接读本仓 GitHub `main`**，没有第二个 GitOps 仓。ecommerce 仓走 GitLab 镜像是因为当时假设
-  Argo 拉不到 GitHub；2026-09-27 在 `argocd-repo-server` Pod 里实测 `git ls-remote github.com` 5/5 成功、
-  ~1.5s（与 GitLab 相同），于是省掉中转。GitHub 仓 webhook（id 686513067）→ `argocd.apikv.com/api/webhook`，
-  校验密钥是 `argocd-secret` 的 `webhook.github.secret`。**不要再往 `gitlab.com/sumery/control-tower` 推**，
-  那是切换前的镜像，已归档。
+- **Argo CD 读的是 GitLab 镜像 `gitlab.com/sumery/control-tower`，不是 GitHub**（与 ecommerce 同一做法，
+  GitLab 免费版没有 pull mirror）。release job 用 GitHub Secret `GITLAB_PUSH_TOKEN`（GitLab 项目访问令牌
+  `github-actions-release-20260927`，Developer / write_repository，2027-09-27 到期）推过去；
+  平时改代码只推 GitHub，GitLab 只在发布时更新。GitLab 领先于 GitHub 时 release job 拒绝推送。
 - Argo 对象在 `deploy/argocd/`（AppProject + 两个 Application + repo），由人 `kubectl apply`；
   Secret 与 Namespace 不归 Argo 管。ecommerce ns 的网关与 config-center 的 config 是两个 Application。
 - 提交说明里不要出现跳过 CI 的字面标记（连引用都不行）：GitHub 按 head 提交判断，tag 推送也会被整个跳过。
@@ -74,7 +73,7 @@ git tag X.Y.Z && git push origin X.Y.Z
   每份 pod spec 必须带 `imagePullSecrets: [tcr-pull]`（private 仓库，漏掉是 `ErrImagePull ... 401`），
   `deploy/manifest_test.go` 守这两条。本机手工构建镜像必须 `--platform linux/amd64`。
 - **CI 不持有集群凭据**（2026-09-18，6c301b4），也不执行 `kubectl`；集群侧权限只在 Argo CD。
-- 旧 GitOps 仓 `gitlab.com/sumery/control-tower-gitops`（手抄 chart）与切换前的镜像 `gitlab.com/sumery/control-tower` 均已归档。
+- 旧 GitOps 仓 `gitlab.com/sumery/control-tower-gitops`（手抄 chart）已归档，不要再用。
 
 ### 数据面与可观测
 
@@ -151,7 +150,7 @@ git tag X.Y.Z && git push origin X.Y.Z
 | `docs/design/adr-0002-bff-session.md` | **现行鉴权决策**：BFF + 服务端 session（取代 ADR-0001） |
 | `docs/design/bff-migration.md` | BFF 化实施手顺：三轨并存、四阶段、按阶段回滚 |
 | `docs/operations/2026-08-30-recovery-record.md` | 2026-08-29/30 恢复实录：六类故障的判别法与教训——**排查「网络面板正常但功能不对」这类症状前先翻它** |
-| `docs/operations/argocd-helm-gitops.md` | **现行发布链路**：tag → CI → GitHub main → Argo CD；接管手顺、回滚、排障 |
+| `docs/operations/argocd-helm-gitops.md` | **现行发布链路**：tag → CI → GitLab 镜像 → Argo CD；接管手顺、回滚、排障 |
 | `deploy/README.md` | 部署目录说明：chart 与渲染产物的关系、Argo 对象、网关的一次性准备（Config Center 键、machine token、selector Secret） |
 | `docs/operations/configctl.md` | 命令行写 Config Center：`configctl put/get/ls`、凭据与 scope 限制——**要把文件灌进某个 key 就用它，别手搓 curl** |
 

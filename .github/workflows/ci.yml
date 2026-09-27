@@ -3,8 +3,8 @@
 # 触发策略（与 ecommerce 同一纪律）：
 #   - PR / workflow_dispatch：只跑质量门禁（test job）。
 #   - push main / 裸 semver tag（X.Y.Z）：质量门禁 + 构建并推送镜像。main 使用 dev tag。
-#   - 裸 semver tag 额外跑 release job：把 pre 的镜像 tag 推进到该版本并提交到 main，
-#     Argo CD 直接读本仓，经 GitHub webhook 同步上线（GitOps 链路见 docs/operations/argocd-helm-gitops.md）。
+#   - 裸 semver tag 额外跑 release job：把 pre 的镜像 tag 推进到该版本并推到 GitLab 镜像仓，
+#     Argo CD 经 webhook 同步上线（GitOps 链路见 docs/operations/argocd-helm-gitops.md）。
 #
 # 镜像（P2 起增加 control-tower-config-web）：
 #   control-tower-gateway   网关          services/gateway/Dockerfile   上下文 .
@@ -267,9 +267,9 @@ jobs:
 
   # 发布推进（只在裸 semver tag 上跑）：三个镜像已由 image job 推到 TCR，这里把 pre 指向它们。
   #   1. scripts/promote-release.sh：改 values-pre.yaml 的三个 tag → 渲染 deploy/pre → 守门测试；
-  #   2. 提交到 main（[skip ci]，且本 workflow 只由 tag 触发，回写不会再触发自己）。
-  #      Argo CD 的 source 就是本仓（2026-09-27 从 argocd-repo-server 实测 GitHub 可达，不再经 GitLab 中转），
-  #      GitHub 的 push webhook 会立刻通知 Argo CD 同步。
+  #   2. 提交到 GitHub main（[skip ci]，且本 workflow 只由 tag 触发，回写不会再触发自己）；
+  #   3. 同一提交 fast-forward 推到 GitLab 镜像 gitlab.com/sumery/control-tower —— Argo CD 的 source
+  #      是 GitLab（GitLab 免费版没有 pull mirror），GitLab 的 push webhook 会立刻通知 Argo CD 同步。
   # push main 不部署：main 只出 sha-* 镜像；线上版本只随发布 tag 变化（AGENTS.md「发布方式」）。
 #
 # ⚠️ 提交说明里不要出现字面量「[skip ci]」（包括正文里引用它）：GitHub 按 push 的 head 提交
@@ -328,3 +328,20 @@ jobs:
             [[ $i -eq 3 ]] && { echo "::error::push GitHub main 重试 3 次失败"; exit 1; }
             git pull --rebase origin main
           done
+
+      # 只做 fast-forward：GitLab 若领先说明有人直接推了镜像仓，让 job 红比静默分叉好。
+      - name: Push main to GitLab (Argo CD source)
+        env:
+          GITLAB_PUSH_TOKEN: ${{ secrets.GITLAB_PUSH_TOKEN }}
+        run: |
+          set -euo pipefail
+          [[ -n "$GITLAB_PUSH_TOKEN" ]] || { echo "::error::缺 secret GITLAB_PUSH_TOKEN，GitLab 未更新，Argo CD 看不到 ${GITHUB_REF_NAME}"; exit 1; }
+          git remote add gitlab "https://oauth2:${GITLAB_PUSH_TOKEN}@gitlab.com/sumery/control-tower.git"
+          git fetch -q gitlab main
+          if ! git merge-base --is-ancestor gitlab/main HEAD; then
+            echo "::error::GitLab main 有 GitHub 没有的提交，拒绝推送；先把两边手动对齐"
+            git log --oneline HEAD..gitlab/main | head -20
+            exit 1
+          fi
+          git push gitlab HEAD:main
+          echo "已推送 $(git rev-parse --short HEAD) 到 GitLab；Argo CD 会经 webhook 同步"

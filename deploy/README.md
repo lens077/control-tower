@@ -24,8 +24,8 @@ deploy/
 git tag X.Y.Z && git push origin X.Y.Z
 ```
 
-CI 构建三个镜像，release job 把 `values-pre.yaml` 的 tag 改成 `X.Y.Z`、重新渲染、提交到 main，
-Argo CD 直接读本仓，经 GitHub webhook 同步。要本地预演：`scripts/promote-release.sh X.Y.Z`（只改工作区）。
+CI 构建三个镜像，release job 把 `values-pre.yaml` 的 tag 改成 `X.Y.Z`、重新渲染、提交并推到 GitLab 镜像仓，
+Argo CD 经 webhook 同步。要本地预演：`scripts/promote-release.sh X.Y.Z`（只改工作区）。
 
 ## Argo CD 对象
 

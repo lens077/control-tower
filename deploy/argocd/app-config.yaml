@@ -19,7 +19,7 @@ metadata:
 spec:
   project: control-tower
   source:
-    repoURL: https://github.com/lens077/control-tower.git
+    repoURL: https://gitlab.com/sumery/control-tower.git
     targetRevision: main
     path: deploy/chart/control-tower
     helm:
@@ -62,6 +62,6 @@ spec:
   revisionHistoryLimit: 10
   info:
     - name: source
-      value: github.com/lens077/control-tower
+      value: gitlab.com/sumery/control-tower（镜像自 github.com/lens077/control-tower）
     - name: environment
       value: pre

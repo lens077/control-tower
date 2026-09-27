@@ -1,9 +1,9 @@
-# GitHub 源码仓在 Argo CD 里的声明。仓库是公开的，不带凭据；
+# GitLab 镜像仓在 Argo CD 里的声明。仓库是公开的，不带凭据；
 # 若改为私有，在集群外建带 token 的 Secret，不要把 token 提交进来。
 apiVersion: v1
 kind: Secret
 metadata:
-  name: repo-github-control-tower
+  name: repo-gitlab-control-tower
   namespace: argocd
   labels:
     argocd.argoproj.io/secret-type: repository
@@ -12,6 +12,6 @@ metadata:
     app.kubernetes.io/managed-by: git
 stringData:
   type: git
-  name: github-control-tower
+  name: gitlab-control-tower
   project: control-tower
-  url: https://github.com/lens077/control-tower.git
+  url: https://gitlab.com/sumery/control-tower.git
