@@ -4,6 +4,7 @@
 #   1. values-pre.yaml 钉住线上正在跑的镜像 tag，apply 本文件时 automated.enabled=false；
 #   2. argocd app diff 只允许出现 Argo 的跟踪注解与本就未 apply 过的 VPA；
 #   3. 手动 sync 一次，确认 Pod 没有重启，再把 automated.enabled 改 true 重新 apply。
+# 2026-09-27 已按此完成接管（钉 sha-68386e8，sync 前后 Pod UID 一致），自动同步已开。
 # 不设 resources-finalizer：删除本 Application 只是让 Argo 放手，线上资源原地不动，接管随时可退。
 apiVersion: argoproj.io/v1alpha1
 kind: Application
@@ -48,7 +49,7 @@ spec:
         - .spec.selector["rollouts-pod-template-hash"]
   syncPolicy:
     automated:
-      enabled: false
+      enabled: true
       # prune 先关：接管稳定一个发布周期后再开，避免一处渲染疏漏直接删线上对象。
       prune: false
       selfHeal: true
