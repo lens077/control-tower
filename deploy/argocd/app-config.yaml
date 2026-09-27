@@ -1,0 +1,66 @@
+# Application control-tower-config：config 服务 + 控制台，namespace config-center。
+#
+# 接管顺序（docs/operations/argocd-helm-gitops.md）：
+#   1. values-pre.yaml 钉住线上正在跑的镜像 tag，apply 本文件时 automated.enabled=false；
+#   2. argocd app diff 只允许出现 Argo 的跟踪注解与本就未 apply 过的 VPA；
+#   3. 手动 sync 一次，确认 Pod 没有重启，再把 automated.enabled 改 true 重新 apply。
+# 不设 resources-finalizer：删除本 Application 只是让 Argo 放手，线上资源原地不动，接管随时可退。
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: control-tower-config
+  namespace: argocd
+  labels:
+    app.kubernetes.io/part-of: control-tower
+    app.kubernetes.io/managed-by: git
+    app.kubernetes.io/component: config
+    app.kubernetes.io/environment: pre
+spec:
+  project: control-tower
+  source:
+    repoURL: https://gitlab.com/sumery/control-tower.git
+    targetRevision: main
+    path: deploy/chart/control-tower
+    helm:
+      releaseName: control-tower
+      valueFiles:
+        - values.yaml
+        - values-pre.yaml
+        # 只渲染 config-center 里的对象，且不渲染 Namespace（集群级，AppProject 不放行）
+        - components/config.yaml
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: config-center
+  ignoreDifferences:
+    # API Server 会给 HTTPRoute 补默认的 group/kind/weight，不忽略会一直 OutOfSync。
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      jsonPointers:
+        - /spec/parentRefs/0/group
+        - /spec/parentRefs/0/kind
+        - /spec/rules/0/backendRefs/0/group
+        - /spec/rules/0/backendRefs/0/kind
+        - /spec/rules/0/backendRefs/0/weight
+    # Argo Rollouts 会在运行时往 Service selector 里写 rollouts-pod-template-hash。
+    - group: ""
+      kind: Service
+      jqPathExpressions:
+        - .spec.selector["rollouts-pod-template-hash"]
+  syncPolicy:
+    automated:
+      enabled: false
+      # prune 先关：接管稳定一个发布周期后再开，避免一处渲染疏漏直接删线上对象。
+      prune: false
+      selfHeal: true
+    syncOptions:
+      - ApplyOutOfSyncOnly=true
+      - CreateNamespace=false
+      - FailOnSharedResource=true
+      - PruneLast=true
+      - RespectIgnoreDifferences=true
+  revisionHistoryLimit: 10
+  info:
+    - name: source
+      value: gitlab.com/sumery/control-tower（镜像自 github.com/lens077/control-tower）
+    - name: environment
+      value: pre

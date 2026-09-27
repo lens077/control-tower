@@ -1,0 +1,56 @@
+# Argo CD AppProject：control-tower 的两个 Application 共用。
+#
+# 一次性由人 apply：kubectl apply -f deploy/argocd/（先 project 与 repo，再 app-*）。
+# 只放行 namespaced 资源，且不含 Secret（AGENTS.md 硬约束 4：凭据不进仓库，也不由 Argo 管）；
+# Namespace 是集群级资源，由人建（config-center / ecommerce 都已存在）。
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: control-tower
+  namespace: argocd
+  labels:
+    app.kubernetes.io/part-of: control-tower
+    app.kubernetes.io/managed-by: git
+spec:
+  description: "control-tower Helm GitOps project（config-center + gateway）"
+  # Argo CD 读的是 GitLab 镜像，不是 GitHub 源码仓：CI 在发布 tag 时把 main 推过去（ci.yml release job）。
+  sourceRepos:
+    - "https://gitlab.com/sumery/control-tower.git"
+  destinations:
+    - name: in-cluster
+      server: https://kubernetes.default.svc
+      namespace: config-center
+    - name: in-cluster
+      server: https://kubernetes.default.svc
+      namespace: ecommerce
+  clusterResourceWhitelist: []
+  namespaceResourceWhitelist:
+    - group: ""
+      kind: ConfigMap
+    - group: ""
+      kind: Service
+    - group: ""
+      kind: ServiceAccount
+    - group: apps
+      kind: Deployment
+    # Argo Rollouts（configWeb.rollouts.enabled 开启后 config-web 变成 Rollout）。
+    - group: argoproj.io
+      kind: Rollout
+    - group: argoproj.io
+      kind: AnalysisTemplate
+    - group: argoproj.io
+      kind: AnalysisRun
+    - group: autoscaling.k8s.io
+      kind: VerticalPodAutoscaler
+    - group: cert-manager.io
+      kind: Certificate
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+    - group: policy
+      kind: PodDisruptionBudget
+  roles:
+    - name: read-only
+      description: "Read control-tower applications and project state"
+      policies:
+        - "p, proj:control-tower:read-only, applications, get, control-tower/*, allow"
+        - "p, proj:control-tower:read-only, projects, get, control-tower, allow"

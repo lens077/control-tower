@@ -1,0 +1,57 @@
+# Application control-tower-gateway：网关，namespace ecommerce。
+#
+# 与 app-config 分开：出问题互不影响同步状态，且网关的启用晚于 config——
+# AGENTS.md「恢复网关前要先补的对象」三项（config-source-pre Secret、consul token 引用
+# optional、Config Center 里 policies.csv 第 29 行）处理完之前保持 automated.enabled=false，
+# Argo 只展示 diff 不动手。
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: control-tower-gateway
+  namespace: argocd
+  labels:
+    app.kubernetes.io/part-of: control-tower
+    app.kubernetes.io/managed-by: git
+    app.kubernetes.io/component: gateway
+    app.kubernetes.io/environment: pre
+spec:
+  project: control-tower
+  source:
+    repoURL: https://gitlab.com/sumery/control-tower.git
+    targetRevision: main
+    path: deploy/chart/control-tower
+    helm:
+      releaseName: control-tower
+      valueFiles:
+        - values.yaml
+        - values-pre.yaml
+        - components/gateway.yaml
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: ecommerce
+  ignoreDifferences:
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      jsonPointers:
+        - /spec/parentRefs/0/group
+        - /spec/parentRefs/0/kind
+        - /spec/rules/0/backendRefs/0/group
+        - /spec/rules/0/backendRefs/0/kind
+        - /spec/rules/0/backendRefs/0/weight
+  syncPolicy:
+    automated:
+      enabled: false
+      prune: false
+      selfHeal: true
+    syncOptions:
+      - ApplyOutOfSyncOnly=true
+      - CreateNamespace=false
+      - FailOnSharedResource=true
+      - PruneLast=true
+      - RespectIgnoreDifferences=true
+  revisionHistoryLimit: 10
+  info:
+    - name: source
+      value: gitlab.com/sumery/control-tower（镜像自 github.com/lens077/control-tower）
+    - name: environment
+      value: pre
