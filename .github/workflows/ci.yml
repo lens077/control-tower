@@ -3,6 +3,8 @@
 # 触发策略（与 ecommerce 同一纪律）：
 #   - PR / workflow_dispatch：只跑质量门禁（test job）。
 #   - push main / 裸 semver tag（X.Y.Z）：质量门禁 + 构建并推送镜像。main 使用 dev tag。
+#   - 裸 semver tag 额外跑 release job：把 pre 的镜像 tag 推进到该版本并推到 GitLab 镜像仓，
+#     Argo CD 经 webhook 同步上线（GitOps 链路见 docs/operations/argocd-helm-gitops.md）。
 #
 # 镜像（P2 起增加 control-tower-config-web）：
 #   control-tower-gateway   网关          services/gateway/Dockerfile   上下文 .
@@ -262,3 +264,80 @@ jobs:
             VERSION=${{ steps.meta.outputs.release }}
             GOPROXY=https://proxy.golang.org,direct
           tags: ${{ steps.meta.outputs.tags }}
+
+  # 发布推进（只在裸 semver tag 上跑）：三个镜像已由 image job 推到 TCR，这里把 pre 指向它们。
+  #   1. scripts/promote-release.sh：改 values-pre.yaml 的三个 tag → 渲染 deploy/pre → 守门测试；
+  #   2. 提交到 GitHub main（[skip ci]，且本 workflow 只由 tag 触发，回写不会再触发自己）；
+  #   3. 同一提交 fast-forward 推到 GitLab 镜像 gitlab.com/sumery/control-tower —— Argo CD 的 source
+  #      是 GitLab（GitLab 免费版没有 pull mirror），GitLab 的 push webhook 会立刻通知 Argo CD 同步。
+  # push main 不部署：main 只出 sha-* 镜像；线上版本只随发布 tag 变化（AGENTS.md「发布方式」）。
+  release:
+    name: release → pre (GitOps)
+    if: github.event_name == 'push' && github.ref_type == 'tag'
+    needs: [image]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    concurrency:
+      group: release-main
+      cancel-in-progress: false
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v5
+        with:
+          ref: main
+          fetch-depth: 0
+
+      # 发布 tag 必须打在 main 的历史上：镜像是按 tag 提交构建的，而本 job 改的是 main 的 values；
+      # 两者不在一条线上，线上就会跑着 main 没有的代码。
+      - name: Tag must be an ancestor of main
+        run: |
+          git merge-base --is-ancestor "${GITHUB_SHA}" HEAD \
+            || { echo "::error::tag ${GITHUB_REF_NAME}（${GITHUB_SHA::7}）不在 main 的历史上，拒绝推进"; exit 1; }
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: go.sum
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: v4.3.0
+
+      - name: Promote ${{ github.ref_name }} to pre
+        run: scripts/promote-release.sh "${GITHUB_REF_NAME}"
+
+      - name: Commit and push to GitHub main
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add deploy/chart/control-tower/values-pre.yaml deploy/pre
+          git diff --cached --quiet && { echo "values 已是 ${GITHUB_REF_NAME}，无需提交"; exit 0; }
+          git commit -m "release: ${GITHUB_REF_NAME} → pre [skip ci]" \
+            -m "由 ci.yml release job 生成：values-pre.yaml 三个镜像 tag 指向发布 tag ${GITHUB_REF_NAME}，deploy/pre 重新渲染。"
+          # 与其它推送竞争时 rebase 重试；本 job 只改 values-pre 与渲染产物，冲突概率极低
+          for i in 1 2 3; do
+            git push origin HEAD:main && break
+            [[ $i -eq 3 ]] && { echo "::error::push GitHub main 重试 3 次失败"; exit 1; }
+            git pull --rebase origin main
+          done
+
+      # 只做 fast-forward：GitLab 若领先说明有人直接推了镜像仓，让 job 红比静默分叉好。
+      - name: Push main to GitLab (Argo CD source)
+        env:
+          GITLAB_PUSH_TOKEN: ${{ secrets.GITLAB_PUSH_TOKEN }}
+        run: |
+          set -euo pipefail
+          [[ -n "$GITLAB_PUSH_TOKEN" ]] || { echo "::error::缺 secret GITLAB_PUSH_TOKEN，GitLab 未更新，Argo CD 看不到 ${GITHUB_REF_NAME}"; exit 1; }
+          git remote add gitlab "https://oauth2:${GITLAB_PUSH_TOKEN}@gitlab.com/sumery/control-tower.git"
+          git fetch -q gitlab main
+          if ! git merge-base --is-ancestor gitlab/main HEAD; then
+            echo "::error::GitLab main 有 GitHub 没有的提交，拒绝推送；先把两边手动对齐"
+            git log --oneline HEAD..gitlab/main | head -20
+            exit 1
+          fi
+          git push gitlab HEAD:main
+          echo "已推送 $(git rev-parse --short HEAD) 到 GitLab；Argo CD 会经 webhook 同步"

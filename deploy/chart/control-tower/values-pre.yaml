@@ -1,7 +1,6 @@
 # pre：对外可达的环境（config.apikv.com / gateway.apikv.com）。Argo CD 只同步这一份。
 # 镜像 tag 由 CI 在发布 tag（X.Y.Z）时回写，不要手改成 dev/latest。
 environment: pre
-
 config:
   image:
     tag: sha-68386e8
@@ -10,12 +9,10 @@ config:
     api: [config-api.dev.test, config-api.apikv.com]
   certificate:
     dnsNames: [config.dev.test, config-api.dev.test]
-
 configWeb:
   image:
     tag: sha-68386e8
   apiUrl: https://config-api.apikv.com
-
 gateway:
   image:
     tag: 0.2.17
