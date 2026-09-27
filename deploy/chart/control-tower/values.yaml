@@ -49,6 +49,9 @@ config:
     dnsNames: []
   vpa:
     enabled: true
+    # Off：只出推荐值。InPlace 需要 admission-controller 开 InPlace feature gate，
+    # 当前集群没开（apply 会被 webhook 拒绝），开了之后再改（见模板注释）。
+    updateMode: "Off"
     minAllowed: { cpu: 50m, memory: 128Mi }
     maxAllowed: { cpu: 500m, memory: 512Mi }
 
@@ -65,6 +68,7 @@ configWeb:
     limits: { cpu: 200m, memory: 128Mi }
   vpa:
     enabled: true
+    updateMode: "Off"
     minAllowed: { cpu: 10m, memory: 32Mi }
     maxAllowed: { cpu: 200m, memory: 128Mi }
   # Argo Rollouts Blue-Green（与 ecommerce 前端同一套做法）。

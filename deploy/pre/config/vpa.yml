@@ -1,9 +1,13 @@
 # 由 deploy/chart/control-tower 渲染生成（make deploy-render），不要手改：
 # 改模板或 values-pre.yaml 后重新渲染；CI 的 check-deploy 会比对。
-# VPA 需要 controller 装好并打开 InPlace feature gate
-# (见 cloud-native-deploy/vpa/install.sh 里对 admission-controller 与 updater 的 patch)。
-# InPlace 原地调整资源不重启 Pod —— 对 config-center 尤其重要:
+# 目标模式是 InPlace:原地调整资源不重启 Pod —— 对 config-center 尤其重要,
 # WatchKeys 是长连接流,重启会把所有订阅者踢掉,它们要退避重连再重收一遍快照。
+# 但 InPlace 需要 VPA admission-controller 打开 InPlace feature gate
+# (见 cloud-native-deploy/vpa/install.sh 里对 admission-controller 与 updater 的 patch);
+# 2026-09-27 核对重建后的集群没开,webhook 直接拒绝(这两份 VPA 此前从未 apply 成功过)。
+# 所以 values 里先用 Off:只出推荐值、不动 Pod,与集群里其它 VPA 一致。
+# 绝不要用 Recreate/Auto 顶替:那会为了调资源驱逐 Pod,正是这里要避免的。
+# 开了 gate 之后把 config.vpa.updateMode / configWeb.vpa.updateMode 改回 "InPlace"。
 apiVersion: autoscaling.k8s.io/v1
 kind: VerticalPodAutoscaler
 metadata:
@@ -18,7 +22,7 @@ spec:
     # 它写的是裸服务名而实际 Deployment 叫 ecommerce-xxx-deploy)
     name: config-center
   updatePolicy:
-    updateMode: "InPlace"
+    updateMode: "Off"
   resourcePolicy:
     containerPolicies:
       - containerName: '*'
@@ -41,7 +45,7 @@ spec:
     kind: Deployment
     name: config-center-web
   updatePolicy:
-    updateMode: "InPlace"
+    updateMode: "Off"
   resourcePolicy:
     containerPolicies:
       - containerName: '*'
