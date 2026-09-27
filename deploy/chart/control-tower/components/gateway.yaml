@@ -1,0 +1,7 @@
+# Argo CD Application control-tower-gateway 用：只渲染 ecommerce namespace 里的网关对象。
+config:
+  enabled: false
+configWeb:
+  enabled: false
+gateway:
+  enabled: true

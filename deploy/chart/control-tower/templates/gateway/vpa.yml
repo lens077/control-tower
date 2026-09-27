@@ -1,5 +1,4 @@
-# 由 deploy/chart/control-tower 渲染生成（make deploy-render），不要手改：
-# 改模板或 values-dev.yaml 后重新渲染；CI 的 check-deploy 会比对。
+{{- if and .Values.gateway.enabled .Values.gateway.vpa.enabled }}
 # 网关的 VPA。
 #
 # 2026-08-30 重建：集群里原本有一个 `control-tower-gateway-vpa`，但**它的定义从来没有进过仓库**
@@ -12,11 +11,12 @@
 #   - Off 模式只产出推荐值、不动 Pod，先观察一段时间再决定要不要放开，是更稳的起点。
 # 想改成 InPlace（原地调整不重启，见 config 那份 vpa.yml 的说明）之前，
 # 先确认 VPA controller 的 InPlace feature gate 确实打开了，否则会静默退化成不生效。
+---
 apiVersion: autoscaling.k8s.io/v1
 kind: VerticalPodAutoscaler
 metadata:
   name: control-tower-gateway-vpa
-  namespace: ecommerce
+  namespace: {{ .Values.gateway.namespace }}
 spec:
   targetRef:
     apiVersion: apps/v1
@@ -26,14 +26,15 @@ spec:
     # 而实际 Deployment 叫 ecommerce-xxx-deploy）
     name: control-tower-gateway
   updatePolicy:
-    updateMode: "Off"
+    updateMode: {{ .Values.gateway.vpa.updateMode | quote }}
   resourcePolicy:
     containerPolicies:
       - containerName: '*'
         minAllowed:
-          cpu: "100m"
-          memory: "128Mi"
+          cpu: {{ .Values.gateway.vpa.minAllowed.cpu | quote }}
+          memory: {{ .Values.gateway.vpa.minAllowed.memory | quote }}
         maxAllowed:
           # 上限对齐 deployment 里的 limits(300m / 512Mi)，VPA 不该把它推到超出集群预算
-          cpu: "300m"
-          memory: "512Mi"
+          cpu: {{ .Values.gateway.vpa.maxAllowed.cpu | quote }}
+          memory: {{ .Values.gateway.vpa.maxAllowed.memory | quote }}
+{{- end }}

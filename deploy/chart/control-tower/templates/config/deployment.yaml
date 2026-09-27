@@ -1,14 +1,13 @@
-# 由 deploy/chart/control-tower 渲染生成（make deploy-render），不要手改：
-# 改模板或 values-dev.yaml 后重新渲染；CI 的 check-deploy 会比对。
+{{- if .Values.config.enabled }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: config-center
-  namespace: config-center
+  namespace: {{ .Values.config.namespace }}
   labels:
     app: config-center
 spec:
-  replicas: 1
+  replicas: {{ .Values.config.replicas }}
   selector:
     matchLabels:
       app: config-center
@@ -19,10 +18,10 @@ spec:
         app: config-center
     spec:
       imagePullSecrets:
-        - name: tcr-pull
+        - name: {{ .Values.imagePullSecret }}
       containers:
         - name: config-center
-          image: ccr.ccs.tencentyun.com/sumery/control-tower-config:0.2.11
+          image: {{ include "ct.image" (dict "name" "config" "registry" .Values.registry "image" .Values.config.image) }}
           imagePullPolicy: Always
           env:
             # 关闭应用内的 Log 导出器，只保留 Trace 和 Metric。
@@ -42,16 +41,16 @@ spec:
             - name: SERVICE_VERSION
               value: "v1"
             - name: DEPLOYMENT_MODE
-              value: "dev"
+              value: {{ .Values.environment | quote }}
             # The service itself always boots from this mounted local file.
             - name: CONFIG_FILE
               value: "/etc/config-center/config.yaml"
             - name: CASDOOR_CERTIFICATE_FILE
               value: "/etc/config-center/casdoor.pem"
             - name: CASDOOR_ISSUER
-              value: "https://casdoor.apikv.com"
+              value: {{ .Values.casdoor.issuer | quote }}
             - name: CASDOOR_AUDIENCE
-              value: "baxf6718e392099b7915"
+              value: {{ .Values.casdoor.clientId | quote }}
             - name: CONFIG_CENTER_SERVICE_TOKEN
               valueFrom:
                 secretKeyRef:
@@ -102,11 +101,11 @@ spec:
             failureThreshold: 3
           resources:
             requests:
-              cpu: 100m
-              memory: 128Mi
+              cpu: {{ .Values.config.resources.requests.cpu }}
+              memory: {{ .Values.config.resources.requests.memory }}
             limits:
-              cpu: "1"
-              memory: 512Mi
+              cpu: {{ .Values.config.resources.limits.cpu | quote }}
+              memory: {{ .Values.config.resources.limits.memory }}
           volumeMounts:
             - name: bootstrap
               mountPath: /etc/config-center
@@ -116,3 +115,4 @@ spec:
         - name: bootstrap
           secret:
             secretName: config-center-bootstrap
+{{- end }}

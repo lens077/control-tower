@@ -1,16 +1,32 @@
-# 由 deploy/chart/control-tower 渲染生成（make deploy-render），不要手改：
-# 改模板或 values-dev.yaml 后重新渲染；CI 的 check-deploy 会比对。
+{{- if and .Values.config.enabled .Values.configWeb.enabled }}
 # Web 控制台:Caddy 伺服构建产物,与后端分开发版
 # (前端改一行不必重建 Go 二进制,这也是没选 embed.FS 的原因)。
+{{- if .Values.configWeb.rollouts.enabled }}
+# Argo Rollouts Blue-Green（configWeb.rollouts.enabled）：active Service 名字不变，
+# 新版本先起在 preview Service 后面，kubectl argo rollouts promote 后才切流量。
+apiVersion: argoproj.io/v1alpha1
+kind: Rollout
+{{- else }}
 apiVersion: apps/v1
 kind: Deployment
+{{- end }}
 metadata:
   name: config-center-web
-  namespace: config-center
+  namespace: {{ .Values.config.namespace }}
   labels:
     app: config-center-web
 spec:
-  replicas: 1
+  replicas: {{ .Values.configWeb.replicas }}
+{{- if .Values.configWeb.rollouts.enabled }}
+  revisionHistoryLimit: 3
+  strategy:
+    blueGreen:
+      activeService: config-center-web
+      previewService: config-center-web-preview
+      autoPromotionEnabled: {{ .Values.configWeb.rollouts.autoPromotionEnabled }}
+      # 给 Service endpoint 更新留出传播时间再缩掉旧版本
+      scaleDownDelaySeconds: {{ .Values.configWeb.rollouts.scaleDownDelaySeconds }}
+{{- end }}
   selector:
     matchLabels:
       app: config-center-web
@@ -21,10 +37,10 @@ spec:
         app: config-center-web
     spec:
       imagePullSecrets:
-        - name: tcr-pull
+        - name: {{ .Values.imagePullSecret }}
       containers:
         - name: config-center-web
-          image: ccr.ccs.tencentyun.com/sumery/control-tower-config-web:0.2.15
+          image: {{ include "ct.image" (dict "name" "config-web" "registry" .Values.registry "image" .Values.configWeb.image) }}
           imagePullPolicy: Always
           ports:
             - name: http
@@ -50,11 +66,11 @@ spec:
             failureThreshold: 3
           resources:
             requests:
-              cpu: 10m
-              memory: 32Mi
+              cpu: {{ .Values.configWeb.resources.requests.cpu }}
+              memory: {{ .Values.configWeb.resources.requests.memory }}
             limits:
-              cpu: 200m
-              memory: 128Mi
+              cpu: {{ .Values.configWeb.resources.limits.cpu }}
+              memory: {{ .Values.configWeb.resources.limits.memory }}
           volumeMounts:
             # 覆盖镜像里那份构建期的 config.json,实现运行时注入 ——
             # 换网关地址/Casdoor 只改 ConfigMap 重启 Pod,不必重建镜像。
@@ -69,3 +85,4 @@ spec:
         - name: runtime-config
           configMap:
             name: config-center-web-config
+{{- end }}

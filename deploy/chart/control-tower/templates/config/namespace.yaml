@@ -1,11 +1,11 @@
-# 由 deploy/chart/control-tower 渲染生成（make deploy-render），不要手改：
-# 改模板或 values-pre.yaml 后重新渲染；CI 的 check-deploy 会比对。
+{{- if and .Values.config.enabled .Values.config.createNamespace }}
 # config-center 是基础设施而不是电商业务,所以独占一个 namespace ——
 # 与 loki / observability 各自一个 ns 同构,也让它的生命周期与 ecommerce 解耦。
 apiVersion: v1
 kind: Namespace
 metadata:
-  name: config-center
+  name: {{ .Values.config.namespace }}
   labels:
     app.kubernetes.io/name: config-center
     app.kubernetes.io/part-of: platform
+{{- end }}

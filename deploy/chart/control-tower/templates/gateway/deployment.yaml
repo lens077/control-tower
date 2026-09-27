@@ -1,32 +1,7 @@
-# 由 deploy/chart/control-tower 渲染生成（make deploy-render），不要手改：
-# 改模板或 values-dev.yaml 后重新渲染；CI 的 check-deploy 会比对。
-apiVersion: policy/v1
-kind: PodDisruptionBudget
-metadata:
-  name: control-tower-gateway
-  namespace: ecommerce
-spec:
-  minAvailable: 1
-  selector:
-    matchLabels:
-      app: control-tower-gateway
----
-# 非机密运行参数（audiences、OTLP 端点按环境填写）。
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: control-tower-gateway-config
-  namespace: ecommerce
-data:
-  # 逗号分隔的 Casdoor client id 白名单：consumer/merchant/admin/desktop。
-  # 占位值，P5 切流前以实际 client id 填充（非机密）。
-  JWT_AUDIENCES: "baxf6718e392099b7915"
-  # 2026-08-24 修正：原值是 jaeger.observability.svc:4318 —— 网关把**指标**也发到了
-  # Jaeger 的 OTLP 端口，而 Jaeger 只收 trace，日志里一直在刷
-  #   failed to send metrics to http://jaeger.observability.svc:4318/v1/metrics: 404
-  # OTLP 三种信号要发给 collector 统一分流，不能直连某个后端。
-  OTEL_EXPORTER_OTLP_ENDPOINT: "otel-opentelemetry-collector.opentelemetry.svc:4318"
----
+{{- if .Values.gateway.enabled }}
+{{- $env := .Values.environment }}
+{{- $g := .Values.gateway }}
+{{- if eq $env "dev" }}
 # control-tower 网关（dev）。
 #
 # ⚠️ 本 overlay 只服务**本地开发**：下面的 BFF 三项（BFF_PUBLIC_BASE_URL /
@@ -39,18 +14,21 @@ data:
 #    线上 shop.apikv.com 点登录被 Casdoor 送去 http://localhost:3000/auth/callback，
 #    整条登录不可用。**对外可达的环境一律用 pre**（Argo CD 也只同步 pre）。
 #    守门测试见 deploy/manifest_test.go 的 TestPreGatewayEnablesBFFWithPublicOrigins。
+{{- else }}
+# control-tower 网关（{{ $env }}）。对外环境只用这一份；前置对象见 deploy/README.md。
+{{- end }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: control-tower-gateway
-  namespace: ecommerce
+  namespace: {{ $g.namespace }}
   labels:
     app: control-tower-gateway
     app.kubernetes.io/part-of: ecommerce
 spec:
   # 双副本 + PDB 保证滚动期至少一个副本可用。硬 spread 与 anti-affinity 下不使用 surge，
   # 否则第三个临时 Pod 可能没有同时满足两条约束的节点。
-  replicas: 2
+  replicas: {{ $g.replicas }}
   strategy:
     type: RollingUpdate
     rollingUpdate:
@@ -92,11 +70,11 @@ spec:
         fsGroup: 1000
         fsGroupChangePolicy: OnRootMismatch
       imagePullSecrets:
-        - name: tcr-pull
+        - name: {{ .Values.imagePullSecret }}
       containers:
         - name: gateway
           # 禁 latest；使用发布 semver tag，发布后不得覆写同名 tag。
-          image: ccr.ccs.tencentyun.com/sumery/control-tower-gateway:0.2.17
+          image: {{ include "ct.image" (dict "name" "gateway" "registry" .Values.registry "image" $g.image) }}
           imagePullPolicy: IfNotPresent
           ports:
             - name: http
@@ -106,7 +84,7 @@ spec:
             - name: SERVICE_NAME
               value: control-tower-gateway
             - name: DEPLOYMENT_MODE
-              value: dev
+              value: {{ $env }}
             - name: HTTP_PORT
               value: ":8080"
             # 自举：selector（type=config_center，key=routes.yaml）经 Secret 挂载。
@@ -117,16 +95,16 @@ spec:
             # optional=true：这份 Secret 在新集群里不存在，不 optional 的话环境变量解析阶段
             # 就 CreateContainerConfigError，Pod 起不来（AGENTS.md「恢复网关前要先补的对象」）。
             - name: CONSUL_HTTP_ADDR
-              value: consul-server.consul.svc.cluster.local:8500
+              value: {{ $g.consul.addr }}
             - name: CONSUL_HTTP_TOKEN
               valueFrom:
                 secretKeyRef:
-                  name: consul-ecommerce-token
+                  name: {{ $g.consul.tokenSecret }}
                   key: CONSUL_HTTP_TOKEN
                   optional: true
             # JWT 信任域绑定（docs/design/auth.md）。audiences=各前端 Casdoor client id（CSV，非机密）。
             - name: JWT_ISSUER
-              value: https://casdoor.apikv.com
+              value: {{ .Values.casdoor.issuer }}
             - name: JWT_AUDIENCES
               valueFrom:
                 configMapKeyRef:
@@ -134,7 +112,7 @@ spec:
                   key: JWT_AUDIENCES
             # 高危路由在线校验凭据（可选；未配置时 online_check 路由 fail-close）。
             - name: CASDOOR_URL
-              value: https://casdoor.apikv.com
+              value: {{ .Values.casdoor.issuer }}
             # ── BFF 会话轨（ADR-0002）。SESSION_REDIS_ADDR / CASDOOR_CLIENT_ID /
             # CASDOOR_CLIENT_SECRET / BFF_PUBLIC_BASE_URL 四项齐备才启用（main.go 的
             # 降级分支），缺任一项就静默退回纯 legacy bearer —— 表现是**站点根本没有登录入口**，
@@ -144,16 +122,16 @@ spec:
             # 长期跑的是 dev 那一份（DEPLOYMENT_MODE=dev 实测），于是线上 shop.apikv.com
             # 点登录被 Casdoor 送去 http://localhost:3000/auth/callback —— dev 的值上了公网。
             - name: SESSION_REDIS_ADDR
-              value: dragonfly.dragonfly.svc:6379
+              value: {{ $g.session.redisAddr }}
             - name: SESSION_REDIS_USERNAME
               valueFrom:
                 secretKeyRef:
-                  name: dragonfly-session
+                  name: {{ $g.session.secret }}
                   key: username
             - name: SESSION_REDIS_PASSWORD
               valueFrom:
                 secretKeyRef:
-                  name: dragonfly-session
+                  name: {{ $g.session.secret }}
                   key: password
             # Dragonfly 以 --tls 启动，明文连不上；证书 SAN 含 dragonfly.dragonfly.svc，
             # 故正常验 CA，不用 InsecureSkipVerify。
@@ -161,23 +139,32 @@ spec:
               value: "true"
             - name: SESSION_REDIS_CA_FILE
               value: /etc/control-tower/session-tls/ca.crt
+{{- if $g.bff.cookieInsecure }}
             # dev 经明文 HTTP 访问：Secure cookie 在此不成立，且 IP/localhost 主机名不能设 Domain。
             # 对外环境必须没有这条（守门测试 TestPreGatewayDoesNotUseDevBFFSettings）。
             - name: SESSION_COOKIE_INSECURE
               value: "true"
+{{- else }}
+            # 对外环境全程 HTTPS：**不设** SESSION_COOKIE_INSECURE，会话 cookie 保持
+            # DefaultCookieConfig 的 __Secure- 前缀 + Secure 属性。
+            # 也**不设** SESSION_COOKIE_DOMAIN：cookie 按 host-only 落在网关主机名，
+            # 前端与它同站（同一 eTLD+1 apikv.com），SameSite=Lax 不拦；
+            # 跨源取用靠 routes.yaml 的 cors.allow_credentials + allow_origins 放行。
+            # 设成 .apikv.com 只会把 cookie 多发给一堆不需要它的子域。
+{{- end }}
             #
             # 回调基地址必须是**网关自己的源**：OAuth 回调打的是网关的 /auth/callback
             # （redirectURI() = BFF_PUBLIC_BASE_URL + "/auth/callback"），不是前端路由。
             # dev 里前端经 vite proxy 把 /auth 代到本网关，所以基地址是前端源 localhost:3000。
             # ⚠️ Casdoor 应用 ecommerce 的 Redirect URLs 必须含 <BFF_PUBLIC_BASE_URL>/auth/callback。
             - name: BFF_PUBLIC_BASE_URL
-              value: http://localhost:3000
+              value: {{ $g.bff.publicBaseUrl }}
             # 登录完跳回前端。网关 redirectAllowed() 无条件放行相对路径，而相对路径会按
             # **网关的源**解析（回调末尾直接 http.Redirect），所以前端必须传绝对地址
             # （frontend packages/configs/src/auth/bff.ts 的 startBffLogin 已归一化），
             # 这里逐条列出允许跳回的前端源。
             - name: BFF_ALLOWED_REDIRECTS
-              value: http://localhost:3000
+              value: {{ $g.bff.allowedRedirects }}
             # optional=true：Secret 缺失时 env 不注入，会话轨自动保持关闭而不是 CrashLoop。
             - name: CASDOOR_CLIENT_ID
               valueFrom:
@@ -199,17 +186,17 @@ spec:
                   key: OTEL_EXPORTER_OTLP_ENDPOINT
                   optional: true
             - name: OTEL_TRACES_SAMPLER_RATIO
-              value: "0.2"
+              value: {{ $g.otlp.tracesSamplerRatio | quote }}
             # OTLP 鉴权头(Vault → ExternalSecret otel-auth，网关专属 key)。
             # optional=true：Secret 未就绪时退回匿名发送而不是 CrashLoop。
             - name: OTEL_EXPORTER_OTLP_HEADERS
               valueFrom:
                 secretKeyRef:
-                  name: otel-auth
+                  name: {{ $g.otlp.headersSecret }}
                   key: OTEL_EXPORTER_OTLP_HEADERS_GATEWAY
                   optional: true
             - name: LOG_LEVEL
-              value: info
+              value: {{ $g.logLevel }}
           volumeMounts:
             - name: config-source
               mountPath: /etc/control-tower/config-source
@@ -236,22 +223,50 @@ spec:
             periodSeconds: 10
           resources:
             requests:
-              cpu: 150m
-              memory: 256Mi
+              cpu: {{ $g.resources.requests.cpu }}
+              memory: {{ $g.resources.requests.memory }}
             limits:
-              cpu: 300m
-              memory: 512Mi
+              cpu: {{ $g.resources.limits.cpu }}
+              memory: {{ $g.resources.limits.memory }}
       volumes:
         # 会话存储的 CA。Secret dragonfly-session 同时带 username/password/ca.crt，
         # 这里只挂 ca.crt。
         - name: session-tls
           secret:
-            secretName: dragonfly-session
+            secretName: {{ $g.session.secret }}
             items:
               - key: ca.crt
                 path: ca.crt
             defaultMode: 0444
         - name: config-source
           secret:
-            secretName: control-tower-config-source-dev
+            secretName: {{ $g.configSourceSecret }}
             defaultMode: 0400
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: control-tower-gateway
+  namespace: {{ $g.namespace }}
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: control-tower-gateway
+---
+# 非机密运行参数（audiences、OTLP 端点按环境填写）。
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: control-tower-gateway-config
+  namespace: {{ $g.namespace }}
+data:
+  # 逗号分隔的 Casdoor client id 白名单：consumer/merchant/admin/desktop。
+  # 占位值，P5 切流前以实际 client id 填充（非机密）。
+  JWT_AUDIENCES: {{ .Values.casdoor.clientId | quote }}
+  # 2026-08-24 修正：原值是 jaeger.observability.svc:4318 —— 网关把**指标**也发到了
+  # Jaeger 的 OTLP 端口，而 Jaeger 只收 trace，日志里一直在刷
+  #   failed to send metrics to http://jaeger.observability.svc:4318/v1/metrics: 404
+  # OTLP 三种信号要发给 collector 统一分流，不能直连某个后端。
+  OTEL_EXPORTER_OTLP_ENDPOINT: {{ $g.otlp.endpoint | quote }}
+{{- end }}

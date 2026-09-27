@@ -1,0 +1,117 @@
+# control-tower chart 公共默认值。
+#
+# 这里放的是与环境无关的结构：副本、探针、资源、Casdoor 信任域。
+# 环境相关值（DEPLOYMENT_MODE、主机名、镜像 tag、BFF 回调）在 values-<env>.yaml，
+# 两份 values 一律叠加使用：-f values.yaml -f values-<env>.yaml。
+#
+# 三个组件各有 enabled 开关，用于 Argo CD 按 namespace 拆成两个 Application
+# （见 components/*.yaml）；本地渲染 deploy/<env>/ 时三者都开。
+#
+# Secret 一律不在 chart 里：这里只引用名字（tcr-pull、config-center-bootstrap、
+# config-center-iam、dragonfly-session、casdoor-bff、control-tower-config-source-<env>、
+# consul-ecommerce-token、otel-auth），由人按 deploy/README.md 建好。
+
+# DEPLOYMENT_MODE；同时决定注释与守门测试里的环境语义。
+environment: pre
+
+imagePullSecret: tcr-pull
+
+registry: ccr.ccs.tencentyun.com/sumery
+
+casdoor:
+  issuer: https://casdoor.apikv.com
+  # 共享 client id（非机密）：config 服务校验 audience，config-web 发起登录，网关作 JWT audiences。
+  clientId: baxf6718e392099b7915
+  organizationName: lens
+  appName: ecommerce
+
+config:
+  enabled: true
+  # 独占 namespace：config-center 是基础设施而不是电商业务（同 loki / observability）。
+  namespace: config-center
+  # 渲染 Namespace 对象。Argo CD 的 AppProject 不放行集群级资源，那边关掉（components/config.yaml）。
+  createNamespace: true
+  image:
+    repository: control-tower-config
+    tag: ""
+  replicas: 1
+  resources:
+    requests: { cpu: 100m, memory: 128Mi }
+    limits: { cpu: "1", memory: 512Mi }
+  # HTTPRoute 主机名：Web 与 API 各一组（按 host 分而不是按路径分，见模板注释）。
+  hosts:
+    web: []
+    api: []
+  # cert-manager 证书：当前不是入口必需（共享 cilium-gateway 已有泛域名证书），
+  # 留给 server.tls / TLSRoute Passthrough 场景。
+  certificate:
+    commonName: config.app.com
+    dnsNames: []
+  vpa:
+    enabled: true
+    minAllowed: { cpu: 50m, memory: 128Mi }
+    maxAllowed: { cpu: 500m, memory: 512Mi }
+
+configWeb:
+  enabled: true
+  image:
+    repository: control-tower-config-web
+    tag: ""
+  replicas: 1
+  # 运行时注入到 config.json 的后端地址（浏览器跨源访问，必须在 config 服务的 CORS 白名单里）。
+  apiUrl: ""
+  resources:
+    requests: { cpu: 10m, memory: 32Mi }
+    limits: { cpu: 200m, memory: 128Mi }
+  vpa:
+    enabled: true
+    minAllowed: { cpu: 10m, memory: 32Mi }
+    maxAllowed: { cpu: 200m, memory: 128Mi }
+  # Argo Rollouts Blue-Green（与 ecommerce 前端同一套做法）。
+  # 开启后 Deployment 变为 Rollout，多一个 preview Service，VPA 关闭（VPA 对 Rollout target 未验证）。
+  # 默认关；先完成 Argo CD 接管，再在 pre 单独开启并做一次 promote 验收。
+  rollouts:
+    enabled: false
+    autoPromotionEnabled: false
+    scaleDownDelaySeconds: 30
+
+gateway:
+  enabled: true
+  namespace: ecommerce
+  image:
+    repository: control-tower-gateway
+    tag: ""
+  # 双副本 + PDB；硬 spread 与 anti-affinity 下不用 surge。
+  replicas: 2
+  resources:
+    requests: { cpu: 150m, memory: 256Mi }
+    limits: { cpu: 300m, memory: 512Mi }
+  hosts: []
+  # selector（type=config_center，key=routes.yaml）+ machine token，按环境各一份 Secret。
+  configSourceSecret: ""
+  bff:
+    # 网关自己的公网源；redirect_uri = publicBaseUrl + /auth/callback。
+    publicBaseUrl: ""
+    # 登录完允许跳回的前端源（绝对地址）。
+    allowedRedirects: ""
+    # 只有明文 HTTP 的本地开发才为 true；对外环境必须为 false（守门测试会拦）。
+    cookieInsecure: false
+  session:
+    redisAddr: dragonfly.dragonfly.svc:6379
+    secret: dragonfly-session
+  consul:
+    addr: consul-server.consul.svc.cluster.local:8500
+    # 网关不经 Consul 找任何后端（routes 全是 direct://），token 只是 hashicorp client 的兜底。
+    # 该 Secret 在新集群里不存在，引用必须 optional，否则 Pod 起不来。
+    tokenSecret: consul-ecommerce-token
+  otlp:
+    endpoint: otel-opentelemetry-collector.opentelemetry.svc:4318
+    tracesSamplerRatio: "0.2"
+    headersSecret: otel-auth
+  logLevel: info
+  vpa:
+    enabled: true
+    # Off：只出推荐值不动 Pod。Recreate/Auto 会与 PDB 拉扯（见模板注释）。
+    updateMode: "Off"
+    minAllowed: { cpu: 100m, memory: 128Mi }
+    maxAllowed: { cpu: 300m, memory: 512Mi }

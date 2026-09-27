@@ -1,0 +1,31 @@
+# dev：只服务本地开发，渲染出的 deploy/dev/ **不要 apply 进集群**。
+#
+# 网关的 BFF 三项（publicBaseUrl / allowedRedirects = http://localhost:3000，
+# cookieInsecure=true）只在「前端 vite dev server 与网关同源」时成立。
+# namespace 与 HTTPRoute 主机名和 pre 完全相同，apply 这份 = 把 localhost 值推上公网，
+# kubectl 不会有任何提示（2026-09-20 事故）。Argo CD 没有 dev 的 Application。
+environment: dev
+
+config:
+  image:
+    tag: 0.2.11
+  hosts:
+    web: [config.app.com, config.apikv.com]
+    api: [config-api.app.com, config-api.apikv.com]
+  certificate:
+    dnsNames: [config.app.com, config-api.app.com]
+
+configWeb:
+  image:
+    tag: 0.2.15
+  apiUrl: https://config-api.app.com
+
+gateway:
+  image:
+    tag: 0.2.17
+  hosts: [gateway.dev.test, gateway.apikv.com]
+  configSourceSecret: control-tower-config-source-dev
+  bff:
+    publicBaseUrl: http://localhost:3000
+    allowedRedirects: http://localhost:3000
+    cookieInsecure: true

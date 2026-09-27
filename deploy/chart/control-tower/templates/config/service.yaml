@@ -1,10 +1,9 @@
-# 由 deploy/chart/control-tower 渲染生成（make deploy-render），不要手改：
-# 改模板或 values-pre.yaml 后重新渲染；CI 的 check-deploy 会比对。
+{{- if .Values.config.enabled }}
 apiVersion: v1
 kind: Service
 metadata:
   name: config-center
-  namespace: config-center
+  namespace: {{ .Values.config.namespace }}
 spec:
   selector:
     app: config-center
@@ -15,3 +14,4 @@ spec:
       port: 30010
       targetPort: http
   type: ClusterIP
+{{- end }}

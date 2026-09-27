@@ -1,3 +1,5 @@
+# 由 deploy/chart/control-tower 渲染生成（make deploy-render），不要手改：
+# 改模板或 values-dev.yaml 后重新渲染；CI 的 check-deploy 会比对。
 # 由集群级 CA 直接签发,与 loki/jaeger/vm/casdoor 同一种简化写法
 # (opentelemetry 那套「ns 级 root-ca → ns 级 Issuer → 业务证书」是给多域名
 #  共用一个 ns CA 的场景准备的,这里只有两个域名,多一层没有收益)。

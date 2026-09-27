@@ -1,6 +1,9 @@
 package deploy_test
 
 import (
+	"bytes"
+	"errors"
+	"io"
 	"os"
 	"path/filepath"
 	"testing"
@@ -28,6 +31,7 @@ type rollingStrategy struct {
 }
 
 type deployment struct {
+	Kind string `yaml:"kind"`
 	Spec struct {
 		Strategy rollingStrategy `yaml:"strategy"`
 		Selector struct {
@@ -54,6 +58,26 @@ type deployment struct {
 	} `yaml:"spec"`
 }
 
+// findDeployment 在多文档清单里按 kind 找 Deployment。
+// deploy/<env>/ 由 helm 渲染（scripts/deploy-render.py），同一文件里的文档按 kind 顺序排列，
+// PodDisruptionBudget 与 ConfigMap 会排在 Deployment 前面，不能假定第一个文档是什么。
+func findDeployment(t *testing.T, path string, data []byte) deployment {
+	t.Helper()
+	decoder := yaml.NewDecoder(bytes.NewReader(data))
+	for {
+		var manifest deployment
+		if err := decoder.Decode(&manifest); err != nil {
+			if errors.Is(err, io.EOF) {
+				t.Fatalf("%s has no Deployment document", path)
+			}
+			t.Fatalf("parse %s: %v", path, err)
+		}
+		if manifest.Kind == "Deployment" {
+			return manifest
+		}
+	}
+}
+
 func TestGatewayDeploymentSpreadsAcrossNodes(t *testing.T) {
 	for _, environment := range []string{"dev", "pre"} {
 		environment := environment
@@ -64,10 +88,7 @@ func TestGatewayDeploymentSpreadsAcrossNodes(t *testing.T) {
 				t.Fatalf("read %s: %v", path, err)
 			}
 
-			var manifest deployment
-			if err := yaml.Unmarshal(data, &manifest); err != nil {
-				t.Fatalf("parse %s: %v", path, err)
-			}
+			manifest := findDeployment(t, path, data)
 
 			const partOf = "app.kubernetes.io/part-of"
 			labels := manifest.Spec.Template.Metadata.Labels

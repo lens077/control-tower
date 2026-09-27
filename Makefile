@@ -1,6 +1,6 @@
 # control-tower 聚合入口。目标保持幂等；CI 与本地共用。
 
-.PHONY: api api-go api-ts tools check-gen lint build test tidy verify config dev gateway sync-ecommerce-schemas
+.PHONY: api api-go api-ts tools check-gen lint build test tidy verify config dev gateway sync-ecommerce-schemas deploy-render check-deploy helm-lint
 
 # 重新生成 proto 产物：Go + Connect（buf.gen.yaml）与控制台 TS（buf.gen.ts.yaml → web/src/gen）。
 # 两份必须一起出：只跑 Go 那份会让 web/src/gen 悄悄落后于 proto（2026-09-15 实测 system.proto
@@ -44,6 +44,21 @@ tidy:
 
 # 提交前最小验证链。
 verify: build lint test
+
+# 部署清单：deploy/chart/control-tower 是唯一真相源，deploy/{dev,pre}/ 是它的渲染产物
+# （守门测试与 kubectl 手工兜底读的是产物）。改了模板或 values-<env>.yaml 要重新渲染并提交。
+deploy-render:
+	python3 scripts/deploy-render.py
+
+# 渲染产物门禁：与 check-gen 同一纪律，CI 的 test job 跑它。
+check-deploy: helm-lint
+	python3 scripts/deploy-render.py --check
+
+helm-lint:
+	helm lint deploy/chart/control-tower -f deploy/chart/control-tower/values-pre.yaml
+	helm lint deploy/chart/control-tower -f deploy/chart/control-tower/values-dev.yaml
+	helm template control-tower deploy/chart/control-tower -f deploy/chart/control-tower/values.yaml -f deploy/chart/control-tower/values-pre.yaml -f deploy/chart/control-tower/components/config.yaml >/dev/null
+	helm template control-tower deploy/chart/control-tower -f deploy/chart/control-tower/values.yaml -f deploy/chart/control-tower/values-pre.yaml -f deploy/chart/control-tower/components/gateway.yaml >/dev/null
 
 # 本机启动配置中心；脚本负责渲染临时配置并关闭不适用的本地依赖。
 config:

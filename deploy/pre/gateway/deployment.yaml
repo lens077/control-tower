@@ -1,4 +1,33 @@
-# control-tower 网关（pre）。对外环境只 apply 这一份；前置对象见 deploy/README.md。
+# 由 deploy/chart/control-tower 渲染生成（make deploy-render），不要手改：
+# 改模板或 values-pre.yaml 后重新渲染；CI 的 check-deploy 会比对。
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: control-tower-gateway
+  namespace: ecommerce
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: control-tower-gateway
+---
+# 非机密运行参数（audiences、OTLP 端点按环境填写）。
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: control-tower-gateway-config
+  namespace: ecommerce
+data:
+  # 逗号分隔的 Casdoor client id 白名单：consumer/merchant/admin/desktop。
+  # 占位值，P5 切流前以实际 client id 填充（非机密）。
+  JWT_AUDIENCES: "baxf6718e392099b7915"
+  # 2026-08-24 修正：原值是 jaeger.observability.svc:4318 —— 网关把**指标**也发到了
+  # Jaeger 的 OTLP 端口，而 Jaeger 只收 trace，日志里一直在刷
+  #   failed to send metrics to http://jaeger.observability.svc:4318/v1/metrics: 404
+  # OTLP 三种信号要发给 collector 统一分流，不能直连某个后端。
+  OTEL_EXPORTER_OTLP_ENDPOINT: "otel-opentelemetry-collector.opentelemetry.svc:4318"
+---
+# control-tower 网关（pre）。对外环境只用这一份；前置对象见 deploy/README.md。
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -72,8 +101,10 @@ spec:
             # 自举：selector（type=config_center，key=routes.yaml）经 Secret 挂载。
             - name: CONFIG_SOURCE_FILE
               value: /etc/control-tower/config-source/gateway.yaml
-            # Consul 只做发现。ACL 开启后缺 token 的症状是 200 空列表而不是报错；
+            # Consul 只做发现；本网关的 routes 全是 direct://，实际不经 Consul 找任何后端。
             # 变量名必须是 CONSUL_HTTP_TOKEN（hashicorp client 的兜底读取）。
+            # optional=true：这份 Secret 在新集群里不存在，不 optional 的话环境变量解析阶段
+            # 就 CreateContainerConfigError，Pod 起不来（AGENTS.md「恢复网关前要先补的对象」）。
             - name: CONSUL_HTTP_ADDR
               value: consul-server.consul.svc.cluster.local:8500
             - name: CONSUL_HTTP_TOKEN
@@ -81,6 +112,7 @@ spec:
                 secretKeyRef:
                   name: consul-ecommerce-token
                   key: CONSUL_HTTP_TOKEN
+                  optional: true
             # JWT 信任域绑定（docs/design/auth.md）。audiences=各前端 Casdoor client id（CSV，非机密）。
             - name: JWT_ISSUER
               value: https://casdoor.apikv.com
@@ -95,9 +127,9 @@ spec:
             # ── BFF 会话轨（ADR-0002）。SESSION_REDIS_ADDR / CASDOOR_CLIENT_ID /
             # CASDOOR_CLIENT_SECRET / BFF_PUBLIC_BASE_URL 四项齐备才启用（main.go 的
             # 降级分支），缺任一项就静默退回纯 legacy bearer —— 表现是**站点根本没有登录入口**，
-            # 不是报错。所以这一整块在 pre 不能省。
+            # 不是报错。所以这一整块在对外环境不能省。
             #
-            # 2026-09-20 事故：本文件此前完全没有 BFF 环境变量，而集群 ns=ecommerce 里
+            # 2026-09-20 事故：pre 此前完全没有 BFF 环境变量，而集群 ns=ecommerce 里
             # 长期跑的是 dev 那一份（DEPLOYMENT_MODE=dev 实测），于是线上 shop.apikv.com
             # 点登录被 Casdoor 送去 http://localhost:3000/auth/callback —— dev 的值上了公网。
             - name: SESSION_REDIS_ADDR
@@ -118,16 +150,17 @@ spec:
               value: "true"
             - name: SESSION_REDIS_CA_FILE
               value: /etc/control-tower/session-tls/ca.crt
-            # pre 全程 HTTPS：**不设** SESSION_COOKIE_INSECURE，会话 cookie 保持
+            # 对外环境全程 HTTPS：**不设** SESSION_COOKIE_INSECURE，会话 cookie 保持
             # DefaultCookieConfig 的 __Secure- 前缀 + Secure 属性。
-            # 也**不设** SESSION_COOKIE_DOMAIN：cookie 按 host-only 落在 gateway.apikv.com，
-            # 前端 shop.apikv.com 与它同站（同一 eTLD+1 apikv.com），SameSite=Lax 不拦；
+            # 也**不设** SESSION_COOKIE_DOMAIN：cookie 按 host-only 落在网关主机名，
+            # 前端与它同站（同一 eTLD+1 apikv.com），SameSite=Lax 不拦；
             # 跨源取用靠 routes.yaml 的 cors.allow_credentials + allow_origins 放行。
             # 设成 .apikv.com 只会把 cookie 多发给一堆不需要它的子域。
             #
-            # 回调基地址必须是**网关自己的公网源**：OAuth 回调打的是网关的 /auth/callback
+            # 回调基地址必须是**网关自己的源**：OAuth 回调打的是网关的 /auth/callback
             # （redirectURI() = BFF_PUBLIC_BASE_URL + "/auth/callback"），不是前端路由。
-            # ⚠️ Casdoor 应用 ecommerce 的 Redirect URLs 必须含 https://gateway.apikv.com/auth/callback。
+            # dev 里前端经 vite proxy 把 /auth 代到本网关，所以基地址是前端源 localhost:3000。
+            # ⚠️ Casdoor 应用 ecommerce 的 Redirect URLs 必须含 <BFF_PUBLIC_BASE_URL>/auth/callback。
             - name: BFF_PUBLIC_BASE_URL
               value: https://gateway.apikv.com
             # 登录完跳回前端。网关 redirectAllowed() 无条件放行相对路径，而相对路径会按
@@ -213,30 +246,3 @@ spec:
           secret:
             secretName: control-tower-config-source-pre
             defaultMode: 0400
----
-apiVersion: policy/v1
-kind: PodDisruptionBudget
-metadata:
-  name: control-tower-gateway
-  namespace: ecommerce
-spec:
-  minAvailable: 1
-  selector:
-    matchLabels:
-      app: control-tower-gateway
----
-# 非机密运行参数（audiences、OTLP 端点按环境填写）。
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: control-tower-gateway-config
-  namespace: ecommerce
-data:
-  # 逗号分隔的 Casdoor client id 白名单：consumer/merchant/admin/desktop。
-  # 占位值，P5 切流前以实际 client id 填充（非机密）。
-  JWT_AUDIENCES: "baxf6718e392099b7915"
-  # 2026-08-24 修正：原值是 jaeger.observability.svc:4318 —— 网关把**指标**也发到了
-  # Jaeger 的 OTLP 端口，而 Jaeger 只收 trace，日志里一直在刷
-  #   failed to send metrics to http://jaeger.observability.svc:4318/v1/metrics: 404
-  # OTLP 三种信号要发给 collector 统一分流，不能直连某个后端。
-  OTEL_EXPORTER_OTLP_ENDPOINT: "otel-opentelemetry-collector.opentelemetry.svc:4318"

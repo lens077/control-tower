@@ -1,3 +1,5 @@
+# 由 deploy/chart/control-tower 渲染生成（make deploy-render），不要手改：
+# 改模板或 values-pre.yaml 后重新渲染；CI 的 check-deploy 会比对。
 # 网关后端 Service（pre）。对外入口统一由共享 cilium-gateway 的 HTTPRoute 提供；
 # 本 Service 只在集群内承接转发。
 apiVersion: v1

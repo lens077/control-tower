@@ -1,3 +1,5 @@
+# 由 deploy/chart/control-tower 渲染生成（make deploy-render），不要手改：
+# 改模板或 values-pre.yaml 后重新渲染；CI 的 check-deploy 会比对。
 # 运行时注入的前端配置。
 #
 # web 启动时 fetch("config.json", {cache:"no-store"}) 读它(见 web/src/runtime-config.ts),
@@ -5,9 +7,9 @@
 # 构建期 env 的原因:同一个镜像能在 dev/pre/prod 用不同后端地址跑。
 #
 # Web/API 公网 hostname 变更时必须同步检查两处，否则浏览器会请求旧域名或被 CORS 拦截：
-#   1. 这里的 apiUrl 必须指向 API 公网入口 https://config-api.apikv.com
+#   1. 这里的 apiUrl 必须指向 API 公网入口（values-<env>.yaml 的 configWeb.apiUrl）
 #   2. config-center 的 bootstrap 配置必须在 server.cors.allowed_origins 中包含
-#      Web 控制台来源 https://config.apikv.com
+#      Web 控制台来源（config.hosts.web 对应的 https 源）
 # Web 与 API 是两个 hostname，跨源请求必须通过预检。
 apiVersion: v1
 kind: ConfigMap

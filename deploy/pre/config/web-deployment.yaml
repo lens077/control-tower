@@ -1,3 +1,5 @@
+# 由 deploy/chart/control-tower 渲染生成（make deploy-render），不要手改：
+# 改模板或 values-pre.yaml 后重新渲染；CI 的 check-deploy 会比对。
 # Web 控制台:Caddy 伺服构建产物,与后端分开发版
 # (前端改一行不必重建 Go 二进制,这也是没选 embed.FS 的原因)。
 apiVersion: apps/v1

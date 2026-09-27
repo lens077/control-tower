@@ -1,5 +1,4 @@
-# 由 deploy/chart/control-tower 渲染生成（make deploy-render），不要手改：
-# 改模板或 values-pre.yaml 后重新渲染；CI 的 check-deploy 会比对。
+{{- if .Values.config.enabled }}
 # 由集群级 CA 直接签发,与 loki/jaeger/vm/casdoor 同一种简化写法
 # (opentelemetry 那套「ns 级 root-ca → ns 级 Issuer → 业务证书」是给多域名
 #  共用一个 ns CA 的场景准备的,这里只有两个域名,多一层没有收益)。
@@ -16,13 +15,13 @@ apiVersion: cert-manager.io/v1
 kind: Certificate
 metadata:
   name: config-center-tls
-  namespace: config-center
+  namespace: {{ .Values.config.namespace }}
 spec:
   secretName: config-center-tls-secret
   issuerRef:
     name: global-ca-issuer
     kind: ClusterIssuer
-  commonName: config.app.com
+  commonName: {{ .Values.config.certificate.commonName }}
   privateKey:
     algorithm: ECDSA
     size: 256
@@ -31,8 +30,10 @@ spec:
     - digital signature
     - key encipherment
   dnsNames:
-    - "config.dev.test"
-    - "config-api.dev.test"
+{{- range .Values.config.certificate.dnsNames }}
+    - {{ . | quote }}
+{{- end }}
     # 集群内直连用的 Service DNS —— server.tls 开启后,SDK 校验证书时用得上
-    - "config-center.config-center.svc"
-    - "config-center.config-center.svc.cluster.local"
+    - "config-center.{{ .Values.config.namespace }}.svc"
+    - "config-center.{{ .Values.config.namespace }}.svc.cluster.local"
+{{- end }}

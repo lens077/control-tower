@@ -1,5 +1,4 @@
-# 由 deploy/chart/control-tower 渲染生成（make deploy-render），不要手改：
-# 改模板或 values-pre.yaml 后重新渲染；CI 的 check-deploy 会比对。
+{{- if .Values.config.enabled }}
 # 两个 hostname 都挂 default 里的共享 cilium-gateway 的 https listener
 # (mode: Terminate,证书是泛域名 global-default-tls,覆盖 *.app.com)。
 # 与 otel/grafana/loki/jaeger/vm 完全同一种接法。
@@ -7,19 +6,21 @@
 # 为什么拆两个 hostname 而不是一个域名下按路径分:Connect 的路径是
 # /config.v1.ConfigService/xxx,前端资源是 /assets/xxx 与 / —— 用 PathPrefix
 # 区分要写死 proto 包名,以后加服务就得改路由。按 host 分,各自的根路径都干净。
+---
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
 metadata:
   name: config-center-web-route
-  namespace: config-center
+  namespace: {{ .Values.config.namespace }}
 spec:
   parentRefs:
     - name: cilium-gateway
       namespace: default
       sectionName: https
   hostnames:
-    - "config.dev.test"
-    - "config.apikv.com"
+{{- range .Values.config.hosts.web }}
+    - {{ . | quote }}
+{{- end }}
   rules:
     - matches:
         - path:
@@ -33,15 +34,16 @@ apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
 metadata:
   name: config-center-api-route
-  namespace: config-center
+  namespace: {{ .Values.config.namespace }}
 spec:
   parentRefs:
     - name: cilium-gateway
       namespace: default
       sectionName: https
   hostnames:
-    - "config-api.dev.test"
-    - "config-api.apikv.com"
+{{- range .Values.config.hosts.api }}
+    - {{ . | quote }}
+{{- end }}
   rules:
     - matches:
         - path:
@@ -50,3 +52,4 @@ spec:
       backendRefs:
         - name: config-center
           port: 30010
+{{- end }}

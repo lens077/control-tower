@@ -1,5 +1,4 @@
-# 由 deploy/chart/control-tower 渲染生成（make deploy-render），不要手改：
-# 改模板或 values-dev.yaml 后重新渲染；CI 的 check-deploy 会比对。
+{{- if and .Values.config.enabled .Values.configWeb.enabled }}
 # 运行时注入的前端配置。
 #
 # web 启动时 fetch("config.json", {cache:"no-store"}) 读它(见 web/src/runtime-config.ts),
@@ -15,16 +14,17 @@ apiVersion: v1
 kind: ConfigMap
 metadata:
   name: config-center-web-config
-  namespace: config-center
+  namespace: {{ .Values.config.namespace }}
 data:
   config.json: |
     {
-      "apiUrl": "https://config-api.app.com",
+      "apiUrl": {{ .Values.configWeb.apiUrl | quote }},
       "casdoor": {
-        "serverUrl": "https://casdoor.apikv.com",
-        "clientId": "baxf6718e392099b7915",
-        "organizationName": "lens",
-        "appName": "ecommerce",
+        "serverUrl": {{ .Values.casdoor.issuer | quote }},
+        "clientId": {{ .Values.casdoor.clientId | quote }},
+        "organizationName": {{ .Values.casdoor.organizationName | quote }},
+        "appName": {{ .Values.casdoor.appName | quote }},
         "redirectPath": "/callback"
       }
     }
+{{- end }}

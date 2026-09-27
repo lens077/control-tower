@@ -1,0 +1,39 @@
+{{- if and .Values.config.enabled .Values.configWeb.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: config-center-web
+  namespace: {{ .Values.config.namespace }}
+spec:
+  selector:
+    app: config-center-web
+  ports:
+    # 端口必须命名:HTTPRoute 的 backendRefs 按名字解析 targetPort
+    - name: http
+      protocol: TCP
+      port: 80
+      targetPort: http
+  # ClusterIP 即可 —— 外部入口由 HTTPRoute + 共享 cilium-gateway 负责。
+  # 不用 LoadBalancer(ecommerce 那些业务服务的做法):那会给每个服务
+  # 占一个外部 IP,而这里走的是 Gateway 统一入口。
+  type: ClusterIP
+{{- if .Values.configWeb.rollouts.enabled }}
+---
+# Blue-Green 的 preview Service:新 ReplicaSet 先只接这里的流量,人工冒烟后 promote
+# 才把上面的 active Service 切过去。HTTPRoute 永远只指 active，不要把它指到 preview。
+apiVersion: v1
+kind: Service
+metadata:
+  name: config-center-web-preview
+  namespace: {{ .Values.config.namespace }}
+spec:
+  selector:
+    app: config-center-web
+  ports:
+    - name: http
+      protocol: TCP
+      port: 80
+      targetPort: http
+  type: ClusterIP
+{{- end }}
+{{- end }}

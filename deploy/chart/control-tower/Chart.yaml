@@ -1,0 +1,7 @@
+apiVersion: v2
+name: control-tower
+description: control-tower 网关与配置中心（config / config-web / gateway）
+type: application
+# chart 版本只在模板结构变化时递增；镜像版本在 values-<env>.yaml 里，由发布 tag 回写。
+version: 0.1.0
+appVersion: "0.2.17"

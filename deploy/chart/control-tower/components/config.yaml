@@ -1,0 +1,8 @@
+# Argo CD Application control-tower-config 用：只渲染 config-center namespace 里的对象。
+# Namespace 是集群级资源，AppProject 不放行，由人建（已存在）。
+config:
+  createNamespace: false
+configWeb:
+  enabled: true
+gateway:
+  enabled: false
