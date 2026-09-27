@@ -11,10 +11,14 @@
 |---|---|---|
 | config | `config-center/config-center` **运行中**（`0.2.18`，TCR，1 副本） | Argo CD Application `control-tower-config`（自动同步 + selfHeal，prune 关） |
 | config web | `config-center/config-center-web` **运行中**（`0.2.18`，TCR），即 `config.apikv.com` | 同上 |
-| gateway | Application `control-tower-gateway` 已建（自动同步**关**），三个阻断项已处理，等一次手动 `argocd app sync` 验收后再开自动同步 | Argo CD |
+| gateway | `ecommerce/control-tower-gateway` **运行中**（`0.2.18`，2 副本，`/readyz` 200） | Argo CD Application `control-tower-gateway`（自动同步 + selfHeal，prune 关） |
 
 公网探活：`config.apikv.com/` 200、`config-api.apikv.com/healthz` 200（`build: 0.2.18`）。
-网关上线后根路径 `/` 仍按契约返回应用层 `404 ROUTE_NOT_FOUND`，入口探活只能用 `/healthz`。
+**`gateway.apikv.com` 公网仍 404**：不是集群问题——集群内 `ecommerce-gateway-service:8080/readyz` 200、
+HTTPRoute Accepted——而是 Pangolin 里没有这条资源（kubernetes 仓 HANDOFF-2026-09-22 §7.1 当时按「未部署」删了
+rid 14）。在 `pangolin.apikv.com` 按 `config-api.apikv.com`（rid 63）同样写法重建：site `k8s-cluster`，
+target `10.10.31.240:443` https，Host/tlsServerName `gateway.dev.test`，SSO 关。响应体是纯文本
+`404 page not found` 就是没到集群；到了集群根路径 `/` 是应用层 JSON `404 ROUTE_NOT_FOUND`，入口探活只能用 `/healthz`。
 
 config 的两条 HTTPRoute 主机名是 `config(-api).dev.test` + `config(-api).apikv.com`，
 Pangolin 资源的 tlsServerName/Host 指向 `*.dev.test`（2026-09-23，5cbf2d5）。主机名现在在
@@ -31,6 +35,10 @@ Pangolin 资源的 tlsServerName/Host 指向 `*.dev.test`（2026-09-23，5cbf2d5
   `authz.Enforcer.SetPolicies` 验证过旧表被拒、新表可加载；
 - `CONSUL_HTTP_TOKEN` 的 `secretKeyRef` 在 chart 里已是 `optional: true`（Secret `consul-ecommerce-token`
   新集群没有，网关也不经 Consul 找任何后端）；
+- **Config Center 里的 `gateway/pre/routes.yaml` 曾是旧的 `discovery:///` 版本**（v1），网关起来后 resolver
+  永远等 Consul 快照、`/readyz` 503。已用 `configctl put` 灌入仓库 `routes/pre.yaml`（v2，全 `direct://`）。
+  注意 resolver 的 watch 集合在**启动时**按路由表定死（`main.go` 「已知边界」），热更新换了 target 写法不会重建，
+  必须 `rollout restart` 一次。以后改 `routes/pre.yaml` 要同时写回这个键并滚动网关；
 - Secret `otel-auth`（`optional: true`）仍缺，缺了只是匿名推 OTLP。token 真相源是
   `opentelemetry/otlp-public-auth`，键名 `OTEL_EXPORTER_OTLP_HEADERS_GATEWAY`。
 

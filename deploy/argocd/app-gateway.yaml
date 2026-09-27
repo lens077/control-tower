@@ -4,6 +4,7 @@
 # AGENTS.md「恢复网关前要先补的对象」三项（config-source-pre Secret、consul token 引用
 # optional、Config Center 里 policies.csv 第 29 行）处理完之前保持 automated.enabled=false，
 # Argo 只展示 diff 不动手。
+# 2026-09-27 三项已处理，手动 sync 一次：7 个对象创建，Pod 1/1，/readyz 200（集群内），自动同步已开。
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
@@ -40,7 +41,7 @@ spec:
         - /spec/rules/0/backendRefs/0/weight
   syncPolicy:
     automated:
-      enabled: false
+      enabled: true
       prune: false
       selfHeal: true
     syncOptions:
