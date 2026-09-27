@@ -2,69 +2,70 @@
 
 网关与配置中心合一的平台仓：单 module、两服务（`services/gateway`、`services/config`）。由 ecommerce 旧网关（go-kratos/gateway fork）与 config-center 合并重写而来。
 
-## 部署现状（2026-09-27 逐资源核对 + 公网探活）
+## 部署现状（2026-09-27，Argo CD 接管后）
 
-集群在 2026-09-21 前后**又重建了一次**（节点 k1/k2/k3 与大部分 ns 的 AGE 约 5 天），
-node3（Pigsty）已于 2026-09-03 退役，数据面全部回到集群内。重建后只恢复了 config，**网关没有部署**。
+集群在 2026-09-21 前后**又重建了一次**（节点 k1/k2/k3），node3（Pigsty）已于 2026-09-03 退役，数据面全部回到集群内。
+2026-09-27 起 config 与 config web 由 **Argo CD** 从 GitLab 镜像仓同步，不再手工 `kubectl apply`。
 
-| 服务 | 集群状态 | 备注 |
+| 服务 | 集群状态 | 由谁管 |
 |---|---|---|
-| config | `config-center/config-center` **运行中**（`sha-68386e8`，TCR，1 副本） | `config-center.config-center.svc:30010`；按 `deploy/pre/config/deployment.yaml` 手工 `kubectl apply`（`DEPLOYMENT_MODE=pre`），2026-09-27 由 `0.2.11` 升级 |
-| config web | `config-center/config-center-web` **运行中**（`sha-68386e8`，TCR） | `config-center-web.config-center.svc:80`，即 `config.apikv.com`；来自 `deploy/pre/config/web-deployment.yaml`，2026-09-27 由 `0.2.15` 升级 |
-| gateway | **未部署**：`ecommerce` ns 里没有 `control-tower-gateway`，也没有 `ecommerce-gateway-service` | 仓库 manifest 已是 `0.2.17`；缺的前置对象见下 |
+| config | `config-center/config-center` **运行中**（`0.2.18`，TCR，1 副本） | Argo CD Application `control-tower-config`（自动同步 + selfHeal，prune 关） |
+| config web | `config-center/config-center-web` **运行中**（`0.2.18`，TCR），即 `config.apikv.com` | 同上 |
+| gateway | Application `control-tower-gateway` 已建（自动同步**关**），三个阻断项已处理，等一次手动 `argocd app sync` 验收后再开自动同步 | Argo CD |
 
-公网探活（2026-09-27）：`config.apikv.com/` 200、`config-api.apikv.com/healthz` 200；
-`gateway.apikv.com/{healthz,readyz}` 均 **404**（没有网关 HTTPRoute，也没有后端）。
-网关恢复后根路径 `/` 仍按契约返回应用层 `404 ROUTE_NOT_FOUND`，入口探活只能用 `/healthz`。
+公网探活：`config.apikv.com/` 200、`config-api.apikv.com/healthz` 200（`build: 0.2.18`）。
+网关上线后根路径 `/` 仍按契约返回应用层 `404 ROUTE_NOT_FOUND`，入口探活只能用 `/healthz`。
 
 config 的两条 HTTPRoute 主机名是 `config(-api).dev.test` + `config(-api).apikv.com`，
-Pangolin 资源的 tlsServerName/Host 指向 `*.dev.test`（2026-09-23，5cbf2d5）。重新收敛：
+Pangolin 资源的 tlsServerName/Host 指向 `*.dev.test`（2026-09-23，5cbf2d5）。主机名现在在
+`deploy/chart/control-tower/values-pre.yaml` 的 `config.hosts`，改完走发布流程，Argo 会同步。
 
-```bash
-kubectl apply -f deploy/pre/config/httproute.yaml
+### 网关的前置对象（2026-09-27 已补齐）
+
+`ecommerce` ns 里**已有**：`dragonfly-session`、`tcr-pull`、`casdoor-bff`、
+`control-tower-config-source-pre`（2026-09-27 签发 machine token `b5db3d81…`，role=service，env=pre 后创建）。
+曾经阻断启动的三项已处理，记在这里防止回退：
+
+- `policies/policies.csv` 第 29 行：`gateway/{dev,pre}` 两个键的 act 列已从 `.*` 改成 `POST`
+  （dev v2、pre v3）。网关自 `0ab7dbc`（0.2.11 起）只认字面 `POST`，其它写法整表拒载。改之前用
+  `authz.Enforcer.SetPolicies` 验证过旧表被拒、新表可加载；
+- `CONSUL_HTTP_TOKEN` 的 `secretKeyRef` 在 chart 里已是 `optional: true`（Secret `consul-ecommerce-token`
+  新集群没有，网关也不经 Consul 找任何后端）；
+- Secret `otel-auth`（`optional: true`）仍缺，缺了只是匿名推 OTLP。token 真相源是
+  `opentelemetry/otlp-public-auth`，键名 `OTEL_EXPORTER_OTLP_HEADERS_GATEWAY`。
+
+**对外环境只有 pre**：Argo CD 没有 dev 的 Application，`deploy/dev/` 只是本地开发的渲染产物，
+带 `http://localhost:3000` 回调与 `SESSION_COOKIE_INSECURE=true`，不要 apply 进集群
+（2026-09-20 事故：线上长期跑着 dev 那份，`shop.apikv.com` 登录被送去 `localhost:3000/auth/callback`）。
+守门测试 `deploy/manifest_test.go` 的 `TestPreGatewayEnablesBFFWithPublicOrigins` 正面断言 pre 的公网回调。
+
+### 发布方式（GitOps）
+
+```
+git tag X.Y.Z && git push origin X.Y.Z
+  → CI：test / web / codegen → image ×3（TCR + GHCR，tag = X.Y.Z）
+  → CI release job：values-pre.yaml 三个镜像 tag = X.Y.Z → 渲染 deploy/pre → 守门测试
+       → commit "release: X.Y.Z → pre" 到 GitHub main → fast-forward 推到 GitLab 镜像仓
+  → GitLab push webhook → Argo CD 秒级刷新 → 同步 config-center（与网关）
 ```
 
-### 恢复网关前要先补的对象
-
-2026-09-27 核对 `deploy/pre/gateway/deployment.yaml` 的引用，新集群 `ecommerce` ns 里**已有**：
-`dragonfly-session`（会话 Redis 凭据 + CA）、`tcr-pull`、`casdoor-bff`（BFF 的 Casdoor client）。
-
-**缺失且会阻断启动**（非 optional，Pod 卡在 `ContainerCreating` 或 `CreateContainerConfigError`）：
-
-- Secret `control-tower-config-source-pre`：挂成 `config-source` 卷（selector + machine token，
-  手顺见 `deploy/README.md` §2–3）。ns 里现有的 `ecommerce-config-source-{dev,pre}` 是业务服务用的，不是这份；
-- **Config Center 里的策略会被拒载**：`gateway/{dev,pre}` 的 `policies/policies.csv` 第 29 行都是
-  `p, anyone, /*, .*, deny`，而网关自 `0ab7dbc`（0.2.11 起）只认 act 列字面 `POST`，有一行不合法就
-  整表拒载、启动失败（`p row act column must be literally "POST"`）。把该行改成 `POST` 后写回两个键；
-  Connect RPC 全是 POST，语义不变。2026-09-27 用 `make gateway` 加修正副本（`GATEWAY_POLICIES_FILE`）
-  验证过改后可启动、`/readyz` 200，线上键尚未改；
-- Secret `consul-ecommerce-token`：`CONSUL_HTTP_TOKEN` 的 `secretKeyRef` 没有 `optional`。网关虽然不走
-  Consul，缺了这份 Secret 容器照样起不来。要么补 Secret，要么先把该引用改成 `optional: true`。
-
-**缺失但不阻断**：
-
-- ConfigMap `control-tower-gateway-config`（`JWT_AUDIENCES` 等）：就在同一份 manifest 里，apply 时一起建；
-- Secret `otel-auth`（`optional: true`）：缺了网关会匿名推 OTLP。token 真相源是
-  `opentelemetry/otlp-public-auth`，需要时从它派生，键名是 `OTEL_EXPORTER_OTLP_HEADERS_GATEWAY`。
-
-**对外环境一律 apply `deploy/pre/`，不要 apply `deploy/dev/gateway/`**。dev overlay 带
-`http://localhost:3000` 的 BFF 回调与 `SESSION_COOKIE_INSECURE=true`，两份 overlay 的 namespace 与
-HTTPRoute 主机名相同，kubectl 不会提示。2026-09-20 事故就是线上长期跑着 dev 那份，
-`shop.apikv.com` 登录被送去 `localhost:3000/auth/callback`。此后 pre 已补齐 BFF 会话轨
-（`BFF_PUBLIC_BASE_URL=https://gateway.apikv.com`、`BFF_ALLOWED_REDIRECTS=https://shop.apikv.com`、
-会话 Redis 走 `dragonfly.dragonfly.svc:6379` TLS），守门测试是
-`deploy/manifest_test.go` 的 `TestPreGatewayEnablesBFFWithPublicOrigins`。
-
-### 发布方式
-
+- **只有裸 semver tag（`X.Y.Z`）会上线**。push main 只出 `sha-<7位>` 与 `dev` 镜像，不部署；
+  `dev` 会被覆盖，不要用于部署。tag 必须打在 main 历史上，release job 会校验。
+- **部署清单的真相源是 `deploy/chart/control-tower/`**（Helm）。`deploy/{dev,pre}/` 是 `make deploy-render`
+  的渲染产物，守门测试读它、手工 `kubectl apply -f deploy/pre/` 是 Argo 故障时的兜底。改模板或
+  values 后必须重新渲染并提交，CI 的 `make check-deploy` 与 `check-gen` 同一纪律。
+- **Argo CD 读的是 GitLab 镜像 `gitlab.com/sumery/control-tower`，不是 GitHub**（与 ecommerce 同一做法，
+  GitLab 免费版没有 pull mirror）。release job 用 GitHub Secret `GITLAB_PUSH_TOKEN`（GitLab 项目访问令牌
+  `github-actions-release-20260927`，Developer / write_repository，2027-09-27 到期）推过去；
+  平时改代码只推 GitHub，GitLab 只在发布时更新。GitLab 领先于 GitHub 时 release job 拒绝推送。
+- Argo 对象在 `deploy/argocd/`（AppProject + 两个 Application + repo），由人 `kubectl apply`；
+  Secret 与 Namespace 不归 Argo 管。ecommerce ns 的网关与 config-center 的 config 是两个 Application。
+- 提交说明里不要出现跳过 CI 的字面标记（连引用都不行）：GitHub 按 head 提交判断，tag 推送也会被整个跳过。
 - **镜像**：集群统一从 TCR 拉 `ccr.ccs.tencentyun.com/sumery/control-tower-{config,config-web,gateway}:<tag>`，
   每份 pod spec 必须带 `imagePullSecrets: [tcr-pull]`（private 仓库，漏掉是 `ErrImagePull ... 401`），
-  `deploy/manifest_test.go` 守这两条。CI 双推 GHCR + TCR，GHCR 只作追溯。
-- 本机手工构建镜像必须 `--platform linux/amd64`（节点全是 amd64）；不要只用本机
-  `docker manifest inspect` 判断可见性（Keychain 会偷偷带凭据）。
-- **CI 不持有集群凭据**（2026-09-18，6c301b4），也不执行 `kubectl`。`docs/operations/argocd-helm-gitops.md`
-  记录的 Argo CD Application `argocd/control-tower-public-dev` 在重建后**已不存在**（当前 `argocd` ns 只有
-  `ecommerce-kyverno`），config 是手工 apply 的。恢复 GitOps 前，发布就是手工 `kubectl apply`。
+  `deploy/manifest_test.go` 守这两条。本机手工构建镜像必须 `--platform linux/amd64`。
+- **CI 不持有集群凭据**（2026-09-18，6c301b4），也不执行 `kubectl`；集群侧权限只在 Argo CD。
+- 旧 GitOps 仓 `gitlab.com/sumery/control-tower-gitops`（手抄 chart）已归档，不要再用。
 
 ### 数据面与可观测
 
@@ -141,8 +142,8 @@ HTTPRoute 主机名相同，kubectl 不会提示。2026-09-20 事故就是线上
 | `docs/design/adr-0002-bff-session.md` | **现行鉴权决策**：BFF + 服务端 session（取代 ADR-0001） |
 | `docs/design/bff-migration.md` | BFF 化实施手顺：三轨并存、四阶段、按阶段回滚 |
 | `docs/operations/2026-08-30-recovery-record.md` | 2026-08-29/30 恢复实录：六类故障的判别法与教训——**排查「网络面板正常但功能不对」这类症状前先翻它** |
-| `docs/operations/argocd-helm-gitops.md` | GitOps 发布方案与 CI 去集群凭据的原因 |
-| `deploy/README.md` | 网关 apply 前的一次性准备：Config Center 键、machine token、selector Secret |
+| `docs/operations/argocd-helm-gitops.md` | **现行发布链路**：tag → CI → GitLab 镜像 → Argo CD；接管手顺、回滚、排障 |
+| `deploy/README.md` | 部署目录说明：chart 与渲染产物的关系、Argo 对象、网关的一次性准备（Config Center 键、machine token、selector Secret） |
 | `docs/operations/configctl.md` | 命令行写 Config Center：`configctl put/get/ls`、凭据与 scope 限制——**要把文件灌进某个 key 就用它，别手搓 curl** |
 
 ## 硬约束
@@ -185,6 +186,14 @@ CI 里由 `.github/workflows/e2e.yml` 承接：每 6 小时 schedule 巡检，�
 指标链路名字对不上、网关路由形态被误解。**改 `web/Dockerfile` 的响应头、改鉴权流程、
 改 `promql/catalog.go` 之后必须跑它。**
 
-CI（`.github/workflows/ci.yml`）：PR 与 `workflow_dispatch` 只跑质量门禁（`test` Go 门禁 + `web` 控制台门禁 +
-`codegen` 生成物门禁）；push main 与裸 semver tag（`X.Y.Z`）在三者都通过后构建并双推镜像。
-main 推 `dev` 与 `sha-<7位>` tag，发布 tag 额外推同名版本 tag。`dev` 会被覆盖，不要用于部署。
+CI（`.github/workflows/ci.yml`）：PR 与 `workflow_dispatch` 只跑质量门禁（`test` Go 门禁含 `make check-deploy` +
+`web` 控制台门禁 + `codegen` 生成物门禁）；push main 与裸 semver tag（`X.Y.Z`）在三者都通过后构建并双推镜像。
+main 推 `dev` 与 `sha-<7位>` tag，发布 tag 额外推同名版本 tag 并跑 `release` job 推进 pre（见「发布方式」）。
+`dev` 会被覆盖，不要用于部署。
+
+```bash
+make deploy-render   # 改了 deploy/chart 或 values-<env>.yaml 后重新渲染 deploy/{dev,pre}
+make check-deploy    # helm lint + 渲染产物字节比对（CI 也跑）
+go test ./deploy/    # 11 条部署清单守门测试（读渲染产物）
+scripts/promote-release.sh X.Y.Z   # 本地预演 release job 会做的事，只改工作区
+```

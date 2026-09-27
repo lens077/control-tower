@@ -60,7 +60,15 @@ web 控制台：`cd web && pnpm install && pnpm dev`（端口 3005，已在上�
 
 ## 发布
 
-PR 只跑质量门禁；push main 与裸 semver tag（`X.Y.Z`）通过门禁后构建三镜像（gateway/config/config-web）并双推 GHCR + TCR，集群从 TCR 拉。部署清单在 `deploy/{dev,pre}`，对外环境只用 `deploy/pre/`，前置操作见 `deploy/README.md`。
+```bash
+git tag X.Y.Z && git push origin X.Y.Z
+```
+
+PR 只跑质量门禁；push main 构建三镜像（gateway/config/config-web）并双推 GHCR + TCR 但不部署；
+裸 semver tag（`X.Y.Z`）额外跑 `release` job：把 `deploy/chart/control-tower/values-pre.yaml` 的镜像 tag
+推进到该版本、重新渲染 `deploy/pre/`、提交并推到 GitLab 镜像仓，Argo CD 经 webhook 同步上线。
+部署清单的真相源是 `deploy/chart/`，`deploy/{dev,pre}/` 是渲染产物（`make deploy-render`）。
+链路、回滚与排障见 `docs/operations/argocd-helm-gitops.md`，目录说明与网关前置见 `deploy/README.md`。
 
 ## 许可
 

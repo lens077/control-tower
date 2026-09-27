@@ -1,59 +1,99 @@
-# 部署前置操作
+# deploy/：部署清单与 GitOps 对象
 
-本文只覆盖「apply 之前」的一次性准备。对外环境一律用 `deploy/pre/`；`deploy/dev/gateway/` 带
-localhost BFF 参数，只服务本地开发，不要 apply 进集群（原因见 `AGENTS.md`「恢复网关前要先补的对象」）。
-
-## 1. Config Center 里的网关键
-
-在 config 管理台（`https://config.apikv.com`）`gateway` namespace 对应 environment 下确认以下键存在，
-缺了就创建（写键优先用 `configctl`，见 `docs/operations/configctl.md`）：
-
-| key | 内容来源 | format | is_secret |
-|---|---|---|---|
-| `routes.yaml` | 仓库 `routes/{env}.yaml` 原文 | yaml | false |
-| `auth/revocations.yaml` | `revocations: []`（空表起步） | yaml | false |
-
-另外三键 `config.yaml`、`secrets/public.pem`、`policies/*` 也由网关读取，不要删。
-
-## 2. 给网关签发 machine token
-
-管理台 `/tokens` 页：service=`gateway`，environment 按环境，namespaces 留空（默认 gateway），
-note 写用途。明文直接进入下一步的 Secret，不落任何文件。
-
-## 3. 创建网关 selector Secret
-
-以 `examples/config-source/gateway.yaml` 为模板填入真 token 后：
-
-```bash
-kubectl -n ecommerce create secret generic control-tower-config-source-<env> \
-  --from-file=gateway.yaml=/dev/stdin < <(填好的 selector 内容)
+```
+deploy/
+  chart/control-tower/      Helm chart，部署清单的唯一真相源
+    values.yaml             环境无关结构（副本、探针、资源、Casdoor 信任域）
+    values-pre.yaml         对外环境；三个镜像 tag 由 CI release job 回写
+    values-dev.yaml         本地开发；带 localhost 回调，不要 apply 进集群
+    components/{config,gateway}.yaml   Argo CD 两个 Application 各自只渲染自己的 namespace
+  dev/  pre/                `make deploy-render` 的渲染产物：守门测试读它、Argo 故障时 kubectl 兜底用它
+  argocd/                   AppProject、两个 Application、repo 声明，由人 kubectl apply
+  examples/config-source/   网关 selector Secret 的模板
 ```
 
-或先落临时文件再 `--from-file=gateway.yaml=<path>`，用完即删。Deployment 以 `defaultMode: 0400` 挂载（清单已写死）。
+**改清单只改 chart**，然后 `make deploy-render` 并把产物一起提交；CI 的 `make check-deploy` 比对两边，
+不一致就红（与 proto → `make check-gen` 同一纪律）。发布链路与回滚见
+`docs/operations/argocd-helm-gitops.md`。
 
-## 4. 核对非机密 ConfigMap
+## 正常发布
 
-`deploy/<env>/gateway/deployment.yaml` 内的 `control-tower-gateway-config`：
-`JWT_AUDIENCES` 已填共享 client id；`OTEL_EXPORTER_OTLP_ENDPOINT` 按集群 collector 实址核对。
-
-## 5. 镜像引用
-
-集群统一从 TCR 拉镜像：`ccr.ccs.tencentyun.com/sumery/control-tower-{gateway,config,config-web}:<tag>`。
-CI 把同一构建双推 GHCR（`ghcr.io/lens077/...`，只作追溯）与 TCR（需要仓库 Secrets
-`TCR_USERNAME`/`TCR_PASSWORD`；缺失时 CI 只推 GHCR 并给 warning，此时要手工 `docker pull` → `tag` → `push` 补到 TCR）。
-apply 前把 Deployment 的 image 换成目标**不可变 tag**，不要用 `dev`/`latest`。
-
-TCR 仓库是 private：每份 Deployment 的 pod spec 必须带 `imagePullSecrets: [tcr-pull]`，
-`config-center` 与 `ecommerce` 两个 ns 都已有该 Secret。漏掉时新 Pod 卡在
-`ErrImagePull ... failed to fetch anonymous token ... 401 Unauthorized`，`deploy/manifest_test.go` 会先在本地拦下。
-本机手工构建时加 `--platform linux/amd64`（节点全是 amd64）。
-
-## 6. apply 与验收
+不需要碰 `kubectl`：
 
 ```bash
-kubectl apply -f deploy/pre/gateway/
+git tag X.Y.Z && git push origin X.Y.Z
+```
+
+CI 构建三个镜像，release job 把 `values-pre.yaml` 的 tag 改成 `X.Y.Z`、重新渲染、提交并推到 GitLab 镜像仓，
+Argo CD 经 webhook 同步。要本地预演：`scripts/promote-release.sh X.Y.Z`（只改工作区）。
+
+## Argo CD 对象
+
+```bash
+kubectl apply -f deploy/argocd/project.yaml -f deploy/argocd/repo.yaml
+kubectl apply -f deploy/argocd/app-config.yaml -f deploy/argocd/app-gateway.yaml
+```
+
+Application 不带 resources-finalizer：删除它只是让 Argo 放手，线上资源原地不动。
+Secret 与 Namespace 不归 Argo 管，AppProject 也不放行它们。
+
+## 手工兜底
+
+Argo CD 不可用时才用，并且只用 `pre`：
+
+```bash
+kubectl apply -f deploy/pre/config/    # 或 deploy/pre/gateway/
+```
+
+`deploy/dev/gateway/` 带 `http://localhost:3000` 回调与 `SESSION_COOKIE_INSECURE=true`，namespace 与
+HTTPRoute 主机名和 pre 完全相同，apply 它 = 把 localhost 值推上公网（2026-09-20 事故）。
+
+## 网关的一次性准备
+
+以下对象 chart 只引用名字，由人建好。2026-09-27 已全部就位，换环境或轮换时按此重做。
+
+### 1. Config Center 里的网关键
+
+`gateway` namespace 对应 environment 下须有 `routes.yaml`、`auth/revocations.yaml`、`config.yaml`、
+`secrets/public.pem`、`policies/{model.conf,policies.csv}`。写键用 `configctl`（`docs/operations/configctl.md`）。
+
+`policies.csv` 的每个 `p` 行 act 列必须是字面 `POST`（网关 `authz.validatePolicyRow`），
+`.*`、`GET|POST` 之类整表拒载、启动失败。
+
+### 2. 签发 machine token 并建 selector Secret
+
+用对应环境的 operator token（Secret `config-center/config-center-operator-<env>`）签发 `role=service`、
+`service_name=gateway` 的 token，明文直接进 Secret，不落文件：
+
+```bash
+OP="$(kubectl -n config-center get secret config-center-operator-pre -o jsonpath='{.data.token}' | base64 -D)"
+curl -sf -X POST https://config-api.apikv.com/config.v1.ConfigService/IssueMachineToken \
+  -H "content-type: application/json" -H "x-config-center-service-token: $OP" \
+  -d '{"serviceName":"gateway","environment":"pre","note":"control-tower-gateway selector","role":"MACHINE_TOKEN_ROLE_SERVICE"}' \
+| python3 -c 'import sys,json; t=json.load(sys.stdin)["token"]; print(open("deploy/examples/config-source/gateway.yaml").read().replace("REPLACE_WITH_ISSUED_TOKEN", t).replace("environment: dev", "environment: pre"))' \
+| kubectl -n ecommerce create secret generic control-tower-config-source-pre --from-file=gateway.yaml=/dev/stdin
+```
+
+Deployment 以 `defaultMode: 0400` 挂载。Secret 建失败时先去 `/tokens` 页吊销刚签的 token 再重来，
+不要留下没有落地的明文。
+
+### 3. 其它 Secret
+
+`ecommerce` ns：`tcr-pull`（拉镜像）、`dragonfly-session`（会话 Redis 账密 + CA）、`casdoor-bff`（BFF client）。
+可选：`otel-auth`（OTLP 鉴权头，缺了匿名发送）、`consul-ecommerce-token`（已 optional，网关不经 Consul）。
+
+### 4. 镜像
+
+集群统一从 TCR 拉 `ccr.ccs.tencentyun.com/sumery/control-tower-{gateway,config,config-web}:<tag>`，
+private 仓库，每份 pod spec 必须带 `imagePullSecrets: [tcr-pull]`（`deploy/manifest_test.go` 守）。
+chart 的 `ct.image` helper 在 tag 为空时直接 fail，不会静默落到 latest。
+本机手工构建加 `--platform linux/amd64`。
+
+### 5. 验收
+
+```bash
 kubectl -n ecommerce rollout status deploy/control-tower-gateway
-curl -sf https://gateway.apikv.com/readyz      # 路由、公钥、Casbin、resolver 快照都就绪才返回 200
+curl -sf https://gateway.apikv.com/readyz      # 路由、公钥、Casbin、resolver 快照都就绪才 200
 ```
 
-每一步集群操作先征询。
+根路径 `/` 按契约返回应用层 `404 ROUTE_NOT_FOUND`，不是故障。
