@@ -59,6 +59,34 @@ function monacoSelfHost() {
   };
 }
 
+/**
+ * 本机开发只认一个来源:`http://localhost:<port>`。
+ *
+ * config 服务的 CORS 白名单(dev.yaml / dev-local.sh)与 Casdoor 的回调地址登记的都是
+ * localhost;回调 redirect_uri 又按 window.location.origin 现算(auth/pkce.ts)。
+ * 用 127.0.0.1 打开时页面能渲染,但接口被 CORS 拦、登录报 redirect_uri 不匹配。
+ * 所以把 127.0.0.1 的请求在 JS 执行前重定向到 localhost,两个地址都能用、来源只有一个。
+ */
+function canonicalLoopbackOrigin() {
+  const redirect = (req: any, res: any, next: () => void) => {
+    const host: string = req.headers.host ?? "";
+    const match = /^127\.0\.0\.1(:\d+)?$/.exec(host);
+    if (!match) return next();
+    res.statusCode = 307;
+    res.setHeader("Location", `http://localhost${match[1] ?? ""}${req.url ?? "/"}`);
+    res.end();
+  };
+  return {
+    name: "canonical-loopback-origin",
+    configureServer(server: any) {
+      server.middlewares.use(redirect);
+    },
+    configurePreviewServer(server: any) {
+      server.middlewares.use(redirect);
+    },
+  };
+}
+
 export default defineConfig(({ mode }) => {
   // 判断是否为生产构建（构建命令下 mode 通常为 'production'）
   const isProduction = mode === "production" || process.env.NODE_ENV === "production";
@@ -94,9 +122,14 @@ export default defineConfig(({ mode }) => {
         generatedRouteTree: resolve(__dirname, "./src/routeTree.gen.ts"),
       }),
       monacoSelfHost(),
+      canonicalLoopbackOrigin(),
     ],
     test: testConfig,
     server: {
+      // 显式绑 IPv4 回环。不写时 Node 把 localhost 解析成 ::1,只监听 IPv6,
+      // 127.0.0.1 直接连接被拒;浏览器访问 localhost 会自动回落到 127.0.0.1,不受影响。
+      // 不用 true/0.0.0.0:那会把开发服务器(含源码)暴露到局域网。
+      host: "127.0.0.1",
       // 端口被占时自动顺延到下一个可用端口。注意:OAuth 回调 redirect_uri 是按
       // window.location.origin 现算的(auth/pkce.ts),换了端口就要去 Casdoor 应用里
       // 把对应的回调地址也加上,否则登录会被判 redirect_uri 不匹配。
