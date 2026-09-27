@@ -13,9 +13,10 @@ metadata:
     app.kubernetes.io/managed-by: git
 spec:
   description: "control-tower Helm GitOps project（config-center + gateway）"
-  # Argo CD 读的是 GitLab 镜像，不是 GitHub 源码仓：CI 在发布 tag 时把 main 推过去（ci.yml release job）。
+  # 直接读 GitHub 源码仓。2026-09-27 从 argocd-repo-server 实测 GitHub 可达（5/5，~1.5s，与 GitLab 相同），
+  # 不再经 GitLab 镜像中转。
   sourceRepos:
-    - "https://gitlab.com/sumery/control-tower.git"
+    - "https://github.com/lens077/control-tower.git"
   destinations:
     - name: in-cluster
       server: https://kubernetes.default.svc

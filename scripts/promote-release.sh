@@ -3,7 +3,7 @@
 #
 #   scripts/promote-release.sh 0.2.18
 #
-# 只改工作区、不碰 git：CI（ci.yml release job）在它之后提交并推送到 GitHub 与 GitLab；
+# 只改工作区、不碰 git：CI（ci.yml release job）在它之后提交并推送到 main；
 # 本地也可以先跑一遍看 diff。版本必须是裸 semver X.Y.Z，与 ci.yml 触发 tag 的写法一致——
 # 这个字符串会直接成为镜像 tag，image job 在同一次 workflow 里推过。
 set -euo pipefail

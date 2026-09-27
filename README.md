@@ -66,7 +66,7 @@ git tag X.Y.Z && git push origin X.Y.Z
 
 PR 只跑质量门禁；push main 构建三镜像（gateway/config/config-web）并双推 GHCR + TCR 但不部署；
 裸 semver tag（`X.Y.Z`）额外跑 `release` job：把 `deploy/chart/control-tower/values-pre.yaml` 的镜像 tag
-推进到该版本、重新渲染 `deploy/pre/`、提交并推到 GitLab 镜像仓，Argo CD 经 webhook 同步上线。
+推进到该版本、重新渲染 `deploy/pre/`、提交到 main，Argo CD 直接读本仓，经 GitHub webhook 同步上线。
 部署清单的真相源是 `deploy/chart/`，`deploy/{dev,pre}/` 是渲染产物（`make deploy-render`）。
 链路、回滚与排障见 `docs/operations/argocd-helm-gitops.md`，目录说明与网关前置见 `deploy/README.md`。
 
