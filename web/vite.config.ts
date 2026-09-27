@@ -5,6 +5,7 @@ import { tanstackRouter } from "@tanstack/router-plugin/vite";
 import { createReadStream } from "node:fs";
 import { cp } from "node:fs/promises";
 import { createRequire } from "node:module";
+import { connect, createServer as createNetServer } from "node:net";
 import { extname, join, normalize, resolve } from "node:path";
 
 /**
@@ -66,6 +67,11 @@ function monacoSelfHost() {
  * localhost;回调 redirect_uri 又按 window.location.origin 现算(auth/pkce.ts)。
  * 用 127.0.0.1 打开时页面能渲染,但接口被 CORS 拦、登录报 redirect_uri 不匹配。
  * 所以把 127.0.0.1 的请求在 JS 执行前重定向到 localhost,两个地址都能用、来源只有一个。
+ *
+ * 另一半是「两个回环地址都要连得上」:Vite 只能绑一个 host,默认的 localhost 在 macOS 上
+ * 落到 ::1,127.0.0.1 就连接被拒;反过来只绑 127.0.0.1,浏览器解析 localhost 先试 ::1,
+ * 不回落的浏览器会直接报「连接失败」。这里在另一个回环地址上开一个 TCP 桥,原样转发到
+ * Vite 实际监听的地址(含 HMR 的 WebSocket),不经过任何网卡,不会暴露到局域网。
  */
 function canonicalLoopbackOrigin() {
   const redirect = (req: any, res: any, next: () => void) => {
@@ -76,12 +82,39 @@ function canonicalLoopbackOrigin() {
     res.setHeader("Location", `http://localhost${match[1] ?? ""}${req.url ?? "/"}`);
     res.end();
   };
+
+  const bridgeOtherLoopback = (server: any) => {
+    const http = server.httpServer;
+    if (!http) return; // middlewareMode 下没有自己的 HTTP 服务器
+    http.once("listening", () => {
+      const addr = http.address();
+      if (!addr || typeof addr !== "object") return;
+      const other = addr.address === "::1" ? "127.0.0.1" : addr.address === "127.0.0.1" ? "::1" : null;
+      if (!other) return; // 绑的是通配地址(--host)或具体网卡,两个回环本来就都通,或者不该管
+      const bridge = createNetServer((client) => {
+        const upstream = connect(addr.port, addr.address);
+        client.pipe(upstream).pipe(client);
+        client.on("error", () => upstream.destroy());
+        upstream.on("error", () => client.destroy());
+      });
+      bridge.on("error", (err: NodeJS.ErrnoException) => {
+        // 机器没开 IPv6 时 ::1 不可用,属正常,静默跳过
+        if (err.code === "EADDRNOTAVAIL") return;
+        server.config.logger.warn(`[loopback] 无法在 ${other}:${addr.port} 上桥接(${err.code ?? err.message}),只有 localhost 可用`);
+      });
+      bridge.listen(addr.port, other);
+      http.once("close", () => bridge.close());
+    });
+  };
+
   return {
     name: "canonical-loopback-origin",
     configureServer(server: any) {
+      bridgeOtherLoopback(server);
       server.middlewares.use(redirect);
     },
     configurePreviewServer(server: any) {
+      bridgeOtherLoopback(server);
       server.middlewares.use(redirect);
     },
   };
@@ -126,10 +159,9 @@ export default defineConfig(({ mode }) => {
     ],
     test: testConfig,
     server: {
-      // 显式绑 IPv4 回环。不写时 Node 把 localhost 解析成 ::1,只监听 IPv6,
-      // 127.0.0.1 直接连接被拒;浏览器访问 localhost 会自动回落到 127.0.0.1,不受影响。
-      // 不用 true/0.0.0.0:那会把开发服务器(含源码)暴露到局域网。
-      host: "127.0.0.1",
+      // host 保持默认(localhost,通常落在 ::1);另一个回环地址由 canonicalLoopbackOrigin 桥接。
+      // 不要改成只绑 127.0.0.1:浏览器解析 localhost 先试 ::1,不是每个浏览器都会回落到 IPv4。
+      // 也不要用 true/0.0.0.0:那会把开发服务器(含源码)暴露到局域网。
       // 端口被占时自动顺延到下一个可用端口。注意:OAuth 回调 redirect_uri 是按
       // window.location.origin 现算的(auth/pkce.ts),换了端口就要去 Casdoor 应用里
       // 把对应的回调地址也加上,否则登录会被判 redirect_uri 不匹配。
