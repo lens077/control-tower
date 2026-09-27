@@ -271,6 +271,10 @@ jobs:
   #   3. 同一提交 fast-forward 推到 GitLab 镜像 gitlab.com/sumery/control-tower —— Argo CD 的 source
   #      是 GitLab（GitLab 免费版没有 pull mirror），GitLab 的 push webhook 会立刻通知 Argo CD 同步。
   # push main 不部署：main 只出 sha-* 镜像；线上版本只随发布 tag 变化（AGENTS.md「发布方式」）。
+#
+# ⚠️ 提交说明里不要出现字面量「[skip ci]」（包括正文里引用它）：GitHub 按 push 的 head 提交
+#    说明判断，main 推送与 tag 推送都会被整个跳过。2026-09-27 首次打 0.2.18 就因此没有任何 run，
+#    只好把 tag 挪到下一个提交。
   release:
     name: release → pre (GitOps)
     if: github.event_name == 'push' && github.ref_type == 'tag'
