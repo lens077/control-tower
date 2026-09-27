@@ -36,6 +36,7 @@ make test-crossversion # 旧 SDK v0.1.0 → 新服务的跨版本实测（需本
 
 ```bash
 make config                     # 等价于 scripts/dev-local.sh config
+make gateway                    # 等价于 scripts/dev-local.sh gateway，监听 :8080
 scripts/dev-local.sh print      # 只渲染配置看结构（口令脱敏）
 ```
 
@@ -43,6 +44,12 @@ scripts/dev-local.sh print      # 只渲染配置看结构（口令脱敏）
 从 K8s Secret 取账密与 CA，渲染 0600 临时配置、退出即删，凭据不进仓库也不进日志。
 PostgreSQL 走 `pg-dev.apikv.com:30001`，Redis（Dragonfly）走 `redis-dev.apikv.com:30005`，均为 TLS 直通；
 System 页面的历史曲线查 `https://metrics.apikv.com`（`METRIC_QUERY_ENDPOINT` 可覆盖）。
+
+`dev-local.sh gateway` 以 file 模式起网关：公钥、Casbin 策略、撤销名单取自 Config Center `gateway/dev`
+（operator token 从 Secret `config-center/config-center-operator-dev` 读），路由用仓库 `routes/dev.yaml`，
+其中 `direct://<svc>.ecommerce.svc:<port>` 改写成 `127.0.0.1:<port>` 并自动 `kubectl port-forward`。
+BFF 会话走 `redis-dev.apikv.com:30005`，回调为 `http://localhost:3000/auth/callback`。
+可调开关（`GATEWAY_ENV`、`GATEWAY_ROUTES_SOURCE`、`GATEWAY_POLICIES_FILE`、`GATEWAY_BFF` 等）见脚本内 `run_gateway` 上方说明。
 
 本地跑 config 服务时 `CONSUL_ENABLED=false` 是硬要求（脚本已内置）：本机实例注册进集群目录后，集群内客户端可能把流量解析到你的 Mac。
 

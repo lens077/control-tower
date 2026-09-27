@@ -33,6 +33,11 @@ kubectl apply -f deploy/pre/config/httproute.yaml
 
 - Secret `control-tower-config-source-pre`：挂成 `config-source` 卷（selector + machine token，
   手顺见 `deploy/README.md` §2–3）。ns 里现有的 `ecommerce-config-source-{dev,pre}` 是业务服务用的，不是这份；
+- **Config Center 里的策略会被拒载**：`gateway/{dev,pre}` 的 `policies/policies.csv` 第 29 行都是
+  `p, anyone, /*, .*, deny`，而网关自 `0ab7dbc`（0.2.11 起）只认 act 列字面 `POST`，有一行不合法就
+  整表拒载、启动失败（`p row act column must be literally "POST"`）。把该行改成 `POST` 后写回两个键；
+  Connect RPC 全是 POST，语义不变。2026-09-27 用 `make gateway` 加修正副本（`GATEWAY_POLICIES_FILE`）
+  验证过改后可启动、`/readyz` 200，线上键尚未改；
 - Secret `consul-ecommerce-token`：`CONSUL_HTTP_TOKEN` 的 `secretKeyRef` 没有 `optional`。网关虽然不走
   Consul，缺了这份 Secret 容器照样起不来。要么补 Secret，要么先把该引用改成 `optional: true`。
 
