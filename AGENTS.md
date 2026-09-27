@@ -62,8 +62,12 @@ git tag X.Y.Z && git push origin X.Y.Z
 - **部署清单的真相源是 `deploy/chart/control-tower/`**（Helm）。`deploy/{dev,pre}/` 是 `make deploy-render`
   的渲染产物，守门测试读它、手工 `kubectl apply -f deploy/pre/` 是 Argo 故障时的兜底。改模板或
   values 后必须重新渲染并提交，CI 的 `make check-deploy` 与 `check-gen` 同一纪律。
-- **Argo CD 读的是 GitLab 镜像 `gitlab.com/sumery/control-tower`，不是 GitHub**（与 ecommerce 同一做法，
-  GitLab 免费版没有 pull mirror）。release job 用 GitHub Secret `GITLAB_PUSH_TOKEN`（GitLab 项目访问令牌
+- **Argo CD 读的是 GitLab 镜像 `gitlab.com/sumery/control-tower`，不是 GitHub**。原因是实测的，不是沿袭：
+  2026-09-27 在 `argocd-repo-server` 里 `git clone` GitHub 三次得 135s 超时 / 24s / 5s，10 分钟内 5 次
+  `context deadline exceeded`；GitLab 三次 4–6s、3 小时零错误。曾把 source 切到 GitHub，两个 Application
+  立刻 `Unknown`（`failed to list refs ... Client.Timeout`），已回退。**`git ls-remote` 通不代表能用**，
+  它只取 refs 不取对象，别再用它当依据。GitLab 免费版没有 pull mirror，所以由
+  release job 用 GitHub Secret `GITLAB_PUSH_TOKEN`（GitLab 项目访问令牌
   `github-actions-release-20260927`，Developer / write_repository，2027-09-27 到期）推过去；
   平时改代码只推 GitHub，GitLab 只在发布时更新。GitLab 领先于 GitHub 时 release job 拒绝推送。
 - Argo 对象在 `deploy/argocd/`（AppProject + 两个 Application + repo），由人 `kubectl apply`；

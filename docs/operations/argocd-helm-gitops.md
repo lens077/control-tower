@@ -38,6 +38,14 @@ git tag X.Y.Z → push
 | GitLab webhook `90127735` | push main → Argo；token 是 `argocd-secret` 里现有的 `webhook.gitlab.secret`（与 ecommerce 共用） | 人 |
 | GitHub Secret `GITLAB_PUSH_TOKEN` | GitLab 项目访问令牌 `github-actions-release-20260927`，Developer + `write_repository`，**2027-09-27 到期** | 到期前用 `glab api ... access_tokens` 重签，`gh secret set` 写回 |
 
+**为什么经 GitLab 而不直接读 GitHub**（2026-09-27 实测）：从 `argocd-repo-server` Pod 里
+`git clone --depth 1` GitHub 三次：135s 超时、24s、5s，10 分钟内 repo-server 日志 5 次
+`context deadline exceeded`；GitLab 三次 4–6s，3 小时零错误。曾把两个 Application 的 source 切到 GitHub
+并建 GitHub webhook，webhook 投递正常（200，1.3s）但 Argo 拉不下来，两个 Application 立刻 `Unknown`，
+已回退。注意 `git ls-remote github.com` 5/5 成功、1.5s——它只取 refs，不能作为「可用」的依据。
+代价是多一个镜像仓与一枚推送令牌；换来的是同步稳定。集群出口对 GitHub 变好之后可以再测，
+测法必须是完整 clone 连续多次，而不是 ls-remote。
+
 Argo CD 本身：`argocd` ns，v3.5.3，公网 `https://argocd.apikv.com`。本机用 CLI 不必登录：
 把 context 的 namespace 切到 `argocd` 后加 `--core`（直接用 kubeconfig）。
 
