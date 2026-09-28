@@ -76,6 +76,9 @@ func AccessLog(log *zap.Logger) func(http.Handler) http.Handler {
 			fields := []zap.Field{
 				zap.String("method", r.Method),
 				zap.String("path", r.URL.Path),
+				zap.String("protocol", r.Proto),
+				zap.Int64("request_content_length", r.ContentLength),
+				zap.Strings("request_transfer_encoding", r.TransferEncoding),
 				zap.Int("status", rec.status),
 				zap.Int64("bytes", rec.bytes),
 				zap.Duration("duration", time.Since(start)),

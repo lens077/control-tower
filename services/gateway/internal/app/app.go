@@ -66,8 +66,9 @@ func BuildHandler(d Deps) http.Handler {
 		))
 	}
 	chain := httpmw.Chain(p,
+		httpmw.AccessLog(d.Log), httpmw.RejectAmbiguousRequestBoundary,
 		httpmw.Recover(d.Log, d.Errors), instrument,
-		httpmw.AccessLog(d.Log), d.Cors.Middleware(), httpmw.Auth(auth),
+		d.Cors.Middleware(), httpmw.Auth(auth),
 	)
 
 	mux := http.NewServeMux()
