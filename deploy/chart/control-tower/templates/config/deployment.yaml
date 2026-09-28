@@ -84,7 +84,7 @@ spec:
             - name: http
               containerPort: 30010
               protocol: TCP
-          # /healthz 在 DB/缓存不通时返回 503。就绪探针据此摘流量;
+          # /healthz 是公开健康端点；就绪探针据此摘流量。
           # 存活探针只探端口 —— 用 /healthz 做存活会让一次数据库抖动把所有 Pod 连环重启。
           readinessProbe:
             httpGet:

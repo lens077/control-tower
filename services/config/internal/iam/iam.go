@@ -218,7 +218,11 @@ func (a *Authorizer) authorize(r *http.Request) (Principal, error) {
 			a.legacyHits.Add(1)
 			a.log.Warn("legacy shared service token used; rotate to per-service machine token",
 				zap.String("path", r.URL.Path),
-				zap.String("client", r.Header.Get(constants.ClientNameHeader)))
+				zap.String("client", r.Header.Get(constants.ClientNameHeader)),
+				zap.String("client_instance", r.Header.Get(constants.ClientInstanceHeader)),
+				zap.String("client_version", r.Header.Get(constants.ClientVersionHeader)),
+				zap.String("user_agent", r.UserAgent()),
+				zap.String("remote_addr", r.RemoteAddr))
 			return Principal{Name: "service", Machine: true, Scope: &MachineScope{Legacy: true}}, nil
 		}
 		// 双栈第二段：per-service token 查表（SHA-256）。
