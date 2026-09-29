@@ -119,8 +119,10 @@ test("系统页共享指标覆盖全部主机，CPU与iowait独立", async ({ pa
       expect(line.points?.length ?? 0, `${line.label} 只有空占位`).toBeGreaterThan(0);
       const last = line.points!.at(-1)!;
       expect(Date.now() - Number(last.tsMs), `${line.label} 不是新鲜样本`).toBeLessThan(480_000);
-      expect(last.value).toBeGreaterThanOrEqual(0);
-      if (id !== 13) expect(last.value).toBeLessThanOrEqual(100);
+      // Proto3 JSON may omit a double's default zero; the point itself must exist above.
+      const value = last.value ?? 0;
+      expect(value).toBeGreaterThanOrEqual(0);
+      if (id !== 13) expect(value).toBeLessThanOrEqual(100);
     }
   }
 });
