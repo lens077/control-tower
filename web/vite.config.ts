@@ -63,7 +63,7 @@ function monacoSelfHost() {
 /**
  * 本机开发只认一个来源:`http://localhost:<port>`。
  *
- * config 服务的 CORS 白名单(dev.yaml / dev-local.sh)与 Casdoor 的回调地址登记的都是
+ * config 服务的 CORS 白名单(dev-local.sh 渲染的本地配置)与 Casdoor 的回调地址登记的都是
  * localhost;回调 redirect_uri 又按 window.location.origin 现算(auth/pkce.ts)。
  * 用 127.0.0.1 打开时页面能渲染,但接口被 CORS 拦、登录报 redirect_uri 不匹配。
  * 所以把 127.0.0.1 的请求在 JS 执行前重定向到 localhost,两个地址都能用、来源只有一个。

@@ -99,9 +99,9 @@ git tag X.Y.Z && git push origin X.Y.Z
 - 线上 config 的配置文件是 Secret `config-center/config-center-bootstrap` 的 `config.yaml` 键，本地对应
   `services/config/configs/pre.yaml`（gitignore）。改完要重灌 Secret 再滚动 Pod，否则两边静默漂移。
   Secret 里那份文件头部注释仍写着 node3 地址，以正文字段为准。
-- `services/config/configs/dev.yaml`（gitignore）的 PG/Redis 仍指向已退役的 `pg.apikv.com`/`redis.apikv.com`
-  （只有 `metric_query` 已改成 `https://metrics.apikv.com`，但没有 `bearer_token`，直接用会 401）；`dev-local.sh` 已不读它，
-  要单独 `go run` 时先按上表改地址并补 token。
+- 本地 `services/config/configs/dev.yaml` 已于 2026-09-29 删除（PG/Redis 指向已退役地址、凭据明文落盘，`dev-local.sh`
+  早已不读它）。本机开发统一用 `scripts/dev-local.sh`；`services/config/Makefile` 的 `dev` 目标不再有默认配置，
+  必须显式给 `CONFIG_FILE`。
 - **主机指标**（控制台 System 页「所在节点」四张图）来自 `opentelemetry-node` DaemonSet
   （kubernetes 仓 `components/opentelemetry-node/`，helm release `opentelemetry/otel-node`），每节点一份，
   只采 hostmetrics，2026-09-29 起直写集群内 `vm-single`（之前绕公网 `metrics.apikv.com` 写入；公网入口现为只读，
