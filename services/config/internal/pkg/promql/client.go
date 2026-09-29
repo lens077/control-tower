@@ -38,6 +38,9 @@ type Client struct {
 	base    string
 	http    *http.Client
 	timeout time.Duration
+	// bearer 非空时每次请求带 Authorization: Bearer。公网 metrics.apikv.com 经 vmauth 只读,
+	// 不带就是 401;集群内直连 VM 不需要。
+	bearer string
 }
 
 // Sample 是一个数据点。
@@ -76,6 +79,13 @@ func New(cfg *confv1.Observability) (*Client, error) {
 		return nil, fmt.Errorf("observability.metric_query.endpoint 必须是带 scheme 的完整地址,当前为 %q", base)
 	}
 
+	// token 只许走 https:明文 http 上带 Bearer 等于把凭据交给沿途每一跳。
+	// 集群内 http://vm-single-...:8428 与 port-forward 直连 VM 本就不需要 token。
+	bearer := strings.TrimSpace(q.GetBearerToken())
+	if bearer != "" && parsed.Scheme != "https" {
+		return nil, fmt.Errorf("observability.metric_query.bearer_token 只能配合 https endpoint 使用,当前为 %q", base)
+	}
+
 	timeout := q.GetTimeout().AsDuration()
 	if timeout <= 0 {
 		timeout = defaultTimeout
@@ -102,6 +112,7 @@ func New(cfg *confv1.Observability) (*Client, error) {
 		base:    base,
 		timeout: timeout,
 		http:    &http.Client{Transport: transport, Timeout: timeout},
+		bearer:  bearer,
 	}, nil
 }
 
@@ -137,6 +148,9 @@ func (c *Client) QueryRange(ctx context.Context, query string, start, end time.T
 		return nil, fmt.Errorf("build query request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	if c.bearer != "" {
+		req.Header.Set("Authorization", "Bearer "+c.bearer)
+	}
 
 	resp, err := c.http.Do(req)
 	if err != nil {

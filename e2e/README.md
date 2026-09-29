@@ -26,7 +26,8 @@ E2E_USERNAME=<账号> E2E_PASSWORD=<口令> pnpm test
 | `E2E_CONFIG_URL` | `https://config.apikv.com` |
 | `E2E_CONFIG_API_URL` | `https://config-api.apikv.com` |
 | `E2E_GATEWAY_URL` | `https://gateway.apikv.com` |
-| `E2E_METRICS_URL` | `http://metrics.apikv.com`（现在 302 跳 https，可直接设成 `https://metrics.apikv.com`） |
+| `E2E_METRICS_URL` | `https://metrics.apikv.com` |
+| `E2E_METRICS_TOKEN` | 无默认，必填。metrics.apikv.com 经 vmauth 只读，取值 `kubectl -n victoriametrics get secret vmauth-credentials -o jsonpath='{.data.read-token}' \| base64 -d`；CI 用仓库 Secret 同名变量 |
 | `E2E_ADMIN_MUTATIONS` | `false`；设为 `true` 时运行 Machine Token 签发/吊销测试 |
 
 管理面变更测试需要显式打开：

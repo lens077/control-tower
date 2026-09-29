@@ -23,6 +23,12 @@ import (
 //
 //	CONFIG_CENTER_VM_ENDPOINT=http://vm.app.com go test ./internal/pkg/promql -run Live -v
 //
+// 走公网 https://metrics.apikv.com(vmauth 只读)时同时给只读 token:
+//
+//	CONFIG_CENTER_VM_ENDPOINT=https://metrics.apikv.com \
+//	CONFIG_CENTER_VM_BEARER_TOKEN="$(kubectl -n victoriametrics get secret vmauth-credentials -o jsonpath='{.data.read-token}' | base64 -d)" \
+//	  go test ./internal/pkg/promql -run Live -v
+//
 // 窗口取 24h 而不是 1h:开发环境经常几小时没有流量,窗口太短会把
 // 「最近很闲」误判成「查询坏了」。
 func TestLive_目录里每条查询都取得到数据(t *testing.T) {
@@ -39,8 +45,9 @@ func TestLive_目录里每条查询都取得到数据(t *testing.T) {
 	client, err := New(&confv1.Observability{
 		Enable: true,
 		MetricQuery: &confv1.Observability_MetricQuery{
-			Endpoint: endpoint,
-			Timeout:  durationpb.New(15 * time.Second),
+			Endpoint:    endpoint,
+			Timeout:     durationpb.New(15 * time.Second),
+			BearerToken: os.Getenv("CONFIG_CENTER_VM_BEARER_TOKEN"),
 		},
 	})
 	require.NoError(t, err)

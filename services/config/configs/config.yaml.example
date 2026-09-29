@@ -102,11 +102,13 @@ observability:
   # 留空 = 不启用历史曲线,页面只显示进程自采样的即时值并说明原因。
   # 集群内填 Service DNS:
   #   http://vm-single-victoria-metrics-single-server.victoriametrics.svc:8428
-  # 本机开发填经网关暴露的地址(注意 VM 目前只有 http 入口):
-  #   http://vm.app.com
+  # 本机开发填公网只读入口,并带只读 token(vmauth,2026-09-29 起;token 只允许配在 https 上):
+  #   endpoint: https://metrics.apikv.com
+  #   bearer_token: <Secret victoriametrics/vmauth-credentials 的 read-token>
   metric_query:
     endpoint: ""
     timeout: 5s
+    bearer_token: ""
     tls:
       enable: false
       insecure_skip_verify: true

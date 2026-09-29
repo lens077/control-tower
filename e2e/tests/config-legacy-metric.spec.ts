@@ -1,5 +1,5 @@
 import { expect, test, type APIRequestContext } from "@playwright/test";
-import { METRICS_URL } from "../playwright.config";
+import { METRICS_TOKEN, METRICS_URL } from "../playwright.config";
 
 interface InstantQueryResponse {
   status: string;
@@ -13,7 +13,12 @@ interface InstantQueryResponse {
 }
 
 async function instantQuery(request: APIRequestContext, query: string): Promise<InstantQueryResponse> {
-  const response = await request.get(`${METRICS_URL}/api/v1/query`, { params: { query } });
+  // 缺 token 时直接说清楚原因，而不是让它以一个看不出头绪的 401 红掉。
+  expect(METRICS_TOKEN, "E2E_METRICS_TOKEN 未设置：metrics.apikv.com 经 vmauth 只读，需要只读 token").not.toBe("");
+  const response = await request.get(`${METRICS_URL}/api/v1/query`, {
+    params: { query },
+    headers: { Authorization: `Bearer ${METRICS_TOKEN}` },
+  });
   expect(response.ok(), await response.text()).toBe(true);
   return response.json() as Promise<InstantQueryResponse>;
 }

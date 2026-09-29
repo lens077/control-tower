@@ -1390,8 +1390,12 @@ type Observability_MetricQuery struct {
 	Endpoint string `protobuf:"bytes,1,opt,name=endpoint,proto3" json:"endpoint,omitempty"`
 	// 单条 PromQL 的超时。默认 5s —— 页面上一次要发好几组查询,
 	// 任何一组卡住都会拖着整页转圈。
-	Timeout       *durationpb.Duration `protobuf:"bytes,2,opt,name=timeout,proto3" json:"timeout,omitempty"`
-	Tls           *Observability_Tls   `protobuf:"bytes,3,opt,name=tls,proto3" json:"tls,omitempty"`
+	Timeout *durationpb.Duration `protobuf:"bytes,2,opt,name=timeout,proto3" json:"timeout,omitempty"`
+	Tls     *Observability_Tls   `protobuf:"bytes,3,opt,name=tls,proto3" json:"tls,omitempty"`
+	// 查询端要求 Bearer 鉴权时填。公网 https://metrics.apikv.com 经 vmauth 只读(2026-09-29 起),
+	// 值取自 kubernetes 仓 Secret victoriametrics/vmauth-credentials 的 read-token。
+	// 集群内直连 VM(http://vm-single-...:8428)不需要,留空。只允许配在 https endpoint 上。
+	BearerToken   string `protobuf:"bytes,4,opt,name=bearer_token,json=bearerToken,proto3" json:"bearer_token,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1445,6 +1449,13 @@ func (x *Observability_MetricQuery) GetTls() *Observability_Tls {
 		return x.Tls
 	}
 	return nil
+}
+
+func (x *Observability_MetricQuery) GetBearerToken() string {
+	if x != nil {
+		return x.BearerToken
+	}
+	return ""
 }
 
 type Observability_Tls struct {
@@ -1838,7 +1849,7 @@ const file_services_config_internal_conf_v1_conf_proto_rawDesc = "" +
 	"\x03Tls\x12\x16\n" +
 	"\x06enable\x18\x01 \x01(\bR\x06enable\x12\x15\n" +
 	"\x06ca_pem\x18\x02 \x01(\tR\x05caPem\x120\n" +
-	"\x14insecure_skip_verify\x18\x03 \x01(\bR\x12insecureSkipVerify\"\x9c\x06\n" +
+	"\x14insecure_skip_verify\x18\x03 \x01(\bR\x12insecureSkipVerify\"\xbf\x06\n" +
 	"\rObservability\x122\n" +
 	"\x05trace\x18\x01 \x01(\v2\x1c.conf.v1.Observability.TraceR\x05trace\x125\n" +
 	"\x06metric\x18\x02 \x01(\v2\x1d.conf.v1.Observability.MetricR\x06metric\x120\n" +
@@ -1853,11 +1864,12 @@ const file_services_config_internal_conf_v1_conf_proto_rawDesc = "" +
 	"\x03tls\x18\x02 \x01(\v2\x1a.conf.v1.Observability.TlsR\x03tls\x1a]\n" +
 	"\aLogging\x12$\n" +
 	"\bendpoint\x18\x01 \x01(\tB\b\xbaH\x05r\x03\x80\x02\x01R\bendpoint\x12,\n" +
-	"\x03tls\x18\x02 \x01(\v2\x1a.conf.v1.Observability.TlsR\x03tls\x1a\x8c\x01\n" +
+	"\x03tls\x18\x02 \x01(\v2\x1a.conf.v1.Observability.TlsR\x03tls\x1a\xaf\x01\n" +
 	"\vMetricQuery\x12\x1a\n" +
 	"\bendpoint\x18\x01 \x01(\tR\bendpoint\x123\n" +
 	"\atimeout\x18\x02 \x01(\v2\x19.google.protobuf.DurationR\atimeout\x12,\n" +
-	"\x03tls\x18\x03 \x01(\v2\x1a.conf.v1.Observability.TlsR\x03tls\x1af\n" +
+	"\x03tls\x18\x03 \x01(\v2\x1a.conf.v1.Observability.TlsR\x03tls\x12!\n" +
+	"\fbearer_token\x18\x04 \x01(\tR\vbearerToken\x1af\n" +
 	"\x03Tls\x12\x16\n" +
 	"\x06enable\x18\x01 \x01(\bR\x06enable\x12\x15\n" +
 	"\x06ca_pem\x18\x02 \x01(\tR\x05caPem\x120\n" +

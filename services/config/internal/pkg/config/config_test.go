@@ -106,3 +106,24 @@ func TestGetConfigConcurrentWithInit(t *testing.T) {
 func TestModule(t *testing.T) {
 	assert.Contains(t, Module.String(), "config")
 }
+
+// 自举配置允许未知字段(AllowUnknownFields),字段名写错会被静默丢弃。
+// dev-local.sh 渲染的 metric_query.bearer_token 必须真的落到结构体里,
+// 否则公网 metrics.apikv.com(vmauth 只读)会一直 401,System 页面静默变成空图。
+func TestInitReadsMetricQueryBearerToken(t *testing.T) {
+	contents := testBootstrapYAML + `observability:
+  enable: false
+  metric_query:
+    endpoint: 'https://metrics.apikv.com'
+    timeout: 5s
+    bearer_token: 'read-token-123'
+    tls:
+      enable: true
+`
+	t.Setenv(constants.EnvConfigFile, writeConfig(t, contents))
+	got, err := Init(context.Background())
+	require.NoError(t, err)
+	query := got.GetObservability().GetMetricQuery()
+	assert.Equal(t, "https://metrics.apikv.com", query.GetEndpoint())
+	assert.Equal(t, "read-token-123", query.GetBearerToken())
+}

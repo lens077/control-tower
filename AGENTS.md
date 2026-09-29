@@ -88,30 +88,32 @@ git tag X.Y.Z && git push origin X.Y.Z
 |---|---|---|
 | PostgreSQL | CNPG `pg-main`：`pg-main-rw.postgresql.svc:5432`，`verify-full` | `pg-dev.apikv.com:30001`，TLS 直通，`verify-ca`（证书 SAN 不含该域名） |
 | Redis | Dragonfly：`dragonfly.dragonfly.svc:6379`，TLS | `redis-dev.apikv.com:30005`，TLS 直通 |
-| 指标查询端 | `http://vm-single-victoria-metrics-single-server.victoriametrics.svc:8428` | `https://metrics.apikv.com`（公共证书；`http://` 现在 302 跳 https） |
+| 指标查询端 | `http://vm-single-victoria-metrics-single-server.victoriametrics.svc:8428` | `https://metrics.apikv.com`（公共证书；2026-09-29 起经 vmauth **只读**，要带 `metric_query.bearer_token`，值为 Secret `victoriametrics/vmauth-credentials` 的 `read-token`） |
 | OTLP 采集 | `otel-opentelemetry-collector.opentelemetry.svc:4318` | 无（本机置 `observability.enable: false`） |
 
 - 这些地址与凭据位置的真相源是 sibling kubernetes 仓的 `components/{postgres,dragonfly}/component.env`
   （`SVC`/`PORT`/`REMOTE_*`/`CRED_SECRET`/`CA_REF`）。`dev-local.sh config` 直接读这两份契约并从
   K8s Secret 取账密与 CA，渲染 0600 临时配置，退出即删。指标查询端不在契约里，由脚本变量
   `METRIC_QUERY_ENDPOINT` 决定（默认 `https://metrics.apikv.com`，设成空串则不渲染 `metric_query`）。
+  https 端点的只读 token 默认从上述 Secret 现取，`METRIC_QUERY_BEARER_TOKEN` 可覆盖；promql 客户端拒绝把 token 配在 http 端点上。
 - 线上 config 的配置文件是 Secret `config-center/config-center-bootstrap` 的 `config.yaml` 键，本地对应
   `services/config/configs/pre.yaml`（gitignore）。改完要重灌 Secret 再滚动 Pod，否则两边静默漂移。
   Secret 里那份文件头部注释仍写着 node3 地址，以正文字段为准。
 - `services/config/configs/dev.yaml`（gitignore）的 PG/Redis 仍指向已退役的 `pg.apikv.com`/`redis.apikv.com`
-  （只有 `metric_query` 已改成 `https://metrics.apikv.com`）；`dev-local.sh` 已不读它，要单独 `go run`
-  时先按上表改地址。
+  （只有 `metric_query` 已改成 `https://metrics.apikv.com`，但没有 `bearer_token`，直接用会 401）；`dev-local.sh` 已不读它，
+  要单独 `go run` 时先按上表改地址并补 token。
 - **主机指标**（控制台 System 页「所在节点」四张图）来自 `opentelemetry-node` DaemonSet
   （kubernetes 仓 `components/opentelemetry-node/`，helm release `opentelemetry/otel-node`），每节点一份，
-  只采 hostmetrics，经 `https://metrics.apikv.com/opentelemetry/v1/metrics` 写入 VM。公网入口与集群内
-  `vm-single` 是同一个实例（2026-09-27 两边序列总数一致）。集群重建时它曾漏装，四张图显示「所选时间窗内无数据」，
+  只采 hostmetrics，2026-09-29 起直写集群内 `vm-single`（之前绕公网 `metrics.apikv.com` 写入；公网入口现为只读，
+  写入与管理接口一律拒绝）。集群重建时它曾漏装，四张图显示「所选时间窗内无数据」，
   2026-09-27 重跑 `bash components/opentelemetry-node/install.sh` 修复，`otel-node-opentelemetry-collector-agent`
   3/3。再遇到空图，先查 `count({__name__=~"system_.*"})` 是否为 0。
 - VM 必须开 `-opentelemetry.usePrometheusNaming=true`（集群内 `vm-single` 已开），否则指标名保持 OTLP
   点号形态，与 `internal/pkg/promql/catalog.go` 的查询对不上，表现为**查询成功但一条序列都没有**。
 - 验收用仓库自带的 live 测试（2026-09-27 全部 13 组通过）。刚装好采集端时要等过一个 5 分钟整点再跑：
   测试按 5 分钟步长对齐取点，数据不满一个对齐点时会误报「取不到任何序列」：
-  `CONFIG_CENTER_VM_ENDPOINT=https://metrics.apikv.com go test ./services/config/internal/pkg/promql -run Live -v`。
+  `CONFIG_CENTER_VM_ENDPOINT=https://metrics.apikv.com CONFIG_CENTER_VM_BEARER_TOKEN=<read-token> go test ./services/config/internal/pkg/promql -run Live -v`
+  （2026-09-29 带 token 13 组全部通过；不带 token 为 401）。
 
 ### Machine Token
 

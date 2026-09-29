@@ -35,6 +35,11 @@ CASDOOR_AUDIENCE="${CASDOOR_AUDIENCE:-baxf6718e392099b7915}"
 # 2026-09-23 实测：https://metrics.apikv.com 返回 200（公共证书，无需 ca_pem），
 # http 入口改为 302 跳转 https。显式设为空串则不渲染 metric_query，页面只显示即时值。
 METRIC_QUERY_ENDPOINT="${METRIC_QUERY_ENDPOINT-https://metrics.apikv.com}"
+# 2026-09-29 起 metrics.apikv.com 经 vmauth 只读，不带 token 返回 401。
+# https 查询端的只读 token 默认从 kubernetes 仓 vmauth 组件的 Secret 现取（只写进 0600 临时配置），
+# 也可用 METRIC_QUERY_BEARER_TOKEN 直接给。http 端点（集群内 / port-forward 直连 VM）不带 token。
+METRIC_QUERY_TOKEN_SECRET="${METRIC_QUERY_TOKEN_SECRET:-victoriametrics/vmauth-credentials}"
+METRIC_QUERY_TOKEN_KEY="${METRIC_QUERY_TOKEN_KEY:-read-token}"
 CFG=""
 CASDOOR_PEM=""
 GW_DIR=""
@@ -226,12 +231,18 @@ observability:
 EOF
     # metric_query 与 enable 相互独立：enable=false 只关 OTLP 推送，不影响历史曲线。
     if [ -n "$METRIC_QUERY_ENDPOINT" ]; then
-      local metric_tls=false
-      case "$METRIC_QUERY_ENDPOINT" in https://*) metric_tls=true ;; esac
+      local metric_tls=false metric_token=""
+      case "$METRIC_QUERY_ENDPOINT" in
+        https://*)
+          metric_tls=true
+          metric_token="${METRIC_QUERY_BEARER_TOKEN:-$(secret_value "$METRIC_QUERY_TOKEN_SECRET" "$METRIC_QUERY_TOKEN_KEY")}"
+          ;;
+      esac
       cat <<EOF
   metric_query:
     endpoint: $(yaml_quote "$METRIC_QUERY_ENDPOINT")
     timeout: 5s
+    bearer_token: $(yaml_quote "$metric_token")
     tls:
       enable: $metric_tls
       insecure_skip_verify: false
@@ -261,7 +272,12 @@ prepare_config() {
   render_from_kubernetes
   echo "→ 配置来源：$KUBERNETES_REPO 的 postgres/dragonfly 契约 + Kubernetes Secret"
   echo "→ PG pg-dev.apikv.com:30001 TLS｜Dragonfly redis-dev.apikv.com:30005 TLS"
-  echo "→ 指标查询端：${METRIC_QUERY_ENDPOINT:-（未配置，System 页面不显示历史曲线）}"
+  local token_src=""
+  case "$METRIC_QUERY_ENDPOINT" in
+    https://*) token_src="｜只读 token 来自 ${METRIC_QUERY_BEARER_TOKEN:+环境变量 METRIC_QUERY_BEARER_TOKEN}"
+               [ -n "${METRIC_QUERY_BEARER_TOKEN:-}" ] || token_src="${token_src}Secret $METRIC_QUERY_TOKEN_SECRET" ;;
+  esac
+  echo "→ 指标查询端：${METRIC_QUERY_ENDPOINT:-（未配置，System 页面不显示历史曲线）}$token_src"
   prepare_casdoor_certificate
 }
 
@@ -536,7 +552,7 @@ case "${1:-config}" in
   print)
     prepare_config
     echo "渲染完成：${CFG}（本命令退出后会删除，仅供查看结构）"
-    sed -E 's/(password:).*/\1 ***/' "$CFG"
+    sed -E 's/(password:|bearer_token:).*/\1 ***/' "$CFG"
     ;;
 
   config)

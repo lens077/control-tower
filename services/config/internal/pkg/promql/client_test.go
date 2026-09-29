@@ -205,3 +205,57 @@ func TestQueryRange_step必须为正(t *testing.T) {
 	_, err := client.QueryRange(context.Background(), "q", time.Unix(0, 0), time.Unix(60, 0), 0)
 	require.Error(t, err)
 }
+
+// 公网 metrics.apikv.com 经 vmauth 只读:配了 token 就必须每次都带上,没配就一个头都不加
+// (集群内直连 VM 的请求不该凭空多出 Authorization)。
+func TestQueryRange_按配置携带Bearer(t *testing.T) {
+	for name, token := range map[string]string{"配置了 token": "read-token-123", "未配置 token": ""} {
+		t.Run(name, func(t *testing.T) {
+			var got string
+			srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				got = r.Header.Get("Authorization")
+				_, _ = w.Write([]byte(`{"status":"success","data":{"resultType":"matrix","result":[]}}`))
+			}))
+			defer srv.Close()
+
+			cfg := enabled(srv.URL)
+			cfg.MetricQuery.BearerToken = token
+			client, err := New(cfg)
+			require.NoError(t, err)
+			client.http = srv.Client()
+
+			end := time.Now()
+			_, err = client.QueryRange(context.Background(), "up", end.Add(-time.Hour), end, time.Minute)
+			require.NoError(t, err)
+			if token == "" {
+				assert.Empty(t, got)
+			} else {
+				assert.Equal(t, "Bearer "+token, got)
+			}
+		})
+	}
+}
+
+// token 配在明文 http 上要在启动时拒绝,而不是悄悄把凭据发出去。
+func TestNew_BearerToken不许配在http上(t *testing.T) {
+	cfg := enabled("http://metrics.apikv.com")
+	cfg.MetricQuery.BearerToken = "read-token-123"
+	_, err := New(cfg)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "https")
+}
+
+// vmauth 拒绝时返回 401,错误里要带状态码,方便一眼看出是缺 token 而不是查询写错。
+func TestQueryRange_未授权时报出状态码(t *testing.T) {
+	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		http.Error(w, "missing 'Authorization' request header", http.StatusUnauthorized)
+	}))
+	defer srv.Close()
+	client, err := New(enabled(srv.URL))
+	require.NoError(t, err)
+	client.http = srv.Client()
+	end := time.Now()
+	_, err = client.QueryRange(context.Background(), "up", end.Add(-time.Hour), end, time.Minute)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "401")
+}

@@ -44,7 +44,8 @@ scripts/dev-local.sh print      # 只渲染配置看结构（口令脱敏）
 `dev-local.sh config` 读 sibling kubernetes 仓 `components/{postgres,dragonfly}/component.env` 的依赖契约，
 从 K8s Secret 取账密与 CA，渲染 0600 临时配置、退出即删，凭据不进仓库也不进日志。
 PostgreSQL 走 `pg-dev.apikv.com:30001`，Redis（Dragonfly）走 `redis-dev.apikv.com:30005`，均为 TLS 直通；
-System 页面的历史曲线查 `https://metrics.apikv.com`（`METRIC_QUERY_ENDPOINT` 可覆盖）。
+System 页面的历史曲线查 `https://metrics.apikv.com`（`METRIC_QUERY_ENDPOINT` 可覆盖）；该入口经 vmauth 只读，
+脚本自动从 Secret `victoriametrics/vmauth-credentials` 取只读 token（`METRIC_QUERY_BEARER_TOKEN` 可覆盖）。
 
 `dev-local.sh gateway` 以 file 模式起网关：公钥、Casbin 策略、撤销名单取自 Config Center `gateway/dev`
 （operator token 从 Secret `config-center/config-center-operator-dev` 读），路由用仓库 `routes/dev.yaml`，

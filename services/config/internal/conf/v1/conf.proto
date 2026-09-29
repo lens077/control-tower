@@ -179,6 +179,10 @@ message Observability {
     // 任何一组卡住都会拖着整页转圈。
     google.protobuf.Duration timeout = 2;
     Tls tls = 3;
+    // 查询端要求 Bearer 鉴权时填。公网 https://metrics.apikv.com 经 vmauth 只读(2026-09-29 起),
+    // 值取自 kubernetes 仓 Secret victoriametrics/vmauth-credentials 的 read-token。
+    // 集群内直连 VM(http://vm-single-...:8428)不需要,留空。只允许配在 https endpoint 上。
+    string bearer_token = 4;
   }
 
   message Tls {
