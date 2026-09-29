@@ -68,7 +68,7 @@ test("历史页的 diff 编辑器可渲染", async ({ page }) => {
   });
 });
 
-test("系统页的指标后端可用,且至少一组曲线取得到数据", async ({ page }) => {
+test("系统页共享指标覆盖全部主机，CPU与iowait独立", async ({ page }) => {
   // 回归 2026-08-29/30 的指标链路三连:域名改名后 collector 还在推旧域名(数据全丢)、
   // VictoriaMetrics 没开 usePrometheusNaming(查询成功但零序列)、主机指标缺 DaemonSet。
   const responses: Array<Record<string, unknown>> = [];
@@ -97,6 +97,32 @@ test("系统页的指标后端可用,且至少一组曲线取得到数据", asyn
     return results.some((r) => (r.lines ?? []).some((l) => (l.points ?? []).length > 0));
   });
   expect(withData, "QueryMetrics 全部返回空序列 —— 指标名/标签可能又对不上了").toBe(true);
+
+  type Line = { label?: string; points?: Array<{ value?: number; tsMs?: string }> };
+  type Result = { series?: string | number; error?: string; lines?: Line[] };
+  const names = ["k1", "k2", "k3", "node0", "node1", "node2", "node3", "node4"];
+  const find = (id: number, name: string) => responses.flatMap((b) => (b.results ?? []) as Result[])
+    .find((r) => r.series === id || r.series === `METRIC_SERIES_${name}`);
+  await expect.poll(() => [10, 11, 12, 13].every((id, i) =>
+    !!find(id, ["HOST_CPU", "HOST_MEMORY", "HOST_DISK", "HOST_NETWORK"][i])),
+  { timeout: 60_000, message: "没有收到全部主机指标组" }).toBe(true);
+  for (const [id, name, suffixes] of [
+    [10, "HOST_CPU", ["", " / iowait"]], [11, "HOST_MEMORY", [""]],
+    [12, "HOST_DISK", [""]], [13, "HOST_NETWORK", [" / receive", " / transmit"]],
+  ] as const) {
+    const result = find(id, name)!;
+    expect(result.error ?? "", `${name} 查询出现部分失败`).toBe("");
+    const lines = result.lines ?? [];
+    const expected = names.flatMap((host) => suffixes.map((suffix) => host + suffix)).sort();
+    expect(lines.map((line) => line.label).sort(), `${name} 主机集合不完整`).toEqual(expected);
+    for (const line of lines) {
+      expect(line.points?.length ?? 0, `${line.label} 只有空占位`).toBeGreaterThan(0);
+      const last = line.points!.at(-1)!;
+      expect(Date.now() - Number(last.tsMs), `${line.label} 不是新鲜样本`).toBeLessThan(480_000);
+      expect(last.value).toBeGreaterThanOrEqual(0);
+      if (id !== 13) expect(last.value).toBeLessThanOrEqual(100);
+    }
+  }
 });
 
 test("界面上不出现未翻译的原始 i18n key", async ({ page }) => {

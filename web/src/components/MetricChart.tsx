@@ -13,6 +13,8 @@ interface Props {
   result?: SeriesResult;
   emptyHint: string;
   height?: number;
+  /** 主机共享规则按查询步长补齐时间轴,全体断采时也保留缺口。 */
+  stepMs?: number;
 }
 
 /**
@@ -31,12 +33,13 @@ function chartColors(mode: keyof typeof palettes): string[] {
  * 查到但没数据显示提示。把后两者都画成空图是最糟的选择 ——
  * 「查询写错了」和「服务确实没流量」会长得一模一样。
  */
-export function MetricChart({ title, result, emptyHint, height = 200 }: Props) {
+export function MetricChart({ title, result, emptyHint, height = 200, stepMs }: Props) {
   const { xAxis, series, unit } = useMemo(
-    () => buildChartData(result?.lines ?? []),
-    [result?.lines],
+    () => buildChartData(result?.lines ?? [], stepMs),
+    [result?.lines, stepMs],
   );
   const { mode } = useColorMode();
+  const missingLabels = (result?.lines ?? []).filter((line) => line.points.length === 0).map((line) => line.label);
 
   return (
     <Box
@@ -56,15 +59,21 @@ export function MetricChart({ title, result, emptyHint, height = 200 }: Props) {
         {title}
       </Typography>
 
+      {result?.error && (
+        <Alert severity="warning" sx={{ m: sp[3], mt: sp[1] }}>
+          {result.error}
+        </Alert>
+      )}
+      {missingLabels.length > 0 && (
+        <Typography role="status" sx={{ fontSize: 12.5, color: ink.muted, px: sp[3], pb: sp[2], overflowWrap: "anywhere" }}>
+          {emptyHint}: {missingLabels.join(", ")}
+        </Typography>
+      )}
       {!result ? (
         <Box sx={{ height, px: sp[3], pb: sp[3] }}>
           <Skeleton variant="rounded" height="100%" />
         </Box>
-      ) : result.error && series.length === 0 ? (
-        <Alert severity="warning" sx={{ m: sp[3], mt: sp[1] }}>
-          {result.error}
-        </Alert>
-      ) : series.length === 0 ? (
+      ) : series.length === 0 && result.error ? null : series.length === 0 ? (
         <Box sx={{ height, display: "grid", placeItems: "center" }}>
           <Typography sx={{ fontSize: 12.5, color: ink.faint }}>{emptyHint}</Typography>
         </Box>

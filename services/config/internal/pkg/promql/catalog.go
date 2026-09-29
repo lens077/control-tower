@@ -21,6 +21,10 @@ type Query struct {
 	LabelKey string
 	// FixedLabel 用于结果只有一条线、标签里没有合适名字的情况。
 	FixedLabel string
+	// LabelSuffix 区分同一主机的 iowait 或收发方向,不扩展 MetricLine wire。
+	LabelSuffix string
+	// ExpectedHosts 表示需要用主机清单保留整窗无数据的主机。
+	ExpectedHosts bool
 }
 
 // Catalog 把一个 MetricSeries 展开成一条或多条查询。
@@ -78,41 +82,56 @@ func (c *Catalog) ProcessNetwork() []Query {
 	}
 }
 
+// HostFreshnessSeconds 与共享规则的 30s 采集/评估周期、30s evalDelay 配套。
+// 统一留出 180s 余量;历史查询按 time() 的评估时点判断,不按当前墙钟时间判断。
+const HostFreshnessSeconds = 180
+
+// HostExpectedInfo 仅供内部补充无数据图例,其常数 1 绝不能作为利用率绘图。
+// 清单不依赖主机曾经上报,由 kubernetes/components/vmalert/rules/host-recording.yml 维护。
+func (c *Catalog) HostExpectedInfo() Query {
+	return Query{Expr: `host:expected_info{host!="",host_kind=~"cloud|kubernetes"} == 1`, LabelKey: "host"}
+}
+
 func (c *Catalog) HostCPU() []Query {
-	// 来源:otel collector 的 host_metrics cpu scraper。
-	//
-	// 必须先按核聚合再对核取平均。直接 sum 会把 4 核机器的满载算成 400%
-	// —— 这是最容易写错的一条,实测过:同一时刻 sum 给 116%、avg 给 28%。
-	return []Query{{
-		Expr: `avg by (k8s_node_name) (` +
-			`sum by (k8s_node_name, cpu) (system_cpu_utilization_ratio{state!="idle"})` +
-			`) * 100`,
-		LabelKey: "k8s_node_name",
-	}}
+	// 共享规则已经完成按核归一化。busy 不含 iowait,后者独立展示。
+	return []Query{
+		hostQuery("host:cpu_busy_ratio", "cpu", "", true),
+		hostQuery("host:cpu_iowait_ratio", "cpu", " / iowait", true),
+	}
 }
 
 func (c *Catalog) HostMemory() []Query {
-	return []Query{{
-		Expr:     `sum by (k8s_node_name) (system_memory_utilization_ratio{state="used"}) * 100`,
-		LabelKey: "k8s_node_name",
-	}}
+	return []Query{hostQuery("host:memory_used_ratio", "memory", "", true)}
 }
 
 func (c *Catalog) HostDisk() []Query {
-	// 只看根分区。collector 侧已经排掉了 kubelet 的 PVC 挂载点,
-	// 这里再挡一次 /boot 之类 —— 它们容量小、永远不动,画上去只是噪音。
-	return []Query{{
-		Expr: `sum by (k8s_node_name) (system_filesystem_usage_bytes{mountpoint="/",state="used"}) / ` +
-			`sum by (k8s_node_name) (system_filesystem_usage_bytes{mountpoint="/"}) * 100`,
-		LabelKey: "k8s_node_name",
-	}}
+	return []Query{hostQuery(`host:filesystem_used_ratio{mountpoint="/"}`, "filesystem", "", true)}
 }
 
 func (c *Catalog) HostNetwork() []Query {
-	return []Query{{
-		Expr:     `sum by (direction) (rate(system_network_io_bytes_total[5m]))`,
-		LabelKey: "direction",
-	}}
+	// 共享规则已经 rate[5m] 并排除虚拟网卡,不能再次 rate 或跨主机求和。
+	return []Query{
+		hostQuery(`host:network_io_bytes_per_second{direction="receive"}`, "network", " / receive", false),
+		hostQuery(`host:network_io_bytes_per_second{direction="transmit"}`, "network", " / transmit", false),
+	}
+}
+
+func hostQuery(record, signal, suffix string, percent bool) Query {
+	expr := record
+	if percent {
+		expr += " * 100"
+	}
+	// and 是存在性过滤,不是乘法:signal_present 的 0 代表缺失而不是零利用率。
+	// 同时检查记录自身、四类原始样本最大采集时间与规则评估时间,防止 VM 回看旧样本。
+	// last_seen 仅判断主机是否仍有采集,单类完整性仍由对应的 signal_present 保证。
+	expr = fmt.Sprintf(`(%s) and (time() - timestamp(%s) < %[3]d)`+
+		` and on (host, host_kind) (host:signal_present{signal="%[4]s"} == 1)`+
+		` and on (host, host_kind) (time() - timestamp(host:signal_present{signal="%[4]s"}) < %[3]d)`+
+		` and on (host, host_kind) (time() - host:last_seen_timestamp_seconds < %[3]d)`+
+		` and on (host, host_kind) (host:expected_info{host!="",host_kind=~"cloud|kubernetes"} == 1)`+
+		` and on () (time() - host:rules_evaluation_timestamp_seconds < %[3]d)`,
+		expr, record, HostFreshnessSeconds, signal)
+	return Query{Expr: expr, LabelKey: "host", LabelSuffix: suffix, ExpectedHosts: true}
 }
 
 func (c *Catalog) APILatency() []Query {

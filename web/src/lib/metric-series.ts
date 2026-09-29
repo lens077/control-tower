@@ -27,7 +27,9 @@ export interface ChartData {
  * 这正是「那一刻没数据」的正确表达 —— 连起来会画出一条并不存在的直线,
  * 让人以为那段时间指标平稳。
  */
-export function buildChartData(lines: MetricLine[]): ChartData {
+export function buildChartData(lines: MetricLine[], stepMs?: number): ChartData {
+  // 空 points 是后端保留的预期主机,由图表列入无数据提示,不是一条零值曲线。
+  lines = lines.filter((line) => line.points.length > 0);
   if (lines.length === 0) {
     return { xAxis: [], series: [], unit: MetricUnit.UNSPECIFIED };
   }
@@ -36,7 +38,17 @@ export function buildChartData(lines: MetricLine[]): ChartData {
   for (const line of lines) {
     for (const point of line.points) timestamps.add(Number(point.tsMs));
   }
-  const sorted = [...timestamps].sort((a, b) => a - b);
+  let sorted = [...timestamps].sort((a, b) => a - b);
+  // 时间戳并集看不到「全部主机同时断采」的槽位。用请求步长补轴,仍只填 null。
+  // 与 API 的2000点上限对齐,异常时间戳不能让浏览器分配无界数组。
+  if (stepMs && Number.isFinite(stepMs) && stepMs > 0 && sorted.length > 1) {
+    const first = sorted[0];
+    const last = sorted[sorted.length - 1];
+    if ((last - first) / stepMs <= 2000) {
+      for (let ts = first; ts <= last; ts += stepMs) timestamps.add(ts);
+      sorted = [...timestamps].sort((a, b) => a - b);
+    }
+  }
   const indexOf = new Map(sorted.map((ts, index) => [ts, index]));
 
   const series = lines.map((line): ChartSeries => {

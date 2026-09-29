@@ -247,7 +247,7 @@
   "system": {
     "nav": "系统信息",
     "title": "系统信息",
-    "subtitle": "配置中心自身的资源占用、接口表现与依赖健康",
+    "subtitle": "配置中心资源、接口与依赖健康，以及全部主机的资源趋势",
     "loadFailed": "加载失败:{{message}}",
     "uptime": "已运行 {{value}}",
     "noData": "所选时间窗内无数据",
@@ -271,8 +271,8 @@
       "process": "进程自身",
       "api": "接口与数据库",
       "apiHint": "延迟为服务端处理耗时,不含网络往返",
-      "host": "所在节点",
-      "hostHint": "整台机器的口径,不是本进程 —— 进程很闲但节点被别的负载打满,同样会让配置中心变慢"
+      "host": "全部主机",
+      "hostHint": "覆盖 k1–k3 与 node0–node4；共享规则按整机统计。CPU 忙碌不含 iowait，网络为已排除虚拟网卡的收发速率。缺失或超过 180 秒的记录不补零，整窗缺失的主机单独列出。"
     },
     "chart": {
       "processCpu": "进程 CPU 使用率",
@@ -284,10 +284,10 @@
       "apiErrorRate": "接口错误率",
       "dbLatency": "数据库延迟分位数",
       "dbPool": "数据库连接池",
-      "hostCpu": "节点 CPU 使用率",
-      "hostMemory": "节点内存使用率",
-      "hostDisk": "节点磁盘使用率(根分区)",
-      "hostNetwork": "节点网络速率"
+      "hostCpu": "主机 CPU 忙碌与 I/O 等待",
+      "hostMemory": "主机内存使用率",
+      "hostDisk": "主机磁盘使用率（根分区）",
+      "hostNetwork": "主机网络收发速率"
     },
     "range": "时间窗"
   },

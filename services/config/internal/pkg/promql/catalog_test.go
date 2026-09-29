@@ -38,30 +38,49 @@ func TestCatalog_进程与应用类查询都带服务名过滤(t *testing.T) {
 	}
 }
 
-func TestCatalog_主机类查询按节点拆分(t *testing.T) {
+func TestCatalog_主机只消费共享规则并保持原单位(t *testing.T) {
 	c := NewCatalog("config-service")
-
-	for name, queries := range map[string][]Query{
-		"HostCPU":    c.HostCPU(),
-		"HostMemory": c.HostMemory(),
-		"HostDisk":   c.HostDisk(),
+	for _, tc := range []struct {
+		name    string
+		queries []Query
+		records []string
+		signal  string
+		percent bool
+	}{
+		{"CPU", c.HostCPU(), []string{"host:cpu_busy_ratio", "host:cpu_iowait_ratio"}, "cpu", true},
+		{"Memory", c.HostMemory(), []string{"host:memory_used_ratio"}, "memory", true},
+		{"Disk", c.HostDisk(), []string{"host:filesystem_used_ratio"}, "filesystem", true},
+		{"Network", c.HostNetwork(), []string{"host:network_io_bytes_per_second", "host:network_io_bytes_per_second"}, "network", false},
 	} {
-		t.Run(name, func(t *testing.T) {
-			require.Len(t, queries, 1)
-			assert.Contains(t, queries[0].Expr, "k8s_node_name",
-				"不按节点拆的话多节点数据会叠在一起,看不出是哪台在抖")
-			assert.Equal(t, "k8s_node_name", queries[0].LabelKey)
+		t.Run(tc.name, func(t *testing.T) {
+			require.Len(t, tc.queries, len(tc.records))
+			for i, q := range tc.queries {
+				assert.Contains(t, q.Expr, tc.records[i])
+				assert.Equal(t, "host", q.LabelKey)
+				assert.Contains(t, q.Expr, `host:signal_present{signal="`+tc.signal+`"} == 1`)
+				assert.Contains(t, q.Expr, `time() - timestamp(host:signal_present{signal="`+tc.signal+`"}) < 180`)
+				assert.Contains(t, q.Expr, `time() - host:last_seen_timestamp_seconds < 180`)
+				assert.Contains(t, q.Expr, `time() - host:rules_evaluation_timestamp_seconds < 180`)
+				assert.Contains(t, q.Expr, "host:last_seen_timestamp_seconds")
+				assert.Contains(t, q.Expr, "host:rules_evaluation_timestamp_seconds")
+				assert.Contains(t, q.Expr, "timestamp("+tc.records[i])
+				assert.Contains(t, q.Expr, "host:expected_info")
+				if tc.percent {
+					assert.Equal(t, 1, strings.Count(q.Expr, "* 100"), "比率只换算一次百分比")
+				} else {
+					assert.NotContains(t, q.Expr, "* 100")
+				}
+				for _, raw := range []string{"system_cpu_", "system_memory_", "system_filesystem_", "system_network_", "node_cpu_", "node_memory_", "k8s_node_name", "service_name", "rate(", "or ", "vector(0)"} {
+					assert.NotContains(t, q.Expr, raw, "不回退原始公式、不补零、不重复 rate")
+				}
+			}
 		})
 	}
-}
-
-// 这是最容易写错的一条:CPU 使用率必须先按核聚合、再对核取平均。
-// 直接 sum 会把 4 核机器的满载算成 400%(实测过:同一时刻 sum 给 116%、avg 给 28%)。
-func TestCatalog_主机CPU先按核聚合再平均(t *testing.T) {
-	expr := NewCatalog("x").HostCPU()[0].Expr
-	assert.Contains(t, expr, "avg by (k8s_node_name)")
-	assert.Contains(t, expr, "sum by (k8s_node_name, cpu)")
-	assert.Contains(t, expr, `state!="idle"`)
+	assert.Contains(t, c.HostDisk()[0].Expr, `mountpoint="/"`)
+	assert.Contains(t, c.HostNetwork()[0].Expr, `direction="receive"`)
+	if len(c.HostNetwork()) > 1 {
+		assert.Contains(t, c.HostNetwork()[1].Expr, `direction="transmit"`)
+	}
 }
 
 // 分子必须用「错误码标签存在且非空」来选。otelconnect 只在出错时才打这个标签,

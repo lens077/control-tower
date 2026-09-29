@@ -247,7 +247,7 @@
   "system": {
     "nav": "System",
     "title": "System",
-    "subtitle": "Config Center resource use, API behaviour, and dependency health",
+    "subtitle": "Config Center resources, API and dependency health, plus resource trends across all hosts",
     "loadFailed": "Failed to load: {{message}}",
     "uptime": "up {{value}}",
     "noData": "No data in the selected window",
@@ -271,8 +271,8 @@
       "process": "This process",
       "api": "API and database",
       "apiHint": "Latency is server-side handling time; it excludes the network round trip",
-      "host": "Host node",
-      "hostHint": "Whole-machine scope, not this process — an idle process on a saturated node still gets slow"
+      "host": "All hosts",
+      "hostHint": "k1–k3 and node0–node4, using shared whole-host rules. CPU busy excludes iowait; network rates exclude virtual interfaces. Missing records or records older than 180 seconds are not filled with zeros; hosts with no data throughout the window are listed separately."
     },
     "chart": {
       "processCpu": "Process CPU",
@@ -284,10 +284,10 @@
       "apiErrorRate": "API error rate",
       "dbLatency": "Database latency percentiles",
       "dbPool": "Database connection pool",
-      "hostCpu": "Node CPU",
-      "hostMemory": "Node memory",
-      "hostDisk": "Node disk (root filesystem)",
-      "hostNetwork": "Node network rate"
+      "hostCpu": "Host CPU busy and I/O wait",
+      "hostMemory": "Host memory",
+      "hostDisk": "Host disk (root filesystem)",
+      "hostNetwork": "Host receive / transmit rates"
     },
     "range": "Time range"
   },

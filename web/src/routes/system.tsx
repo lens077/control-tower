@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { create } from "@bufbuild/protobuf";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -17,7 +18,7 @@ import { MetricSeries, systemApi, TIME_RANGES, type TimeRangeKey } from "@/api";
 import { toAppError } from "@/api/transport";
 import { MetricChart } from "@/components/MetricChart";
 import { formatBytes, formatDuration, formatMetricValue, usageSeverity } from "@/lib/metric-format";
-import { MetricUnit } from "@/gen/api";
+import { MetricUnit, SeriesResultSchema } from "@/gen/api";
 import { useTranslation } from "@/i18n";
 import { PageFrame } from "@/components/PageFrame";
 import { font, hairline, ink, sp, state } from "@/styles/tokens";
@@ -82,13 +83,22 @@ function SystemPage() {
 
   const byS = useMemo(() => {
     const map = new Map<MetricSeries, SeriesResult>();
-    for (const r of metrics.data?.results ?? []) map.set(r.series, r);
-    for (const r of infra.data?.results ?? []) map.set(r.series, r);
+    for (const [batch, requested] of [[metrics, SERIES], [infra, SERIES_INFRA]] as const) {
+      if (batch.isError) {
+        // React Query 重查失败仍保留上次 data,不能把它继续伪装成当前查询结果。
+        for (const series of requested) {
+          map.set(series, create(SeriesResultSchema, { series, error: toAppError(batch.error).message }));
+        }
+      } else {
+        for (const result of batch.data?.results ?? []) map.set(result.series, result);
+      }
+    }
     return map;
-  }, [metrics.data, infra.data]);
+  }, [metrics.data, metrics.isError, metrics.error, infra.data, infra.isError, infra.error]);
 
   const chartsReady = !metrics.isLoading && !infra.isLoading;
-  const metricsAvailable = metrics.data?.metricsBackendAvailable ?? true;
+  const metricsAvailable = (metrics.isError || metrics.data?.metricsBackendAvailable !== false)
+    && (infra.isError || infra.data?.metricsBackendAvailable !== false);
 
   const build = status.data?.build;
   const uptime = status.data?.process?.uptime;
@@ -208,21 +218,25 @@ function SystemPage() {
           <Section title={t("system.section.host")} hint={t("system.section.hostHint")}>
             <MetricChart
               title={t("system.chart.hostCpu")}
+              stepMs={TIME_RANGES[range].stepSeconds * 1000}
               result={chart(byS, MetricSeries.HOST_CPU, chartsReady)}
               emptyHint={t("system.noData")}
             />
             <MetricChart
               title={t("system.chart.hostMemory")}
+              stepMs={TIME_RANGES[range].stepSeconds * 1000}
               result={chart(byS, MetricSeries.HOST_MEMORY, chartsReady)}
               emptyHint={t("system.noData")}
             />
             <MetricChart
               title={t("system.chart.hostDisk")}
+              stepMs={TIME_RANGES[range].stepSeconds * 1000}
               result={chart(byS, MetricSeries.HOST_DISK, chartsReady)}
               emptyHint={t("system.noData")}
             />
             <MetricChart
               title={t("system.chart.hostNetwork")}
+              stepMs={TIME_RANGES[range].stepSeconds * 1000}
               result={chart(byS, MetricSeries.HOST_NETWORK, chartsReady)}
               emptyHint={t("system.noData")}
             />
@@ -237,7 +251,7 @@ function SystemPage() {
 // 构造一个空结果,图会显示「无数据」而不是永远转圈。
 function chart(map: Map<MetricSeries, SeriesResult>, series: MetricSeries, ready: boolean) {
   if (!ready) return undefined;
-  return map.get(series) ?? ({ series, lines: [], error: "" } as unknown as SeriesResult);
+  return map.get(series) ?? create(SeriesResultSchema, { series });
 }
 
 function InstantCards({ process }: { process: NonNullable<GetSystemStatusResponse["process"]> }) {

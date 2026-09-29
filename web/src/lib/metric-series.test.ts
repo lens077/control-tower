@@ -18,6 +18,29 @@ describe("buildChartData", () => {
     expect(result.series).toEqual([]);
   });
 
+  it("预期主机的空占位不画成零利用率或空图例", () => {
+    const { series } = buildChartData([line("k1", [[1000, 0]]), line("node4", [])]);
+    expect(series.map((item) => item.label)).toEqual(["k1"]);
+    expect(series[0].data).toEqual([0]);
+  });
+
+  it("全部主机缺失时返回空图数据", () => {
+    const { xAxis, series } = buildChartData([line("k1", []), line("node4", [])]);
+    expect(xAxis).toEqual([]);
+    expect(series).toEqual([]);
+  });
+
+  it("完整保留八台主机的收发十六条线", () => {
+    const hosts = ["k1", "k2", "k3", "node0", "node1", "node2", "node3", "node4"];
+    const lines = hosts.flatMap((host) => ["receive", "transmit"].map((direction) =>
+      line(`${host} / ${direction}`, [[1000, 1024]], MetricUnit.BYTES_PER_SECOND),
+    ));
+    const { series, unit } = buildChartData(lines);
+    expect(series.map((item) => item.label)).toEqual(lines.map((item) => item.label));
+    expect(series).toHaveLength(16);
+    expect(unit).toBe(MetricUnit.BYTES_PER_SECOND);
+  });
+
   it("单条曲线按时间升序排列", () => {
     // 后端不保证顺序,这里必须自己排 —— 乱序的点会让折线来回折返
     const { xAxis, series } = buildChartData([
@@ -73,6 +96,16 @@ describe("buildChartData", () => {
 
     expect(series[0].data).toEqual([1, null, 3]);
     expect(series.every((s) => s.connectNulls === false)).toBe(true);
+  });
+
+  it("所有主机同时缺点也按请求步长保留断线", () => {
+    const { xAxis, series } = buildChartData([
+      line("k1", [[1000, 10], [4000, 20]]),
+      line("node4", [[1000, 0], [4000, 1]]),
+    ], 1000);
+    expect(xAxis.map((point) => point.getTime())).toEqual([1000, 2000, 3000, 4000]);
+    expect(series[0].data).toEqual([10, null, null, 20]);
+    expect(series[1].data).toEqual([0, null, null, 1]);
   });
 
   it("量纲取自第一条曲线", () => {

@@ -102,18 +102,16 @@ git tag X.Y.Z && git push origin X.Y.Z
 - 本地 `services/config/configs/dev.yaml` 已于 2026-09-29 删除（PG/Redis 指向已退役地址、凭据明文落盘，`dev-local.sh`
   早已不读它）。本机开发统一用 `scripts/dev-local.sh`；`services/config/Makefile` 的 `dev` 目标不再有默认配置，
   必须显式给 `CONFIG_FILE`。
-- **主机指标**（控制台 System 页「所在节点」四张图）来自 `opentelemetry-node` DaemonSet
-  （kubernetes 仓 `components/opentelemetry-node/`，helm release `opentelemetry/otel-node`），每节点一份，
-  只采 hostmetrics，2026-09-29 起直写集群内 `vm-single`（之前绕公网 `metrics.apikv.com` 写入；公网入口现为只读，
-  写入与管理接口一律拒绝）。集群重建时它曾漏装，四张图显示「所选时间窗内无数据」，
-  2026-09-27 重跑 `bash components/opentelemetry-node/install.sh` 修复，`otel-node-opentelemetry-collector-agent`
-  3/3。再遇到空图，先查 `count({__name__=~"system_.*"})` 是否为 0。
-- VM 必须开 `-opentelemetry.usePrometheusNaming=true`（集群内 `vm-single` 已开），否则指标名保持 OTLP
-  点号形态，与 `internal/pkg/promql/catalog.go` 的查询对不上，表现为**查询成功但一条序列都没有**。
-- 验收用仓库自带的 live 测试（2026-09-27 全部 13 组通过）。刚装好采集端时要等过一个 5 分钟整点再跑：
-  测试按 5 分钟步长对齐取点，数据不满一个对齐点时会误报「取不到任何序列」：
-  `CONFIG_CENTER_VM_ENDPOINT=https://metrics.apikv.com CONFIG_CENTER_VM_BEARER_TOKEN=<read-token> go test ./services/config/internal/pkg/promql -run Live -v`
-  （2026-09-29 带 token 13 组全部通过；不带 token 为 401）。
+- **主机指标**：System 页「全部主机」消费共享 `host:*` recording rules，覆盖 k1–k3 与 node0–node4；
+  规则真相源在 kubernetes 仓 `components/vmalert/rules/host-recording.yml`。先部署规则，再发布控制台。
+  `host` 是全局唯一图例来源，`host_kind` 为 cloud/kubernetes；利用率比率仅在 catalog 乘一次100，网络已是 bytes/s。
+  查询通过180秒新鲜度及 signal_present 门控；缺失主机保留空点图例，不补零、不回退原始公式。
+  **修改 Host 查询或排查缺主机/过旧记录时先读 `docs/operations/host-metrics.md`**，其中说明单位、缺失语义和验证顺序。
+- k1–k3 原始指标由 `opentelemetry-node` DaemonSet 采集并直写集群内 `vm-single`，公网 `metrics.apikv.com`
+  只读。VM 的 `-opentelemetry.usePrometheusNaming=true` 仍是共享规则匹配 OTLP 原始指标的前提。
+- live 测试：安全注入 `CONFIG_CENTER_VM_BEARER_TOKEN` 后，设置 `CONFIG_CENTER_VM_ENDPOINT=https://metrics.apikv.com`
+  运行 `go test ./services/config/internal/pkg/promql -run Live -v`。主机组按最近5分钟/30秒步长检查全部八台，
+  每条 CPU/iowait/收发查询都要有新鲜数据；应用组仍用24小时窗口避免低流量误报。无 token 的公网请求为401。
 
 ### Machine Token
 

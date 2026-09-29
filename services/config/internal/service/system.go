@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"runtime"
 	"sort"
+	"strings"
 	"time"
 
 	"connectrpc.com/connect"
@@ -132,9 +133,49 @@ func (s *SystemService) QueryMetrics(
 	end := time.Now()
 	start := end.Add(-req.Msg.GetWindow().AsDuration())
 
+	// 一个请求只读一次清单。它与利用率查询分开,常数1不会流入图表。
+	var expected []promql.Series
+	var expectedErr error
+	for _, series := range req.Msg.GetSeries() {
+		queries, _, _ := s.plan(series)
+		if len(queries) > 0 && queries[0].ExpectedHosts {
+			expected, expectedErr = s.metrics.QueryRange(ctx, s.catalog.HostExpectedInfo().Expr, start, end, step)
+			break
+		}
+	}
+
 	results := make([]*v1.SeriesResult, 0, len(req.Msg.GetSeries()))
 	for _, series := range req.Msg.GetSeries() {
-		results = append(results, s.querySeries(ctx, series, start, end, step))
+		result := s.querySeries(ctx, series, start, end, step)
+		queries, unit, _ := s.plan(series)
+		if len(queries) > 0 && queries[0].ExpectedHosts {
+			if expectedErr != nil {
+				result.Error = joinMetricErrors(result.Error, "预期主机清单查询失败: "+expectedErr.Error())
+			} else if len(expected) == 0 {
+				result.Error = joinMetricErrors(result.Error, "共享规则缺少预期主机清单,无法确认覆盖范围")
+			} else {
+				for _, q := range queries {
+					placeholders := toLines(expected, q, unit)
+					for _, line := range placeholders {
+						line.Points = nil
+					}
+					result.Lines = append(result.Lines, placeholders...)
+				}
+			}
+			result.Lines = mergeHostLines(result.Lines)
+			// step 可达5分钟,最后一个对齐点离 end 最多差一个 step;勿把它误判为过旧。
+			var stale []string
+			cutoff := end.Add(-step - promql.HostFreshnessSeconds*time.Second).UnixMilli()
+			for _, line := range result.Lines {
+				if n := len(line.Points); n > 0 && line.Points[n-1].TsMs < cutoff {
+					stale = append(stale, line.Label)
+				}
+			}
+			if len(stale) > 0 {
+				result.Error = joinMetricErrors(result.Error, "最近记录缺失或超过 180s（另计查询步长）,仅保留历史: "+strings.Join(stale, ", "))
+			}
+		}
+		results = append(results, result)
 	}
 
 	return connect.NewResponse(&v1.QueryMetricsResponse{
@@ -168,18 +209,49 @@ func (s *SystemService) querySeries(
 				zap.String("series", series.String()),
 				zap.String("expr", q.Expr),
 				zap.Error(err))
-			out.Error = err.Error()
+			out.Error = joinMetricErrors(out.Error, err.Error())
 			continue
 		}
 		out.Lines = append(out.Lines, toLines(found, q, unit)...)
 	}
 
-	// 有数据就不算失败,哪怕其中一条查询报错了 —— 例如内存那组的 limit
-	// 查不到时,rss 和 heap 两条线仍然值得画。
-	if len(out.Lines) > 0 {
-		out.Error = ""
-	}
+	// 部分查询失败时保留已有曲线和错误,不能用一条成功曲线掩盖另一条失败。
 	return out
+}
+
+func joinMetricErrors(current, next string) string {
+	if current == "" {
+		return next
+	}
+	return current + "; " + next
+}
+
+// 清单标签变更或历史数据可能带来同名线。按图例合并去重,真实点覆盖空占位,
+// 不对利用率求和,不把 metadata 的0/1当成数据;输出顺序保持稳定。
+func mergeHostLines(lines []*v1.MetricLine) []*v1.MetricLine {
+	byLabel := make(map[string]*v1.MetricLine)
+	points := make(map[string]map[int64]*v1.MetricPoint)
+	for _, line := range lines {
+		if byLabel[line.Label] == nil {
+			byLabel[line.Label] = &v1.MetricLine{Label: line.Label, Unit: line.Unit}
+			points[line.Label] = make(map[int64]*v1.MetricPoint)
+		}
+		for _, point := range line.Points {
+			if _, exists := points[line.Label][point.TsMs]; !exists {
+				points[line.Label][point.TsMs] = point
+			}
+		}
+	}
+	result := make([]*v1.MetricLine, 0, len(byLabel))
+	for label, line := range byLabel {
+		for _, point := range points[label] {
+			line.Points = append(line.Points, point)
+		}
+		sort.Slice(line.Points, func(i, j int) bool { return line.Points[i].TsMs < line.Points[j].TsMs })
+		result = append(result, line)
+	}
+	sort.Slice(result, func(i, j int) bool { return result[i].Label < result[j].Label })
+	return result
 }
 
 // plan 把枚举翻译成查询与量纲。新增 MetricSeries 时这里不加分支会直接报错,
@@ -234,6 +306,8 @@ func toLines(found []promql.Series, q promql.Query, unit v1.MetricUnit) []*v1.Me
 			// 色块,看起来像渲染出了 bug。
 			label = "value"
 		}
+
+		label += q.LabelSuffix
 
 		points := make([]*v1.MetricPoint, 0, len(s.Points))
 		for _, p := range s.Points {

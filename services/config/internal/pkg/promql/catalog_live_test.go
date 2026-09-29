@@ -72,16 +72,51 @@ func TestLive_目录里每条查询都取得到数据(t *testing.T) {
 
 	end := time.Now()
 	start := end.Add(-24 * time.Hour)
+	expectedHosts := []string{"k1", "k2", "k3", "node0", "node1", "node2", "node3", "node4"}
+	inventory, err := client.QueryRange(context.Background(), c.HostExpectedInfo().Expr, end.Add(-5*time.Minute), end, 30*time.Second)
+	require.NoError(t, err)
+	inventoryHosts := make(map[string]bool)
+	for _, series := range inventory {
+		inventoryHosts[series.Labels["host"]] = true
+	}
+	require.Len(t, inventoryHosts, len(expectedHosts), "清单必须覆盖全部八台主机")
+	for _, host := range expectedHosts {
+		require.True(t, inventoryHosts[host], "预期清单缺少 %s", host)
+	}
 
 	for name, queries := range groups {
 		t.Run(name, func(t *testing.T) {
 			lines, points := 0, 0
 			for _, q := range queries {
-				series, err := client.QueryRange(context.Background(), q.Expr, start, end, 5*time.Minute)
+				queryStart, step := start, 5*time.Minute
+				if q.ExpectedHosts {
+					queryStart, step = end.Add(-5*time.Minute), 30*time.Second
+				}
+				series, err := client.QueryRange(context.Background(), q.Expr, queryStart, end, step)
 				require.NoError(t, err, "查询语句本身必须合法:%s", q.Expr)
+				freshHosts := make(map[string]bool)
 				for _, s := range series {
 					lines++
 					points += len(s.Points)
+					if q.ExpectedHosts {
+						host, kind := s.Labels["host"], s.Labels["host_kind"]
+						require.Contains(t, expectedHosts, host)
+						require.Contains(t, []string{"cloud", "kubernetes"}, kind)
+						for _, point := range s.Points {
+							require.GreaterOrEqual(t, point.Value, 0.0)
+							if name != "HOST_NETWORK" {
+								require.LessOrEqual(t, point.Value, 100.0)
+							}
+							if point.TimestampMS >= end.Add(-step-HostFreshnessSeconds*time.Second).UnixMilli() {
+								freshHosts[host] = true
+							}
+						}
+					}
+				}
+				if q.ExpectedHosts {
+					for _, host := range expectedHosts {
+						require.True(t, freshHosts[host], "%s%s 缺少新鲜数据;不能用其它主机或旧历史冒充覆盖", host, q.LabelSuffix)
+					}
 				}
 			}
 			// 一条线都没有,基本只有两个原因:指标名不存在,或者过滤条件写错了。
