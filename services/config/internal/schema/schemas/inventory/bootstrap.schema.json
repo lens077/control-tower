@@ -784,9 +784,10 @@
         }
       },
       "properties": {
-        "enable": {
-          "$ref": "#/$defs/google.protobuf.BoolValue.schema.json",
-          "description": "显式关闭保护:false 时导出失败恢复为每次采集都打一条错误日志(升级前的行为)。\n 用 wrapper 而不是裸 bool:kit 默认已开启保护,裸 bool 的零值是 false,会让\n 「只写了 ntfy、没写 enable」的服务静默关掉保护。不配置(或配 true)= 保持开启。"
+        "disable": {
+          "default": false,
+          "description": "显式关闭保护:true 时导出失败恢复为每次采集都打一条错误日志(升级前的行为)。\n 字段故意叫 disable 而不是 enable:kit 默认已开启保护,裸 bool 的零值恰好是\n false,用 enable 会让「只写了 ntfy、没写 enable」的服务静默关掉保护。\n 也不能用 google.protobuf.BoolValue:配置解码走 mapstructure 且没有 wrapper\n 钩子,那样要求写成 enable: {value: true}(2026-10-07 实测解码报错)。",
+          "type": "boolean"
         },
         "hard_shutdown": {
           "default": false,
@@ -798,8 +799,19 @@
           "description": "首次失败后的退避窗口,之后按 multiplier 递增并封顶 max_backoff。\n 不配置回落到 2s。"
         },
         "jitter": {
-          "$ref": "#/$defs/google.protobuf.DoubleValue.schema.json",
-          "description": "退避抖动比例 [0, 1)。用 wrapper 而不是裸 double:proto3 裸 double 的零值\n 就是 0.0,和「没配置」无法区分——0 是合法值(不抖动),写成裸 double 会被\n 回落成默认的 0.3。不配置回落到 0.3,显式配置 0 表示不抖动。"
+          "anyOf": [
+            {
+              "exclusiveMaximum": 1,
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "pattern": "^-?[0-9]+(\\.[0-9]+)?([eE][+-]?[0-9]+)?$",
+              "type": "string"
+            }
+          ],
+          "default": 0,
+          "description": "退避抖动比例 [0, 1)。裸 double 无法区分「没配置」与「配了 0」,因此 0(含\n 不写)统一按未配置处理、回落到 kit 默认的 0.3;要更小的抖动就填大于 0 的数。\n 不能用 google.protobuf.DoubleValue:配置解码走 mapstructure 且没有 wrapper\n 钩子,那样要求写成 jitter: {value: 0.3},而 JSON Schema 又按裸数字放行——\n 两个门禁不一致,只在本地有 dev.yml 时才会被解码测试抓到。"
         },
         "max_backoff": {
           "$ref": "#/$defs/google.protobuf.Duration.schema.json",
@@ -1075,12 +1087,6 @@
       },
       "title": "Server",
       "type": "object"
-    },
-    "google.protobuf.BoolValue.schema.json": {
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
-      "description": "The bool value.",
-      "title": "Bool Value",
-      "type": "boolean"
     },
     "google.protobuf.DoubleValue.schema.json": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
