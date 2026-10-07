@@ -721,6 +721,158 @@
       "title": "Logging",
       "type": "object"
     },
+    "conf.v1.Observability.Metric.Guard.schema.json": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "patternProperties": {
+        "^(hardShutdown)$": {
+          "default": false,
+          "description": "true:熔断即关闭底层导出器,不再探测。用于确定要下线的端点。",
+          "type": "boolean"
+        },
+        "^(initialBackoff)$": {
+          "$ref": "#/$defs/google.protobuf.Duration.schema.json",
+          "description": "首次失败后的退避窗口,之后按 multiplier 递增并封顶 max_backoff。\n 不配置回落到 2s。"
+        },
+        "^(maxBackoff)$": {
+          "$ref": "#/$defs/google.protobuf.Duration.schema.json",
+          "description": "退避窗口上限。不配置回落到 5m。"
+        },
+        "^(maxFailures)$": {
+          "anyOf": [
+            {
+              "maximum": 100,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "pattern": "^-?[0-9]+$",
+              "type": "string"
+            }
+          ],
+          "default": 0,
+          "description": "连续失败多少次熔断。30s 采集周期下 8 次约 4 分钟;按需下调可更快止噪。"
+        },
+        "^(probeInterval)$": {
+          "$ref": "#/$defs/google.protobuf.Duration.schema.json",
+          "description": "熔断后每隔多久放行一次探测导出,探测成功即恢复。不配置回落到 5m。"
+        }
+      },
+      "properties": {
+        "enable": {
+          "$ref": "#/$defs/google.protobuf.BoolValue.schema.json",
+          "description": "显式关闭保护:false 时导出失败恢复为每次采集都打一条错误日志(升级前的行为)。\n 用 wrapper 而不是裸 bool:kit 默认已开启保护,裸 bool 的零值是 false,会让\n 「只写了 ntfy、没写 enable」的服务静默关掉保护。不配置(或配 true)= 保持开启。"
+        },
+        "hard_shutdown": {
+          "default": false,
+          "description": "true:熔断即关闭底层导出器,不再探测。用于确定要下线的端点。",
+          "type": "boolean"
+        },
+        "initial_backoff": {
+          "$ref": "#/$defs/google.protobuf.Duration.schema.json",
+          "description": "首次失败后的退避窗口,之后按 multiplier 递增并封顶 max_backoff。\n 不配置回落到 2s。"
+        },
+        "jitter": {
+          "$ref": "#/$defs/google.protobuf.DoubleValue.schema.json",
+          "description": "退避抖动比例 [0, 1)。用 wrapper 而不是裸 double:proto3 裸 double 的零值\n 就是 0.0,和「没配置」无法区分——0 是合法值(不抖动),写成裸 double 会被\n 回落成默认的 0.3。不配置回落到 0.3,显式配置 0 表示不抖动。"
+        },
+        "max_backoff": {
+          "$ref": "#/$defs/google.protobuf.Duration.schema.json",
+          "description": "退避窗口上限。不配置回落到 5m。"
+        },
+        "max_failures": {
+          "anyOf": [
+            {
+              "maximum": 100,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "pattern": "^-?[0-9]+$",
+              "type": "string"
+            }
+          ],
+          "default": 0,
+          "description": "连续失败多少次熔断。30s 采集周期下 8 次约 4 分钟;按需下调可更快止噪。"
+        },
+        "multiplier": {
+          "anyOf": [
+            {
+              "maximum": 10,
+              "minimum": 1,
+              "type": "number"
+            },
+            {
+              "pattern": "^-?[0-9]+(\\.[0-9]+)?([eE][+-]?[0-9]+)?$",
+              "type": "string"
+            }
+          ],
+          "default": 0,
+          "description": "退避递增倍数。不配置回落到 2.0。"
+        },
+        "ntfy": {
+          "$ref": "#/$defs/conf.v1.Observability.Metric.Ntfy.schema.json"
+        },
+        "probe_interval": {
+          "$ref": "#/$defs/google.protobuf.Duration.schema.json",
+          "description": "熔断后每隔多久放行一次探测导出,探测成功即恢复。不配置回落到 5m。"
+        }
+      },
+      "title": "Guard",
+      "type": "object"
+    },
+    "conf.v1.Observability.Metric.Ntfy.schema.json": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "patternProperties": {
+        "^(alertPriority)$": {
+          "default": "",
+          "description": "熔断通知的 ntfy Priority 头,不配置用 urgent。",
+          "maxLength": 16,
+          "type": "string"
+        },
+        "^(recoveryPriority)$": {
+          "default": "",
+          "description": "恢复通知的 ntfy Priority 头,不配置用 default。",
+          "maxLength": 16,
+          "type": "string"
+        }
+      },
+      "properties": {
+        "alert_priority": {
+          "default": "",
+          "description": "熔断通知的 ntfy Priority 头,不配置用 urgent。",
+          "maxLength": 16,
+          "type": "string"
+        },
+        "recovery_priority": {
+          "default": "",
+          "description": "恢复通知的 ntfy Priority 头,不配置用 default。",
+          "maxLength": 16,
+          "type": "string"
+        },
+        "token": {
+          "default": "",
+          "description": "可选 Bearer Token。凭据类信息,不写进仓库与日志。",
+          "maxLength": 512,
+          "type": "string"
+        },
+        "topic": {
+          "default": "",
+          "description": "订阅主题。凭据类信息,不写进仓库与日志。",
+          "maxLength": 128,
+          "type": "string"
+        },
+        "url": {
+          "default": "",
+          "description": "ntfy 服务地址,形如 https://ntfy.example.com,不带主题路径。",
+          "pattern": "^(?:(?:[a-zA-Z][a-zA-Z\\d+\\-.]*):)?(?://(?:[A-Za-z0-9\\-\\.]+(?::\\d+)?))?(/[^\\?#]*)?(?:\\?([^\\#]*))?(?:\\#(.*))?$",
+          "type": "string"
+        }
+      },
+      "title": "Ntfy",
+      "type": "object"
+    },
     "conf.v1.Observability.Metric.schema.json": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "additionalProperties": false,
@@ -739,6 +891,10 @@
         "export_interval": {
           "$ref": "#/$defs/google.protobuf.Duration.schema.json",
           "description": "指标导出间隔。不配置回落到 30s。\n (OTel SDK 默认 60s;这里取 30s,原来硬编码的 3s 对 collector 压力过大)"
+        },
+        "guard": {
+          "$ref": "#/$defs/conf.v1.Observability.Metric.Guard.schema.json",
+          "description": "指标导出保护:失败按指数退避、连续失败熔断,熔断与恢复各发一次 ntfy 告警,\n 熔断期间不再向业务日志刷导出错误。不配置时由 go-connect-kit/otelguard 的\n 默认值兜底(MaxFailures=8、InitialBackoff=2s、MaxBackoff=5m、\n Multiplier=2.0、Jitter=0.3、ProbeInterval=5m)。\n ntfy 的 topic 与 token 属于凭据类信息,只写在 Config Center,不落仓库。"
         },
         "tls": {
           "$ref": "#/$defs/conf.v1.Observability.Tls.schema.json"
@@ -1076,6 +1232,12 @@
       },
       "title": "Server",
       "type": "object"
+    },
+    "google.protobuf.BoolValue.schema.json": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "description": "The bool value.",
+      "title": "Bool Value",
+      "type": "boolean"
     },
     "google.protobuf.DoubleValue.schema.json": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
