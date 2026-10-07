@@ -3,7 +3,7 @@
 environment: pre
 config:
   image:
-    tag: 0.2.21
+    tag: 0.2.22
   hosts:
     web: [config.dev.test, config.apikv.com]
     api: [config-api.dev.test, config-api.apikv.com]
@@ -11,11 +11,11 @@ config:
     dnsNames: [config.dev.test, config-api.dev.test]
 configWeb:
   image:
-    tag: 0.2.21
+    tag: 0.2.22
   apiUrl: https://config-api.apikv.com
 gateway:
   image:
-    tag: 0.2.21
+    tag: 0.2.22
   hosts: [gateway.dev.test, gateway.apikv.com]
   configSourceSecret: control-tower-config-source-pre
   bff:

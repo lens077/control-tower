@@ -22,7 +22,7 @@ spec:
         - name: tcr-pull
       containers:
         - name: config-center
-          image: ccr.ccs.tencentyun.com/sumery/control-tower-config:0.2.21
+          image: ccr.ccs.tencentyun.com/sumery/control-tower-config:0.2.22
           imagePullPolicy: Always
           env:
             # 关闭应用内的 Log 导出器，只保留 Trace 和 Metric。
