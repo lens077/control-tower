@@ -220,7 +220,7 @@ scripts/promote-release.sh X.Y.Z   # 本地预演 release job 会做的事，只
 | 实例 | 入口 | 运行方式 | 上线方式 |
 |---|---|---|---|
 | k8s 控制台 | `config.apikv.com` | Pod `config-center-web`（镜像 `control-tower-config-web:<tag>`，config.json 由 ConfigMap `config-center-web-config` 注入） | 打 semver tag → ci.yml `release` job 推进 pre 镜像 tag → 推 GitLab → Argo CD 同步（GitOps，tag 触发） |
-| EdgeOne 控制台 | `egde-one.apikv.com`（自定义域，CNAME 到 EdgeOne） | EdgeOne Pages 静态托管，运行时配置写进 `web/dist/config.json` | push main（或 tag）→ `.github/workflows/deploy.yml` 构建并 `edgeone pages deploy` |
+| EdgeOne 控制台 | `egde-one.apikv.com`（自定义域，CNAME 到 EdgeOne） | EdgeOne Pages 静态托管，运行时配置写进 `web/dist/config.json` | push main（或 tag）→ `.github/workflows/deploy.yml` 构建并 `edgeone makers deploy` |
 
 设计要点：
 - **k8s 控制台仍是 tag 触发**（与既有 GitOps 纪律一致）；**EdgeOne 控制台是 push main 即上线**，做随时可看的「最新构建」。
@@ -238,7 +238,14 @@ scripts/promote-release.sh X.Y.Z   # 本地预演 release job 会做的事，只
 | 1 | **config-center CORS**：`config-center-bootstrap` Secret 的 `server.cors.allowed_origins` 含 `https://egde-one.apikv.com` | ✅ 2026-10-15 已加并 rollout |
 | 2 | **自定义域**：DNS `egde-one.apikv.com` CNAME 到 `egde-one.apikv.com.pages.dnsoe6.com.` + EdgeOne 后台绑定 | ✅ 2026-10-16 已生效 |
 | 3 | **HTTPS 证书**：域名的 `Https.CertInfo` 曾为空（回落到共享 `*.cdn.myqcloud.com` 证书，浏览器报证书不匹配） | ✅ 2026-10-16 已申请并绑定免费证书（见下） |
-| 4 | **Casdoor `redirect_uri` 白名单**：Casdoor 应用 `ecommerce`（org `lens`）的回调地址需含 `https://egde-one.apikv.com/callback` | ⏳ **唯一遗留**，需 Casdoor 管理后台操作 |
+| 4 | **Casdoor `redirect_uri` 白名单**：Casdoor 应用 `ecommerce`（org `lens`）的回调地址需含 `https://egde-one.apikv.com/callback` | ✅ 2026-10-16 已加，e2e 登录恢复 |
+
+四处齐了之后 e2e 于 **2026-10-16 恢复全绿**（run 38816036703：12 passed / 3 skipped）。
+
+**CI 侧前置**：`deploy.yml` 需要仓库 Secret `EDGEONE_TOKEN`（EdgeOne API Token，
+控制台 → 个人中心/API 密钥生成；本地 CLI 登录态下也能从 `~/.edgeone/` 取到）。
+CLI 用 `edgeone makers deploy`（`pages` 子命令已弃用），并锁 `edgeone@1.6.41`、
+带 `--skip-ai-gateway-sync`（否则会试图拉 AI Gateway key 写 `.env`）、失败重试 3 次。
 
 **证书怎么发的**（下次换域/重签照做）：域名 CNAME 接入后 `Https.ApplyType` 默认仍是 `none`，不会自动发证书，
 必须走 teo 四步：`ApplyFreeCertificate → CheckFreeCertificateVerification → ModifyHostsCertificate`。
@@ -247,9 +254,12 @@ scripts/promote-release.sh X.Y.Z   # 本地预演 release job 会做的事，只
   `web/dist/.well-known/pki-validation/fileauth.txt` 重新部署，再调 `CheckFreeCertificateVerification`，
   最后 `ModifyHostsCertificate --ApplyType apply` 绑定（CertId `teo-3w8n42yht4ce`，有效期至 2027-01-12）。
 
-**Pangolin 隧道**（仅恢复 k8s 控制台需要）：`config.apikv.com` 经 Pangolin 的隧道资源缺失/指向错
-时控制台 0 字节超时；在 `pangolin.apikv.com` 按 `config-api.apikv.com`（rid 63）同样写法重建
-site `k8s-cluster`、target `10.10.31.240:443` https、Host/tlsServerName `config.apikv.com`、SSO 关。
+**Pangolin 隧道**：`config.apikv.com` / `config-api.apikv.com` 经 Pangolin 的隧道资源缺失/指向错
+时表现为 **0 字节超时**，而集群内一切正常（`kubectl port-forward svc/config-center:30010` → `/healthz` 200）。
+排查顺序固定为：先 port-forward 验集群内，再比对公网，别去改服务配置。
+在 `pangolin.apikv.com` 按 `config-api.apikv.com`（rid 63）同样写法重建
+site `k8s-cluster`、target `10.10.31.240:443` https、Host/tlsServerName 填对应域名、SSO 关。
+2026-10-16 两条隧道均已重建，公网实测 `config.apikv.com` 200/0.13s、`config-api.apikv.com/healthz` 200/0.20s。
 
-本地一键：`make deploy-web`（= `web-build` + `gen-web-config` + `edgeone pages deploy`，需 `EDGEONE_TOKEN`）；
+本地一键：`make deploy-web`（= `web-build` + `gen-web-config` + `edgeone makers deploy`，需 `EDGEONE_TOKEN`）；
 k8s 发布推进：`make release VERSION=X.Y.Z`（= `scripts/promote-release.sh`，之后 `git tag` + push 触发 Argo CD）。
