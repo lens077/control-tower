@@ -44,6 +44,9 @@ export default defineConfig({
   reporter: [["list"], ["html", { open: "never" }]],
   use: {
     baseURL: CONFIG_URL,
+    // goto/reload 的兜底超时：默认 30s 在隧道抖动时太紧。45s 给足首屏抵达时间，
+    // 真正的重试逻辑在 nav.ts 的 navigate() 里（domcontentloaded + 重试）。
+    navigationTimeout: 45_000,
     trace: "retain-on-failure",
     video: "retain-on-failure",
     screenshot: "only-on-failure",

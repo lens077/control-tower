@@ -1,4 +1,5 @@
 import { expect, test, type ConsoleMessage, type Page } from "@playwright/test";
+import { navigate } from "../nav";
 
 /**
  * config 服务 + Web 控制台的端到端用例。
@@ -29,10 +30,10 @@ test("整页加载后能靠静默续期保持登录", async ({ page }) => {
   // 而网络面板一片正常。
   const errors = collectErrors(page);
 
-  await page.goto("/");
+  await navigate(page, "/");
   await expectSignedIn(page);
 
-  await page.reload();
+  await page.reload({ waitUntil: "domcontentloaded" });
   await expectSignedIn(page);
 
   expect(errors.filter((e) => /Content Security Policy|frame-src/i.test(e))).toEqual([]);
@@ -44,7 +45,7 @@ test("深链直接打开 /edit 能渲染出编辑器且带内容", async ({ page
   // 而网络面板看不到任何失败条目(CSP 拦截发生在发请求之前)。
   const errors = collectErrors(page);
 
-  await page.goto("/edit?ns=product&env=dev&key=bootstrap.yaml");
+  await navigate(page, "/edit?ns=product&env=dev&key=bootstrap.yaml");
   await expectSignedIn(page);
 
   const editor = page.locator(".monaco-editor").first();
@@ -61,7 +62,7 @@ test("深链直接打开 /edit 能渲染出编辑器且带内容", async ({ page
 });
 
 test("历史页的 diff 编辑器可渲染", async ({ page }) => {
-  await page.goto("/history?ns=product&env=dev&key=bootstrap.yaml");
+  await navigate(page, "/history?ns=product&env=dev&key=bootstrap.yaml");
   await expectSignedIn(page);
   await expect(page.locator(".monaco-diff-editor, .monaco-editor").first()).toBeVisible({
     timeout: 45_000,
@@ -81,7 +82,7 @@ test("系统页共享指标覆盖全部主机，CPU与iowait独立", async ({ pa
     }
   });
 
-  await page.goto("/system");
+  await navigate(page, "/system");
   await expectSignedIn(page);
 
   // 后端不可用时前端会显式提示,而不是画空图 —— 出现这句话就是没接上指标后端。
@@ -130,7 +131,7 @@ test("系统页共享指标覆盖全部主机，CPU与iowait独立", async ({ pa
 test("界面上不出现未翻译的原始 i18n key", async ({ page }) => {
   // 回归 2026-08-29:代码引用了从不存在的 common: 命名空间,i18next 把前缀剥掉后
   // 按钮上直接显示 action.save / action.delete 这样的原始 key。
-  await page.goto("/");
+  await navigate(page, "/");
   await expectSignedIn(page);
 
   const body = (await page.locator("body").innerText()) ?? "";
@@ -142,7 +143,7 @@ test("各页面都不刷 CSP 违规或未捕获异常", async ({ page }) => {
   const errors = collectErrors(page);
 
   for (const path of ["/", "/connections", "/tokens", "/system"]) {
-    await page.goto(path);
+    await navigate(page, path);
     await expectSignedIn(page);
   }
 

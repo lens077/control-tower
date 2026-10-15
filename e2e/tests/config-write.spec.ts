@@ -1,5 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 import { STORAGE_STATE } from "../playwright.config";
+import { navigate } from "../nav";
 
 /**
  * 配置中心的**写路径**：新建 → 保存 → 再保存 → 回滚 → 删除。
@@ -91,7 +92,7 @@ function versionChip(page: Page) {
 }
 
 test("配置写路径:新建 → 保存 → 再保存 → 回滚 → 删除", async ({ page }) => {
-  await page.goto("/");
+  await navigate(page, "/");
   await expectSignedIn(page);
 
   await test.step("在新命名空间里创建 key", async () => {
@@ -115,14 +116,14 @@ test("配置写路径:新建 → 保存 → 再保存 → 回滚 → 删除", as
 
   await test.step("新 key 出现在浏览列表里", async () => {
     // 只看编辑页的版本号不够：那只证明写进去了，不证明 ListKeys 查得到。
-    await page.goto("/");
+    await navigate(page, "/");
     await expectSignedIn(page);
     await selectNamespace(page);
     await expect(page.getByText(KEY, { exact: false })).toBeVisible({ timeout: 30_000 });
   });
 
   await test.step("二次保存产生 v2", async () => {
-    await page.goto(EDIT_URL);
+    await navigate(page, EDIT_URL);
     await expectSignedIn(page);
     // 先等 v1 的内容回填完 —— 这既是「读回来的确实是刚存的」这条断言,
     // 也把下面的输入与回填的竞态挡掉。
@@ -159,7 +160,7 @@ test("配置写路径:新建 → 保存 → 再保存 → 回滚 → 删除", as
     await page.getByRole("button", { name: "删除" }).click();
     await page.waitForURL(/\/$|\/\?/, { timeout: 30_000 });
 
-    await page.goto("/");
+    await navigate(page, "/");
     await expectSignedIn(page);
     await selectNamespace(page);
     // 等列表刷新完再断言「不存在」,否则可能只是还没加载出来。
@@ -173,7 +174,7 @@ test.afterAll(async ({ browser }) => {
   const context = await browser.newContext({ storageState: STORAGE_STATE });
   const page = await context.newPage();
   try {
-    await page.goto(EDIT_URL, { waitUntil: "domcontentloaded" });
+    await navigate(page, EDIT_URL);
     const remove = page.getByRole("button", { name: "删除" });
     if (await remove.isEnabled({ timeout: 15_000 }).catch(() => false)) {
       await remove.click();

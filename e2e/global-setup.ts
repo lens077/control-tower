@@ -1,6 +1,7 @@
 import { chromium, type FullConfig } from "@playwright/test";
 import { mkdirSync } from "node:fs";
 import { CONFIG_URL, STORAGE_STATE } from "./playwright.config";
+import { navigate } from "./nav";
 
 /**
  * 登录一次，把 **Casdoor 那边的会话 Cookie** 存下来给所有用例复用。
@@ -24,7 +25,9 @@ async function globalSetup(_config: FullConfig) {
   const browser = await chromium.launch();
   const page = await browser.newPage();
 
-  await page.goto(CONFIG_URL, { waitUntil: "domcontentloaded" });
+  // 隧道抖动偶发让首屏导航超时；这里用带重试的 navigate（见 nav.ts）。
+  // globalSetup 不受单条用例 90s 超时约束，所以多给几次重试、单次超时也放宽到 30s。
+  await navigate(page, CONFIG_URL, { retries: 3, timeout: 30_000 });
   // ⚠️ 必须限定在 <main> 里。0.2.16 的控制台改版给 header 也放了一个「登录」按钮
   // （`web/src/routes/__root.tsx`：header 一个、SignedOut 落地页一个，点击行为相同），
   // 不限定作用域会撞 Playwright 严格模式：`resolved to 2 elements`，

@@ -1,5 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 import { CONFIG_API_URL, STORAGE_STATE } from "../playwright.config";
+import { navigate } from "../nav";
 
 const ADMIN_MUTATIONS_ENABLED = process.env.E2E_ADMIN_MUTATIONS === "true";
 const RUN_ID = Date.now().toString(36);
@@ -63,7 +64,7 @@ async function saveAndExpectVersion(page: Page, version: string) {
 }
 
 async function createWatchKey(page: Page) {
-  await page.goto(EDIT_URL);
+  await navigate(page, EDIT_URL);
   await expectSignedIn(page);
   await expect(versionChip(page)).toHaveText("新建", { timeout: 30_000 });
   await expect(page.locator(".monaco-editor")).toBeVisible({ timeout: 45_000 });
@@ -72,7 +73,7 @@ async function createWatchKey(page: Page) {
 }
 
 async function updateWatchKey(page: Page) {
-  await page.goto(EDIT_URL);
+  await navigate(page, EDIT_URL);
   await expectSignedIn(page);
   await waitForEditorContent(page, INITIAL_VALUE);
   await replaceEditorContent(page, UPDATED_VALUE);
@@ -80,7 +81,7 @@ async function updateWatchKey(page: Page) {
 }
 
 async function issueMachineToken(page: Page): Promise<string> {
-  await page.goto("/tokens");
+  await navigate(page, "/tokens");
   await expectSignedIn(page);
   await page.getByRole("button", { name: "签发 Token" }).click();
 
@@ -223,7 +224,7 @@ function tokenCard(page: Page) {
 }
 
 async function revokeIssuedToken(page: Page) {
-  await page.goto("/tokens");
+  await navigate(page, "/tokens");
   await expectSignedIn(page);
   await page.getByLabel("服务名").fill(SERVICE_NAME);
   const card = tokenCard(page);
@@ -234,7 +235,7 @@ async function revokeIssuedToken(page: Page) {
 }
 
 async function deleteWatchKey(page: Page) {
-  await page.goto(EDIT_URL, { waitUntil: "domcontentloaded" });
+  await navigate(page, EDIT_URL);
   const remove = page.getByRole("button", { name: "删除" });
   if (await remove.isEnabled({ timeout: 15_000 }).catch(() => false)) {
     await remove.click();
@@ -270,7 +271,7 @@ test.describe("真实 WatchKeys、客户端连接与 token 吊销", () => {
 
   test("/connections 显示真实订阅客户端和目标 key", async ({ page }) => {
     expect(watchDone).toBe(false);
-    await page.goto("/connections");
+    await navigate(page, "/connections");
     await expectSignedIn(page);
 
     const card = connectionCard(page);
@@ -294,7 +295,7 @@ test.describe("真实 WatchKeys、客户端连接与 token 吊销", () => {
     expect(watchEndCode).toBe("permission_denied");
     expect(await getKeyStatus(issuedToken)).toBe(401);
 
-    await page.goto("/connections");
+    await navigate(page, "/connections");
     const card = connectionCard(page);
     await expect(card).toBeVisible({ timeout: 30_000 });
     await expect(card).toContainText("已断开");
@@ -309,7 +310,7 @@ test.describe("真实 WatchKeys、客户端连接与 token 吊销", () => {
     const page = await context.newPage();
     try {
       // 即使签发响应在返回明文前就断了，也按唯一 service name 查卡片并补做吊销。
-      await page.goto("/tokens");
+      await navigate(page, "/tokens");
       await page.getByLabel("服务名").fill(SERVICE_NAME);
       const revoke = tokenCard(page).getByRole("button", { name: "吊销" });
       if (await revoke.isEnabled({ timeout: 15_000 }).catch(() => false)) {
