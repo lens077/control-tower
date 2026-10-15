@@ -1,6 +1,6 @@
 # control-tower 聚合入口。目标保持幂等；CI 与本地共用。
 
-.PHONY: api api-go api-ts tools check-gen lint build test tidy verify config dev gateway sync-ecommerce-schemas deploy-render check-deploy helm-lint
+.PHONY: api api-go api-ts tools check-gen lint build test tidy verify config dev gateway sync-ecommerce-schemas deploy-render check-deploy helm-lint web-build gen-web-config edgeone-deploy deploy-web release
 
 # 重新生成 proto 产物：Go + Connect（buf.gen.yaml）与控制台 TS（buf.gen.ts.yaml → web/src/gen）。
 # 两份必须一起出：只跑 Go 那份会让 web/src/gen 悄悄落后于 proto（2026-09-15 实测 system.proto
@@ -87,3 +87,26 @@ LEGACY_CONFIG_CENTER ?= ../config-center
 breaking-legacy:
 	buf breaking --against $(LEGACY_CONFIG_CENTER) \
 		--config '{"version":"v2","modules":[{"path":".","excludes":["third_party/google","third_party/errors"]}],"breaking":{"use":["WIRE_JSON"]}}'
+
+# --- EdgeOne Pages 控制台部署（静态 SPA，不经 k8s）---
+# 运行期配置注入：web/dist/config.json 由本仓 chart 值生成（apiUrl + casdoor），
+# 不写死在 web/public/config.json（那份是 localhost，仅供本机 dev）。
+web-build:
+	cd web && pnpm install --frozen-lockfile --config.strictDepBuilds=false && pnpm build
+
+# 用 chart 的 prod 值生成 EdgeOne 用的运行时 config.json。
+gen-web-config:
+	./scripts/gen-web-config.sh web/dist
+
+# 构建 + 注入 config + 上传到 EdgeOne Pages。需 EDGEONE_TOKEN（GitHub Secret / 本地 export）。
+# 自定义域名（默认 egde-one.apikv.com）的 CNAME 在 EdgeOne 后台加，本仓不托管 DNS。
+edgeone-deploy: web-build gen-web-config
+	edgeone pages deploy web/dist -n control-tower-web -t "$${EDGEONE_TOKEN}"
+
+# 一键：构建并部署 EdgeOne 控制台。
+deploy-web: edgeone-deploy
+
+# 发布推进（仅 semver tag 走 ArgoCD 上线 k8s pod）：改 values-pre 三镜像 tag → 渲染 → 守门测试。
+# 用法：make release VERSION=0.2.23   （之后 git tag + push 触发 ci.yml release job → GitLab → Argo CD）
+release:
+	./scripts/promote-release.sh $(VERSION)

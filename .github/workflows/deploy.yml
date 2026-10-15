@@ -1,0 +1,69 @@
+# 自动部署 Web 控制台到 EdgeOne Pages（静态 SPA，不经 k8s 镜像）。
+#
+# 触发：
+#   - push main          → 构建并上传最新控制台（push 即上线 EdgeOne）
+#   - push semver tag    → 同上；同时 ci.yml 的 release job 会把镜像推进 pre 并推 GitLab，
+#                           Argo CD 经 webhook 同步 k8s 里的 config-web pod（两套并存）
+#   - workflow_dispatch  → 手动触发
+#
+# k8s 里的 config-web pod 仍只在「打 semver tag」时经 Argo CD 上线（AGENTS.md「发布方式」；
+# 本次按选择维持 tag 触发，push main 不滚动 k8s pod）。镜像构建在 ci.yml 的 image job。
+#
+# 前置 Secret（仓库 Settings → Secrets）：
+#   EDGEONE_TOKEN   EdgeOne API Token（控制台 → 个人中心/API 密钥 生成），用于 edgeone CLI 登录。
+name: Deploy
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - "[0-9]+.[0-9]+.[0-9]+"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  EDGEONE_PROJECT: control-tower-web
+
+jobs:
+  edgeone:
+    name: deploy web → EdgeOne Pages
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          package_json_file: web/package.json
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: web/pnpm-lock.yaml
+
+      - name: Install
+        working-directory: web
+        run: pnpm install --frozen-lockfile --config.strictDepBuilds=false
+
+      - name: Build web SPA
+        working-directory: web
+        run: pnpm build
+
+      # 运行时配置注入：用 chart 的 prod 值写 dist/config.json（apiUrl + casdoor），
+      # 不依赖 web/public/config.json（那份是 localhost）。
+      - name: Inject prod runtime config
+        run: ./scripts/gen-web-config.sh web/dist
+
+      - name: Install EdgeOne CLI
+        run: npm install -g edgeone
+
+      - name: Deploy to EdgeOne Pages
+        env:
+          EDGEONE_TOKEN: ${{ secrets.EDGEONE_TOKEN }}
+        run: edgeone pages deploy web/dist -n "$EDGEONE_PROJECT" -t "$EDGEONE_TOKEN"

@@ -212,3 +212,34 @@ make check-deploy    # helm lint + 渲染产物字节比对（CI 也跑）
 go test ./deploy/    # 11 条部署清单守门测试（读渲染产物）
 scripts/promote-release.sh X.Y.Z   # 本地预演 release job 会做的事，只改工作区
 ```
+
+## Web 控制台的双部署：k8s 镜像 + EdgeOne Pages（2026-10-15 起）
+
+控制台是静态 SPA（Caddy 伺服），有两份运行实例，来源同一个 `web/dist` 构建物：
+
+| 实例 | 入口 | 运行方式 | 上线方式 |
+|---|---|---|---|
+| k8s 控制台 | `config.apikv.com` | Pod `config-center-web`（镜像 `control-tower-config-web:<tag>`，config.json 由 ConfigMap `config-center-web-config` 注入） | 打 semver tag → ci.yml `release` job 推进 pre 镜像 tag → 推 GitLab → Argo CD 同步（GitOps，tag 触发） |
+| EdgeOne 控制台 | `egde-one.apikv.com`（自定义域，CNAME 到 EdgeOne） | EdgeOne Pages 静态托管，运行时配置写进 `web/dist/config.json` | push main（或 tag）→ `.github/workflows/deploy.yml` 构建并 `edgeone pages deploy` |
+
+设计要点：
+- **k8s 控制台仍是 tag 触发**（与既有 GitOps 纪律一致）；**EdgeOne 控制台是 push main 即上线**，做随时可看的「最新构建」。
+- 两份的运行时配置（apiUrl + casdoor）出自同一组 chart 值：`deploy/chart/control-tower/values-pre.yaml`
+  的 `configWeb.apiUrl` 与 `values.yaml` 的 `casdoor.*`。EdgeOne 那份由 `scripts/gen-web-config.sh`
+  在部署前生成 `web/dist/config.json`（k8s 那份由 ConfigMap 注入，不重建镜像）。**不要**把 prod 地址写死进
+  `web/public/config.json`（那份是 localhost，仅供本机 dev）。
+- **e2e 默认打 EdgeOne 控制台**（`e2e/playwright.config.ts` 的 `CONFIG_URL` 默认
+  `https://egde-one.apikv.com`）；要打 k8s 控制台就传 `E2E_CONFIG_URL=https://config.apikv.com`。
+
+让 EdgeOne 控制台真正能登录/调 API，还差两处（都不在本仓、需集群侧/外部操作）：
+1. **config-center CORS**：`config-center-bootstrap` Secret 的 `server.cors.allowed_origins`
+   必须包含 `https://egde-one.apikv.com`（**已加，2026-10-15**）。
+2. **Casdoor `redirect_uri` 白名单**：在 Casdoor 应用 `ecommerce`（org `lens`）里把
+   `https://egde-one.apikv.com/callback` 加进回调地址。
+3. **自定义域 CNAME**：在 DNS 把 `egde-one.apikv.com` CNAME 到 EdgeOne 给的地址，并在 EdgeOne 后台绑定。
+4. **Pangolin 隧道**（仅恢复 k8s 控制台需要）：`config.apikv.com` 经 Pangolin 的隧道资源缺失/指向错
+   时控制台 0 字节超时；在 `pangolin.apikv.com` 按 `config-api.apikv.com`（rid 63）同样写法重建
+   site `k8s-cluster`、target `10.10.31.240:443` https、Host/tlsServerName `config.apikv.com`、SSO 关。
+
+本地一键：`make deploy-web`（= `web-build` + `gen-web-config` + `edgeone pages deploy`，需 `EDGEONE_TOKEN`）；
+k8s 发布推进：`make release VERSION=X.Y.Z`（= `scripts/promote-release.sh`，之后 `git tag` + push 触发 Argo CD）。
