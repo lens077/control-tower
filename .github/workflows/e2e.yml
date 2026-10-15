@@ -12,7 +12,7 @@ on:
   workflow_dispatch:
     inputs:
       config_url:
-        description: "控制台地址（留空用默认 https://config.apikv.com）"
+        description: "控制台地址（留空用默认 https://egde-one.apikv.com）"
         required: false
         type: string
       config_api_url:
@@ -57,6 +57,56 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v5
+
+      # 预检：先把目标的真实响应打出来，再花 40s 装浏览器。
+      #
+      # 2026-10-15 的教训：egde-one.apikv.com 当时返回 19 字节的纯文本 `404 page not found`，
+      # 页面「加载成功」却根本没有控制台，用例一路走到点「登录」按钮才超时 30s。
+      # 报错停在「点不到按钮」会把排查方向带偏成「控制台改版改没了按钮」，
+      # 实际是 DNS/隧道没通。这里先探一次，日志第一屏就能看到到底是什么响应。
+      #
+      # continue-on-error：只做诊断，不代替用例做判定，绝不把绿的运行判红
+      # （瞬时抖动让 curl 失败不代表用例会失败，用例自己有重试）。
+      # 与 playwright.config.ts 里的默认值必须保持一致。
+      - name: "Preflight: 控制台可达性"
+        continue-on-error: true
+        env:
+          TARGET: ${{ inputs.config_url || 'https://egde-one.apikv.com' }}
+        run: |
+          set -uo pipefail
+          echo "探测目标: $TARGET"
+          for i in 1 2 3; do
+            if out=$(curl -sS --max-time 15 -o /tmp/pf.body -w '%{http_code} %{size_download}' "$TARGET" 2>&1); then
+              echo "第 $i 次: $out 字节"
+              break
+            fi
+            echo "第 $i 次失败: $out"
+            [ "$i" -lt 3 ] && sleep 3
+          done
+          echo "--- 响应正文（前 200 字节）---"
+          head -c 200 /tmp/pf.body 2>/dev/null || true
+          echo
+          echo "--- 是否像控制台（应含 <div id=\"app\">）---"
+          if grep -q 'id="app"' /tmp/pf.body 2>/dev/null; then
+            verdict="✅ 拿到控制台 index.html"
+          else
+            verdict="⚠️ 不是控制台页面 —— 用例必然失败，见上面正文判断原因"
+          fi
+          echo "$verdict"
+          # 写进 run 的 Summary：失败时点开运行页第一眼就能看到原因，
+          # 不用去翻几十兆的浏览器日志。
+          {
+            echo "### 控制台预检"
+            echo ""
+            echo "目标: \`$TARGET\`"
+            echo ""
+            echo '```'
+            echo "HTTP: ${out:-（探测失败）}"
+            head -c 200 /tmp/pf.body 2>/dev/null || true
+            echo '```'
+            echo ""
+            echo "$verdict"
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Set up pnpm
         uses: pnpm/action-setup@v6
