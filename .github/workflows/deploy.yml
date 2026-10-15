@@ -60,10 +60,32 @@ jobs:
       - name: Inject prod runtime config
         run: ./scripts/gen-web-config.sh web/dist
 
+      # 锁版本：`edgeone` 是 npm 包，不锁会因上游发版而突然变红。
+      # `pages` 子命令已弃用（CLI 自带提示），统一用 `makers`（参数完全兼容）。
       - name: Install EdgeOne CLI
-        run: npm install -g edgeone
+        run: npm install -g edgeone@1.6.41
 
-      - name: Deploy to EdgeOne Pages
+      # `--skip-ai-gateway-sync`：默认会去拉 AI Gateway API key 并写 .env、绑云凭证，
+      # CI 里既没交互也没必要，跳过可避免它卡住或改坏产物。
+      # 重试 3 次：EdgeOne 上传偶发网络抖动，单次失败不代表产物有问题。
+      - name: Deploy to EdgeOne Makers
         env:
           EDGEONE_TOKEN: ${{ secrets.EDGEONE_TOKEN }}
-        run: edgeone pages deploy web/dist -n "$EDGEONE_PROJECT" -t "$EDGEONE_TOKEN"
+        run: |
+          set -o pipefail
+          for i in 1 2 3; do
+            echo "::group::第 $i 次部署"
+            if edgeone makers deploy web/dist \
+                -n "$EDGEONE_PROJECT" \
+                -t "$EDGEONE_TOKEN" \
+                --skip-ai-gateway-sync; then
+              echo "::endgroup::"
+              echo "✅ 部署成功"
+              exit 0
+            fi
+            echo "::endgroup::"
+            echo "⚠️ 第 $i 次失败，10s 后重试"
+            [ "$i" -lt 3 ] && sleep 10
+          done
+          echo "❌ 3 次部署全部失败"
+          exit 1
