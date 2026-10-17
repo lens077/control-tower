@@ -9,9 +9,6 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"go.opentelemetry.io/otel"
-	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
-	"go.opentelemetry.io/otel/sdk/metric/metricdata"
 	"go.uber.org/zap"
 )
 
@@ -52,68 +49,19 @@ func doAuth(t *testing.T, a *Authorizer, token, path string) (*httptest.Response
 	return rec, got
 }
 
-// 双栈第一段：legacy 共享 token 仍可用，且计入告警计数。
-func TestLegacySharedTokenStillWorksAndCounts(t *testing.T) {
-	a := &Authorizer{serviceToken: []byte("legacy-shared"), log: zap.NewNop()}
-
-	rec, p := doAuth(t, a, "legacy-shared", "/config.v1.ConfigService/GetKey")
-	require.Equal(t, http.StatusOK, rec.Code)
-	require.NotNil(t, p)
-	assert.True(t, p.Machine)
-	require.NotNil(t, p.Scope)
-	assert.True(t, p.Scope.Legacy)
-	assert.EqualValues(t, 1, a.LegacyHits())
-	// legacy 范围=任意 namespace 只读。
-	assert.True(t, p.Scope.AllowsRead("anything", "anywhere"))
-}
-
-func TestLegacySharedTokenPublishesHitGauge(t *testing.T) {
-	reader := sdkmetric.NewManualReader()
-	provider := sdkmetric.NewMeterProvider(sdkmetric.WithReader(reader))
-	previous := otel.GetMeterProvider()
-	otel.SetMeterProvider(provider)
-	t.Cleanup(func() {
-		otel.SetMeterProvider(previous)
-		require.NoError(t, provider.Shutdown(context.Background()))
-	})
-
-	a := &Authorizer{serviceToken: []byte("legacy-shared"), log: zap.NewNop()}
-	require.NoError(t, registerLegacyHitMetric(a))
-	doAuth(t, a, "legacy-shared", "/config.v1.ConfigService/GetKey")
-
-	var resourceMetrics metricdata.ResourceMetrics
-	require.NoError(t, reader.Collect(context.Background(), &resourceMetrics))
-	for _, scopeMetrics := range resourceMetrics.ScopeMetrics {
-		for _, metric := range scopeMetrics.Metrics {
-			if metric.Name != "machine_token_legacy_hits" {
-				continue
-			}
-			gauge, ok := metric.Data.(metricdata.Gauge[int64])
-			require.True(t, ok)
-			require.Len(t, gauge.DataPoints, 1)
-			assert.EqualValues(t, 1, gauge.DataPoints[0].Value)
-			return
-		}
-	}
-	t.Fatal("machine_token_legacy_hits metric was not collected")
-}
-
-// 双栈第二段：per-service token 查表命中，范围收窄。
+// per-service token 查表命中，范围收窄到自身 namespace×environment。
 func TestPerServiceTokenScoped(t *testing.T) {
 	scope := MachineScope{TokenID: "id-1", Service: "order", Environment: "dev", Namespaces: []string{"order"}}
 	a := &Authorizer{
-		serviceToken: []byte("legacy-shared"),
-		tokens:       newFakeStore("ct_order_dev", scope),
-		log:          zap.NewNop(),
+		tokens: newFakeStore("ct_order_dev", scope),
+		log:    zap.NewNop(),
 	}
 
 	rec, p := doAuth(t, a, "ct_order_dev", "/config.v1.ConfigService/WatchKeys")
 	require.Equal(t, http.StatusOK, rec.Code)
 	require.NotNil(t, p)
 	require.NotNil(t, p.Scope)
-	assert.False(t, p.Scope.Legacy)
 	assert.Equal(t, "service:order", p.Name)
-	assert.EqualValues(t, 0, a.LegacyHits())
 	// TouchLastUsed 已记录。
 	assert.Equal(t, []string{"id-1"}, a.tokens.(*fakeStore).touched)
 
@@ -126,9 +74,8 @@ func TestPerServiceTokenScoped(t *testing.T) {
 // 双双未命中 → 401。
 func TestUnknownTokenRejected(t *testing.T) {
 	a := &Authorizer{
-		serviceToken: []byte("legacy-shared"),
-		tokens:       newFakeStore("ct_known", MachineScope{TokenID: "x"}),
-		log:          zap.NewNop(),
+		tokens: newFakeStore("ct_known", MachineScope{TokenID: "x"}),
+		log:    zap.NewNop(),
 	}
 	rec, _ := doAuth(t, a, "ct_wrong", "/config.v1.ConfigService/GetKey")
 	assert.Equal(t, http.StatusUnauthorized, rec.Code)
@@ -138,9 +85,8 @@ func TestUnknownTokenRejected(t *testing.T) {
 func TestMachineTokenCannotManage(t *testing.T) {
 	scope := MachineScope{TokenID: "id-1", Service: "order", Environment: "dev", Namespaces: []string{"order"}}
 	a := &Authorizer{
-		serviceToken: []byte("legacy-shared"),
-		tokens:       newFakeStore("ct_order_dev", scope),
-		log:          zap.NewNop(),
+		tokens: newFakeStore("ct_order_dev", scope),
+		log:    zap.NewNop(),
 	}
 	for _, tok := range []string{"legacy-shared", "ct_order_dev"} {
 		for _, path := range []string{
@@ -155,8 +101,8 @@ func TestMachineTokenCannotManage(t *testing.T) {
 	}
 }
 
-// 未配置 legacy 环境变量时（关闭死线后形态），只有查表路径生效。
-func TestLegacyDisabledAfterDeadline(t *testing.T) {
+// 共享 token 已移除：只有查表路径生效，任何非 machine token 一律 401。
+func TestOnlyPerServiceTokensAccepted(t *testing.T) {
 	scope := MachineScope{TokenID: "id-1", Service: "order", Environment: "dev", Namespaces: []string{"order"}}
 	a := &Authorizer{
 		tokens: newFakeStore("ct_order_dev", scope),
@@ -167,7 +113,6 @@ func TestLegacyDisabledAfterDeadline(t *testing.T) {
 
 	rec, _ = doAuth(t, a, "anything-else", "/config.v1.ConfigService/GetKey")
 	assert.Equal(t, http.StatusUnauthorized, rec.Code)
-	assert.EqualValues(t, 0, a.LegacyHits())
 }
 
 // AllowsRead 的 "*" 通配：namespace 任意，environment 仍须相等。
@@ -185,9 +130,8 @@ func TestAllowsReadNamespaceWildcard(t *testing.T) {
 func TestOperatorTokenProcedureAllowlist(t *testing.T) {
 	scope := MachineScope{TokenID: "op-1", Service: "harvest", Environment: "pre", Namespaces: []string{"*"}, Operator: true}
 	a := &Authorizer{
-		serviceToken: []byte("legacy-shared"),
-		tokens:       newFakeStore("ct_operator_pre", scope),
-		log:          zap.NewNop(),
+		tokens: newFakeStore("ct_operator_pre", scope),
+		log:    zap.NewNop(),
 	}
 
 	for _, path := range []string{
@@ -220,7 +164,6 @@ func TestOperatorTokenProcedureAllowlist(t *testing.T) {
 		rec, _ := doAuth(t, a, "ct_operator_pre", path)
 		assert.Equal(t, http.StatusForbidden, rec.Code, "path=%s", path)
 	}
-	assert.EqualValues(t, 0, a.LegacyHits())
 }
 
 // 普通 service token 不因 operator 引入而放宽：PutKey 等仍 403。

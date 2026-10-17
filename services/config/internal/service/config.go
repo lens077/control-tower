@@ -260,7 +260,7 @@ func (s *ConfigService) WatchKeys(
 		case <-ticker.C:
 			// 吊销断流：per-service token 在每个心跳周期复验一次。
 			// 只有「确定已吊销」才断流；查询错误（如 DB 抖动）不掐流（收窄不放大）。
-			if p, ok := iam.PrincipalFromContext(ctx); ok && p.Machine && p.Scope != nil && !p.Scope.Legacy {
+			if p, ok := iam.PrincipalFromContext(ctx); ok && p.Machine && p.Scope != nil {
 				active, err := s.tokens.IsActive(ctx, p.Scope.TokenID)
 				if err != nil {
 					s.log.Warn("machine token recheck failed; keeping stream", zap.Error(err))

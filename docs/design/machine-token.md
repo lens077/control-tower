@@ -2,7 +2,7 @@
 
 ## 背景与目标
 
-初始状态是一把全局共享 token（`CONFIG_CENTER_SERVICE_TOKEN` 环境变量，恒时比较），任何持有者都能读取全部 namespace×environment 配置。2026-08-31 已将 10 个业务服务和 gateway 的 dev/pre selector 迁移到 per-service token；服务端暂时保留 legacy 回退，用于 7 天零命中烘烤和应急回滚。
+初始状态是一把全局共享 token（`CONFIG_CENTER_SERVICE_TOKEN` 环境变量，恒时比较），任何持有者都能读取全部 namespace×environment 配置。2026-08-31 已将 10 个业务服务和 gateway 的 dev/pre selector 迁移到 per-service token；服务端曾保留 legacy 回退用于 7 天零命中烘烤，**2026-10-16 窗口满足后已移除**（见文末「共享 token 退役记录」）。
 
 目标：
 
@@ -60,34 +60,44 @@ per-service machine token 是高熵随机 API Key，不是 JWT。当前数据模
 
 在引入到期机制时，必须同时处理 `WatchKeys` 长流：服务端应在心跳复验中检查到期状态，并确保新 Secret 已生效后再吊销或淘汰旧 token，避免配置读取中断。
 
-## 数据面校验（双栈过渡）
+## 数据面校验
 
-`x-config-center-service-token` 头的校验顺序：
+`x-config-center-service-token` 头只有一条路径：
 
-1. **legacy 共享 token**：与 `CONFIG_CENTER_SERVICE_TOKEN` 恒时比较命中 → 按旧语义放行（任意 namespace 只读），记 WARN 日志与 `machine_token_legacy_hits` 可观测量表。量表从进程启动起累计，并始终上报 `0`，避免把「零命中」与「指标未接线」混为一谈；
-2. **per-service token**：SHA-256 查表命中且未吊销 → 主体=(service, environment, namespaces)；强制校验：请求的 `environment` 与 token 相等、`namespace` ∈ 白名单；
-3. 双双未命中 → 401。
+1. **per-service token**：SHA-256 查表命中且未吊销 → 主体=(service, environment, namespaces)；强制校验：请求的 `environment` 与 token 相等、`namespace` ∈ 白名单；
+2. 未命中 → 401。
 
-作用域：`role=service`（含 legacy）的 machine token 只允许 `GetKey`/`WatchKeys`；`role=operator` 的白名单见下节。
+共享 token 分支（`CONFIG_CENTER_SERVICE_TOKEN` 恒时比较、`machine_token_legacy_hits` 量表）已在关闭死线后删除。
+
+作用域：`role=service` 的 machine token 只允许 `GetKey`/`WatchKeys`；`role=operator` 的白名单见下节。
 
 **吊销断流**：`WatchKeys` 服务端在每次心跳 tick（沿现有心跳周期）复验 token 状态；吊销后主动结束流。SDK 现有重连逻辑会带着新 Secret 重建流（若已轮换）或收到 401 快速失败。
 
-**共享 token 关闭死线**：10 个业务服务与 gateway 全部换发 per-service token 后，`machine_token_legacy_hits` 必须连续 7 天为零。满足该条件后，移除环境变量、K8s Secret 字段和 legacy 分支。烘烤期内出现任意非零值时，从最后一次命中重新计算 7 天窗口。
+**共享 token 退役记录**（原「关闭死线」条款，2026-10-16 实际移除）：规则是 `machine_token_legacy_hits`
+连续 7 天为零后移除环境变量、Secret 字段与 legacy 分支；烘烤期内任意非零值从最后一次命中重算 7 天。
+2026-08-31T16:05Z 起窗口清零；2026-09-12 02:35–03:55Z 出现 12 次命中，全部是 `client=cart-service`
+从开发机 `make dev` 发出——本地 gitignored selector 里塞的是共享 token（dev 环境当时没有
+per-service selector，8-31 签的 dev token 明文已失）。处理：为 dev 建 `ecommerce-config-source-dev`
+并签 10 枚 per-service token，开发机切换，8-31 的孤儿 token 吊销；重启 config 服务归零量表
+（量表从进程启动累计，不重启永不归零）。
 
-**当前烘烤窗口**（2026-09-27 核对）：pre 实例 `c5252de3` 在 `2026-09-24T14:06:21Z` 记到 1 次 legacy 命中
-（`/config.v1.ConfigService/GetKey`，日志里 `client` 为空），窗口从这次命中重新起算，最早删除时间为
-`2026-10-01T14:06:21Z`。前提是先找出并换掉这个调用方，且此后零增量。
-每 6 小时 e2e 同时断言「时序存在」「活实例当前值为零」「7 天窗口增量为零」；空结果或任意非零值
-都会让巡检失败并重置退役窗口。
+**窗口被一次未识别的命中顺延过**：2026-09-24T14:06:21Z pre 实例记到 1 次命中
+（`/config.v1.ConfigService/GetKey`，日志里 `client` 为空），因此按「最后一次命中 + 7 天」
+最早移除时间是 **2026-10-01T14:06:21Z**，而不是按 09-12 那批算出的 09-19。
+该调用方始终没查出来（`client` 头为空），但此后不再出现。
 
-窗口查询用 `increase(machine_token_legacy_hits[7d])`，不要用 `max_over_time`。`machine_token_legacy_hits`
-是累计计数器，`max_over_time(...[7d])` 取的是窗口内最大累计值，回答的是「这个实例历史上有没有命中过」，
-而不是「窗口内有没有新命中」；Pod 重启后旧实例变成一条带着历史总数的 stale 时序，只要它最后一个样本
-没滑出 7d，断言就一直红。`increase` 处理计数器重置、只看窗口内增量。实现见
-`e2e/tests/config-legacy-metric.spec.ts`。
+**移除前的核对（2026-10-16）**：直接从集群内 VictoriaMetrics 拉
+`machine_token_legacy_hits` 的 30 天范围样本确认——最后一次非零样本是 **2026-09-26T20:00Z**
+（值 1，即 09-24 那次；之后实例随 Pod 重启结束），**09-26T20Z 到 10-15T22Z 全程为 0 且时序连续无缺口**，
+约 20 天零命中，远超 7 天要求。集群内所有 Secret 复核无消费者再持有共享 token，据此合并
+分支 `chore/retire-legacy-shared-token` 并完成移除。
 
-另一个教训：指标采样中断期间发生的命中时刻不可考，窗口只能从**恢复采样后的第一个样本**起算，
-不能往前认。
+移除后 e2e 的零命中巡检用例（`config-legacy-metric.spec.ts`）同时删除——指标不存在了，
+「时序存在」断言没有意义。
+
+⚠️ **残留风险**：09-24 那次命中的调用方从未识别。若它是低频任务（周级/月级），移除后会
+收到 401。已连续 20 天零命中，判断为已停用或已随 dev 切换解决；若后续出现 401 投诉，
+按 `x-config-center-service-token` 请求日志反查即可定位。
 
 ## operator 角色（管理面服务账号，2026-09-11）
 
