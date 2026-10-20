@@ -12,7 +12,7 @@ on:
   workflow_dispatch:
     inputs:
       config_url:
-        description: "控制台地址（留空用默认 https://egde-one.apikv.com）"
+        description: "控制台地址（留空用默认 https://control-tower.apikv.com）"
         required: false
         type: string
       config_api_url:
@@ -71,7 +71,7 @@ jobs:
       - name: "Preflight: 控制台可达性"
         continue-on-error: true
         env:
-          TARGET: ${{ inputs.config_url || 'https://egde-one.apikv.com' }}
+          TARGET: ${{ inputs.config_url || 'https://control-tower.apikv.com' }}
         run: |
           set -uo pipefail
           echo "探测目标: $TARGET"
