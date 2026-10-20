@@ -11,6 +11,8 @@ import { navigate } from "./nav";
  * 还是**压根没找到登录表单** —— 三种原因的修法完全不同（改 Secrets / 加白名单 /
  * 改选择器），只能靠猜，一圈试下来要好几个 CI 周期。
  * 所以这里在抛错前把 URL 与可见文本落盘并打到 stdout，让日志自己说清楚。
+ * 2026-10-20 增强：额外 dump 页面输入控件（tag/type/name/id/label），
+ * 「表单在但选择器匹配不到」与「表单根本没渲染」由此可直接区分。
  */
 async function dumpLoginFailure(page: Page, phase: string): Promise<string> {
   const url = page.url();
@@ -33,11 +35,32 @@ async function dumpLoginFailure(page: Page, phase: string): Promise<string> {
     hint = "不在 Casdoor 上 —— 检查 CONFIG_URL 与目标站点";
   }
 
+  let inputs = "";
+  if (onCasdoor) {
+    try {
+      const list = await page.evaluate(() =>
+        Array.from(document.querySelectorAll("input,select,textarea")).map((el) => {
+          const e = el as HTMLInputElement;
+          const label =
+            (e.labels && e.labels[0] && e.labels[0].textContent ? e.labels[0].textContent.trim() : "") ||
+            e.getAttribute("aria-label") ||
+            e.getAttribute("placeholder") ||
+            "";
+          return `${e.tagName}[type=${e.type},name=${e.name},id=${e.id}] "${label}"`;
+        }),
+      );
+      inputs = `输入控件 ${list.length} 个:\n    ${list.join("\n    ")}\n`;
+    } catch {
+      inputs = "（输入控件读取失败）\n";
+    }
+  }
+
   const report =
     `\n===== global-setup 登录失败 (${phase}) =====\n` +
     `CONFIG_URL : ${CONFIG_URL}\n` +
     `当前 URL   : ${url}\n` +
     `正文片段   : ${body.slice(0, 600)}\n` +
+    inputs +
     `判断       : ${hint}\n` +
     `=============================================\n`;
   console.log(report);
@@ -88,12 +111,23 @@ async function globalSetup(_config: FullConfig) {
     // ⚠️ 这里必须用 waitFor 而不是 isVisible():isVisible() **不接受 timeout**,
     // 它立刻返回当下的可见性 —— 页面还没渲染完就会得到 false,于是静默跳过登录,
     // 最后表现成后面 waitForURL 超时,看上去像是登录失败。
+    //
+    // 2026-10-20：globalSetup 用的是全新 browser context（无任何 Cookie），
+    // Casdoor 会话必然不存在、登录表单必然要出现，「未出现」只有两种可能：
+    // ① SPA 渲染慢（海外 runner 打国内 Casdoor，JS 包加载 + hydrate 可能超过 15s）；
+    // ② 选择器失配（表单在但 getByRole 匹配不到，含严格模式多匹配）。
+    // 15s 在 2026-10-20 连续两轮派发里都不够用（表单在 ~30s 后才可见），放宽到 45s；
+    // 同时把 waitFor 的失败原因打出来（超时 vs 严格模式冲突），dumpLoginFailure
+    // 也会列出全部输入控件，两种可能都能在日志里直接分辨。
     const usernameBox = page.getByRole("textbox", { name: /username|用户名/i });
     const needsLogin = await usernameBox
-      .waitFor({ state: "visible", timeout: 15_000 })
+      .waitFor({ state: "visible", timeout: 45_000 })
       .then(() => true)
-      .catch(() => false);
-    console.log(`[global-setup] Casdoor 登录表单: ${needsLogin ? "已出现" : "未出现（沿用已有会话）"}`);
+      .catch((err) => {
+        console.log(`[global-setup] 登录表单等待失败: ${String(err).slice(0, 200)}`);
+        return false;
+      });
+    console.log(`[global-setup] Casdoor 登录表单: ${needsLogin ? "已出现" : "未出现（见下方 waitForURL 失败 dump）"}`);
 
     if (needsLogin) {
       await usernameBox.fill(username);
