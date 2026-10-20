@@ -54,6 +54,7 @@ function describeBadResponse(status: number, text: string): string {
  * 页面**加载成功了**（所以 goto 不报错、重试也不会重试），只是根本没有 `<main>`。
  * 没有这道校验时，报错停在「点不到登录按钮」，把人往完全错误的方向带：
  * 看着像控制台改版把按钮改没了，实际是 DNS/隧道根本没通。
+ * （该域名已于 2026-10-20 迁移至 `control-tower.apikv.com`，故障形态同理。）
  */
 async function assertConsolePage(page: Page, url: string, status: number): Promise<void> {
   const probe = await page.evaluate(() => ({

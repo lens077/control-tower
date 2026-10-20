@@ -5,7 +5,7 @@ import { defineConfig, devices } from "@playwright/test";
  * 暴露的东西 —— CSP 响应头、Casdoor 单点登录、Pangolin 隧道与 EdgeOne Pages 公网链路、
  * node3 上的 PG/Redis/VM。
  * 因此没有 webServer 段，地址一律由环境变量给。
- * 控制台默认打 EdgeOne Pages（egde-one.apikv.com）；要打 k8s 控制台就传
+ * 控制台默认打 EdgeOne Pages（control-tower.apikv.com）；要打 k8s 控制台就传
  * E2E_CONFIG_URL=https://config.apikv.com。
  */
 /**
@@ -20,7 +20,7 @@ function envOr(name: string, fallback: string): string {
   return value ? value : fallback;
 }
 
-export const CONFIG_URL = envOr("E2E_CONFIG_URL", "https://egde-one.apikv.com");
+export const CONFIG_URL = envOr("E2E_CONFIG_URL", "https://control-tower.apikv.com");
 export const CONFIG_API_URL = envOr("E2E_CONFIG_API_URL", "https://config-api.apikv.com");
 export const GATEWAY_URL = envOr("E2E_GATEWAY_URL", "https://gateway.apikv.com");
 export const METRICS_URL = envOr("E2E_METRICS_URL", "https://metrics.apikv.com");

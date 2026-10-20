@@ -220,7 +220,7 @@ scripts/promote-release.sh X.Y.Z   # 本地预演 release job 会做的事，只
 | 实例 | 入口 | 运行方式 | 上线方式 |
 |---|---|---|---|
 | k8s 控制台 | `config.apikv.com` | Pod `config-center-web`（镜像 `control-tower-config-web:<tag>`，config.json 由 ConfigMap `config-center-web-config` 注入） | 打 semver tag → ci.yml `release` job 推进 pre 镜像 tag → 推 GitLab → Argo CD 同步（GitOps，tag 触发） |
-| EdgeOne 控制台 | `egde-one.apikv.com`（自定义域，CNAME 到 EdgeOne） | EdgeOne Pages 静态托管，运行时配置写进 `web/dist/config.json` | push main（或 tag）→ `.github/workflows/deploy.yml` 构建并 `edgeone makers deploy` |
+| EdgeOne 控制台 | `control-tower.apikv.com`（自定义域，CNAME 到 EdgeOne） | EdgeOne Pages 静态托管，运行时配置写进 `web/dist/config.json` | push main（或 tag）→ `.github/workflows/deploy.yml` 构建并 `edgeone makers deploy` |
 
 设计要点：
 - **k8s 控制台仍是 tag 触发**（与既有 GitOps 纪律一致）；**EdgeOne 控制台是 push main 即上线**，做随时可看的「最新构建」。
@@ -229,16 +229,16 @@ scripts/promote-release.sh X.Y.Z   # 本地预演 release job 会做的事，只
   在部署前生成 `web/dist/config.json`（k8s 那份由 ConfigMap 注入，不重建镜像）。**不要**把 prod 地址写死进
   `web/public/config.json`（那份是 localhost，仅供本机 dev）。
 - **e2e 默认打 EdgeOne 控制台**（`e2e/playwright.config.ts` 的 `CONFIG_URL` 默认
-  `https://egde-one.apikv.com`）；要打 k8s 控制台就传 `E2E_CONFIG_URL=https://config.apikv.com`。
+  `https://control-tower.apikv.com`）；要打 k8s 控制台就传 `E2E_CONFIG_URL=https://config.apikv.com`。
 
 让 EdgeOne 控制台真正能登录/调 API，需要四处外部配置（都不在本仓）：
 
 | # | 项目 | 状态 |
 |---|---|---|
-| 1 | **config-center CORS**：`config-center-bootstrap` Secret 的 `server.cors.allowed_origins` 含 `https://egde-one.apikv.com` | ✅ 2026-10-15 已加并 rollout |
-| 2 | **自定义域**：DNS `egde-one.apikv.com` CNAME 到 `egde-one.apikv.com.pages.dnsoe6.com.` + EdgeOne 后台绑定 | ✅ 2026-10-16 已生效 |
-| 3 | **HTTPS 证书**：域名的 `Https.CertInfo` 曾为空（回落到共享 `*.cdn.myqcloud.com` 证书，浏览器报证书不匹配） | ✅ 2026-10-16 已申请并绑定免费证书（见下） |
-| 4 | **Casdoor `redirect_uri` 白名单**：Casdoor 应用 `ecommerce`（org `lens`）的回调地址需含 `https://egde-one.apikv.com/callback` | ✅ 2026-10-16 已加，e2e 登录恢复 |
+| 1 | **config-center CORS**：`config-center-bootstrap` Secret 的 `server.cors.allowed_origins` 含 `https://control-tower.apikv.com` | ✅ 2026-10-20 换域时改为新源并 rollout（旧 `egde-one` 源同步移除） |
+| 2 | **自定义域**：DNS `control-tower.apikv.com` CNAME 到 `control-tower.apikv.com.pages.dnsoe5.com.` + EdgeOne 后台绑定 | ✅ 2026-10-20 已生效（旧 `egde-one` 及其 `_dnsauth` 记录已删） |
+| 3 | **HTTPS 证书**：域名的 `Https.CertInfo` 曾为空（回落到共享 `*.cdn.myqcloud.com` 证书，浏览器报证书不匹配） | ✅ 2026-10-20 控制台一键申请免费证书并自动绑定（TrustAsia，有效期至 2027-01-17） |
+| 4 | **Casdoor `redirect_uri` 白名单**：Casdoor 应用 `ecommerce`（org `lens`）的回调地址需含 `https://control-tower.apikv.com/callback` | ⏳ 2026-10-20 待用户操作（外部服务无管理员凭据；不加则登录报 `Redirect URI doesn't exist`） |
 
 四处齐了之后 e2e 于 **2026-10-16 恢复全绿**（run 38816036703：12 passed / 3 skipped）。
 
@@ -253,6 +253,8 @@ CLI 用 `edgeone makers deploy`（`pages` 子命令已弃用），并锁 `edgeon
 - 改用**文件验证**（`http_challenge`）一次通过：把 `FileVerification.Content` 写进
   `web/dist/.well-known/pki-validation/fileauth.txt` 重新部署，再调 `CheckFreeCertificateVerification`，
   最后 `ModifyHostsCertificate --ApplyType apply` 绑定（CertId `teo-3w8n42yht4ce`，有效期至 2027-01-12）。
+- 2026-10-20 换域到 `control-tower.apikv.com` 时改在 **Makers 控制台一键申请**免费证书，自动签发并绑定
+  （TrustAsia DV，有效期至 2027-01-17），比四步手工流程省事；证书仅在控制台/API 可见，本仓无 CertId 记录。
 
 **Pangolin 隧道**：`config.apikv.com` / `config-api.apikv.com` 经 Pangolin 的隧道资源缺失/指向错
 时表现为 **0 字节超时**，而集群内一切正常（`kubectl port-forward svc/config-center:30010` → `/healthz` 200）。

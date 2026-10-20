@@ -99,7 +99,7 @@ gen-web-config:
 	./scripts/gen-web-config.sh web/dist
 
 # 构建 + 注入 config + 上传到 EdgeOne。需 EDGEONE_TOKEN（GitHub Secret / 本地 export）。
-# 自定义域名（默认 egde-one.apikv.com）的 CNAME 在 EdgeOne 后台加，本仓不托管 DNS。
+# 自定义域名（默认 control-tower.apikv.com）的 CNAME 在 EdgeOne 后台加，本仓不托管 DNS。
 # 用 `makers` 而非 `pages`（后者已弃用）；--skip-ai-gateway-sync 避免它拉 AI Gateway key 写 .env。
 edgeone-deploy: web-build gen-web-config
 	edgeone makers deploy web/dist -n control-tower-web -t "$${EDGEONE_TOKEN}" --skip-ai-gateway-sync
