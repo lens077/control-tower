@@ -22,7 +22,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-var expectedHostNames = []string{"k1", "k2", "k3", "node0", "node1", "node2", "node3", "node4"}
+var expectedHostNames = []string{"k1", "k2", "k3", "node1", "node2", "node3", "node4"}
 
 // 真实 promql.Client + 本地 HTTP fake,证明 metadata 从未进入利用率数值。
 func testHostService(t *testing.T, reply func(query string, end int64) ([]map[string]any, int)) *SystemService {
@@ -84,7 +84,7 @@ func TestQueryMetrics_预期主机整窗缺失保留空点而非零(t *testing.T
 	require.Len(t, response.Msg.Results, 2)
 	assert.Equal(t, 1, inventoryCalls, "一个 API 请求只取一次主机清单")
 	for _, result := range response.Msg.Results {
-		require.Len(t, result.Lines, 8)
+		require.Len(t, result.Lines, 7)
 		for i, line := range result.Lines {
 			assert.Equal(t, expectedHostNames[i], line.Label)
 			assert.Equal(t, v1.MetricUnit_METRIC_UNIT_PERCENT, line.Unit)
@@ -98,7 +98,7 @@ func TestQueryMetrics_预期主机整窗缺失保留空点而非零(t *testing.T
 	}
 }
 
-func TestQueryMetrics_全缺时仍列出八台预期主机(t *testing.T) {
+func TestQueryMetrics_全缺时仍列出七台预期主机(t *testing.T) {
 	svc := testHostService(t, func(query string, end int64) ([]map[string]any, int) {
 		if strings.HasPrefix(query, "host:expected_info") {
 			return inventoryMatrix(end), 0
@@ -110,7 +110,7 @@ func TestQueryMetrics_全缺时仍列出八台预期主机(t *testing.T) {
 		Window: durationpb.New(time.Hour), StepSeconds: 30,
 	}))
 	require.NoError(t, err)
-	require.Len(t, response.Msg.Results[0].Lines, 16)
+	require.Len(t, response.Msg.Results[0].Lines, 14)
 	for _, line := range response.Msg.Results[0].Lines {
 		assert.Empty(t, line.Points)
 		assert.Equal(t, v1.MetricUnit_METRIC_UNIT_BYTES_PER_SECOND, line.Unit)

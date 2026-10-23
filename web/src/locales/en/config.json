@@ -272,7 +272,7 @@
       "api": "API and database",
       "apiHint": "Latency is server-side handling time; it excludes the network round trip",
       "host": "All hosts",
-      "hostHint": "k1–k3 and node0–node4, using shared whole-host rules. CPU busy excludes iowait; network rates exclude virtual interfaces. Missing records or records older than 180 seconds are not filled with zeros; hosts with no data throughout the window are listed separately."
+      "hostHint": "k1–k3 and node1–node4, using shared whole-host rules. CPU busy excludes iowait; network rates exclude virtual interfaces. Missing records or records older than 180 seconds are not filled with zeros; hosts with no data throughout the window are listed separately."
     },
     "chart": {
       "processCpu": "Process CPU",

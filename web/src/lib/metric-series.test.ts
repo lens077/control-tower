@@ -30,14 +30,14 @@ describe("buildChartData", () => {
     expect(series).toEqual([]);
   });
 
-  it("完整保留八台主机的收发十六条线", () => {
-    const hosts = ["k1", "k2", "k3", "node0", "node1", "node2", "node3", "node4"];
+  it("完整保留七台主机的收发十四条线", () => {
+    const hosts = ["k1", "k2", "k3", "node1", "node2", "node3", "node4"];
     const lines = hosts.flatMap((host) => ["receive", "transmit"].map((direction) =>
       line(`${host} / ${direction}`, [[1000, 1024]], MetricUnit.BYTES_PER_SECOND),
     ));
     const { series, unit } = buildChartData(lines);
     expect(series.map((item) => item.label)).toEqual(lines.map((item) => item.label));
-    expect(series).toHaveLength(16);
+    expect(series).toHaveLength(14);
     expect(unit).toBe(MetricUnit.BYTES_PER_SECOND);
   });
 

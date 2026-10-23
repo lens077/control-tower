@@ -72,14 +72,14 @@ func TestLive_目录里每条查询都取得到数据(t *testing.T) {
 
 	end := time.Now()
 	start := end.Add(-24 * time.Hour)
-	expectedHosts := []string{"k1", "k2", "k3", "node0", "node1", "node2", "node3", "node4"}
+	expectedHosts := []string{"k1", "k2", "k3", "node1", "node2", "node3", "node4"}
 	inventory, err := client.QueryRange(context.Background(), c.HostExpectedInfo().Expr, end.Add(-5*time.Minute), end, 30*time.Second)
 	require.NoError(t, err)
 	inventoryHosts := make(map[string]bool)
 	for _, series := range inventory {
 		inventoryHosts[series.Labels["host"]] = true
 	}
-	require.Len(t, inventoryHosts, len(expectedHosts), "清单必须覆盖全部八台主机")
+	require.Len(t, inventoryHosts, len(expectedHosts), "清单必须覆盖全部七台主机")
 	for _, host := range expectedHosts {
 		require.True(t, inventoryHosts[host], "预期清单缺少 %s", host)
 	}

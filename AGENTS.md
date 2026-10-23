@@ -102,7 +102,7 @@ git tag X.Y.Z && git push origin X.Y.Z
 - 本地 `services/config/configs/dev.yaml` 已于 2026-09-29 删除（PG/Redis 指向已退役地址、凭据明文落盘，`dev-local.sh`
   早已不读它）。本机开发统一用 `scripts/dev-local.sh`；`services/config/Makefile` 的 `dev` 目标不再有默认配置，
   必须显式给 `CONFIG_FILE`。
-- **主机指标**：System 页「全部主机」消费共享 `host:*` recording rules，覆盖 k1–k3 与 node0–node4；
+- **主机指标**：System 页「全部主机」消费共享 `host:*` recording rules，覆盖 k1–k3 与 node1–node4；
   规则真相源在 kubernetes 仓 `components/vmalert/rules/host-recording.yml`。先部署规则，再发布控制台。
   `host` 是全局唯一图例来源，`host_kind` 为 cloud/kubernetes；利用率比率仅在 catalog 乘一次100，网络已是 bytes/s。
   查询通过180秒新鲜度及 signal_present 门控；缺失主机保留空点图例，不补零、不回退原始公式。
@@ -110,7 +110,7 @@ git tag X.Y.Z && git push origin X.Y.Z
 - k1–k3 原始指标由 `opentelemetry-node` DaemonSet 采集并直写集群内 `vm-single`，公网 `metrics.apikv.com`
   只读。VM 的 `-opentelemetry.usePrometheusNaming=true` 仍是共享规则匹配 OTLP 原始指标的前提。
 - live 测试：安全注入 `CONFIG_CENTER_VM_BEARER_TOKEN` 后，设置 `CONFIG_CENTER_VM_ENDPOINT=https://metrics.apikv.com`
-  运行 `go test ./services/config/internal/pkg/promql -run Live -v`。主机组按最近5分钟/30秒步长检查全部八台，
+  运行 `go test ./services/config/internal/pkg/promql -run Live -v`。主机组按最近5分钟/30秒步长检查全部七台，
   每条 CPU/iowait/收发查询都要有新鲜数据；应用组仍用24小时窗口避免低流量误报。无 token 的公网请求为401。
 
 ### Machine Token

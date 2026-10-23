@@ -101,7 +101,7 @@ test("系统页共享指标覆盖全部主机，CPU与iowait独立", async ({ pa
 
   type Line = { label?: string; points?: Array<{ value?: number; tsMs?: string }> };
   type Result = { series?: string | number; error?: string; lines?: Line[] };
-  const names = ["k1", "k2", "k3", "node0", "node1", "node2", "node3", "node4"];
+  const names = ["k1", "k2", "k3", "node1", "node2", "node3", "node4"];
   const find = (id: number, name: string) => responses.flatMap((b) => (b.results ?? []) as Result[])
     .find((r) => r.series === id || r.series === `METRIC_SERIES_${name}`);
   await expect.poll(() => [10, 11, 12, 13].every((id, i) =>

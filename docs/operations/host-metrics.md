@@ -2,7 +2,7 @@
 
 ## 来源与兼容边界
 
-System 页「全部主机」覆盖 k1–k3 与 node0–node4。`services/config/internal/pkg/promql/catalog.go`
+System 页「全部主机」覆盖 k1–k3 与 node1–node4。`services/config/internal/pkg/promql/catalog.go`
 只消费共享 recording rules；规则真相源在 kubernetes 仓的 `components/vmalert/rules/host-recording.yml`。
 先部署并验证共享规则，再发布 control-tower。新规则不自动回填旧历史。
 
@@ -45,7 +45,7 @@ QueryMetrics 的 proto、生成物和 wire 字段保持不变。`MetricLine` 仍
 已有历史但最后一点距离窗口末端超过「180秒＋查询步长」时，保留历史并显示过旧提示。
 查询步长的余量用于避免24小时视图的5分钟对齐点误报。此提示不是独立的实时健康探针。
 整个请求失败时显示错误且不继续显示缓存的成功结果；部分查询失败时保留其它曲线并同时显示错误。
-清单查询失败或为空时明确提示覆盖范围未知，不声称八台齐全。
+清单查询失败或为空时明确提示覆盖范围未知，不声称七台齐全。
 
 ## 验证
 
@@ -64,7 +64,7 @@ CONFIG_CENTER_VM_ENDPOINT=https://metrics.apikv.com \
   go test ./services/config/internal/pkg/promql -run Live -v
 ```
 
-live 测试对主机组使用最近5分钟、30秒步长，核对预期八台、每条 busy/iowait/收发查询、百分比范围与新鲜点。
+live 测试对主机组使用最近5分钟、30秒步长，核对预期七台、每条 busy/iowait/收发查询、百分比范围与新鲜点。
 其它应用组仍使用24小时窗口，避免把低流量误判成故障。无凭据时不执行公网验证。
 
 发布后以既有安全环境提供 E2E 登录凭据，运行 `pnpm -C e2e exec playwright test tests/config-console.spec.ts`。
