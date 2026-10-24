@@ -8,3 +8,13 @@ node_modules/
 # playwright-cli 的交互探索产物（页面快照/控制台日志），不是测试源码。
 # 2026-08-30 曾误用 git add -A 把 23 个文件提交进仓库。
 .playwright-cli/
+
+# EdgeOne CLI 的本地项目链接文件（.edgeone/project.json 存 Name + ProjectId）。
+# 凭据本体在 ~/.edgeone/ 不在仓库里，但这份链接文件属于本机状态，不该进仓库。
+.edgeone/
+
+# WorkBuddy 项目数据目录（会话记忆等）。注意：是项目数据不是临时缓存，不要删。
+.workbuddy/
+
+# 根目录的空占位图，非仓库资产。
+/image.png
