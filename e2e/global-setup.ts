@@ -1,6 +1,6 @@
 import { chromium, type FullConfig, type Page } from "@playwright/test";
 import { mkdirSync, writeFileSync } from "node:fs";
-import { CONFIG_URL, STORAGE_STATE } from "./playwright.config";
+import { CONFIG_URL, E2E_USER_AGENT, STORAGE_STATE } from "./playwright.config";
 import { navigate } from "./nav";
 
 /**
@@ -94,7 +94,9 @@ async function globalSetup(_config: FullConfig) {
 
   mkdirSync("./.auth", { recursive: true });
   const browser = await chromium.launch();
-  const page = await browser.newPage();
+  // ⚠️ 这里必须显式带 UA：globalSetup 是自己 launch 的 browser，不走 playwright.config.ts
+  // 的 use.userAgent。漏掉的话登录这一次请求不会被标记，指标里会剩下一小撮裸流量。
+  const page = await browser.newPage({ userAgent: E2E_USER_AGENT });
 
   try {
     // 隧道抖动偶发让首屏导航超时；这里用带重试的 navigate（见 nav.ts）。

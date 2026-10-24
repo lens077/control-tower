@@ -2,6 +2,12 @@ name: e2e
 
 # 实机浏览器端到端：打**真实环境**，覆盖 config 控制台与 gateway 两条链路。
 #
+# 控制台默认打 **e2e 专属域** e2e.control-tower.apikv.com —— 它与生产域
+# control-tower.apikv.com 指向同一份 EdgeOne Makers 部署（同一份 dist、同一套 Casdoor
+# 与后端 API），只是 Host 不同。这样一天 4 轮的巡检流量不会混进生产域的 EdgeOne 流量
+# 统计里，看板按域名筛即可只看真实用户；想验证生产域自身的链路就手动 dispatch 时
+# 显式填 config_url。
+#
 # 为什么不挂在 PR 上：这套用例断言的是「**已经部署出去的东西**是否正常」，
 # 而 PR 里的代码还没构建成镜像、更没上集群。挂在 PR 上只会得到两种坏结果 ——
 # 要么测的是旧版本（绿了但毫无意义），要么因为外部环境抖动把无辜的 PR 拦红。
@@ -12,7 +18,7 @@ on:
   workflow_dispatch:
     inputs:
       config_url:
-        description: "控制台地址（留空用默认 https://control-tower.apikv.com）"
+        description: "控制台地址（留空用 e2e 专属域 https://e2e.control-tower.apikv.com；要验证生产域自身的 DNS/证书链路就显式传 https://control-tower.apikv.com）"
         required: false
         type: string
       config_api_url:
@@ -32,8 +38,14 @@ on:
         required: false
         default: false
         type: boolean
-  schedule:
-    - cron: "0 */6 * * *"
+  # ⚠️ schedule 暂时停用（2026-10-25）：e2e 的默认目标已切到 e2e 专属域
+  # e2e.control-tower.apikv.com，该域名还需要在 EdgeOne Makers 控制台绑定到项目
+  # control-tower-web、签发证书，并把 https://e2e.control-tower.apikv.com/callback
+  # 加进 Casdoor 应用 ecommerce 的回调白名单。这三步完成前，每 6 小时的巡检必然红
+  # （域名还不存在），红的原因与代码无关，只会淹没有效告警。
+  # 手动 dispatch 验证通过后取消下面的注释恢复巡检。
+  # schedule:
+  #   - cron: "0 */6 * * *"
 
 # 用例串行共享同一个 Casdoor 会话，两次运行叠在一起会互相踢。
 # 不取消进行中的那次：巡检结果比「最新一次」更重要。
@@ -71,12 +83,15 @@ jobs:
       - name: "Preflight: 控制台可达性"
         continue-on-error: true
         env:
-          TARGET: ${{ inputs.config_url || 'https://control-tower.apikv.com' }}
+          TARGET: ${{ inputs.config_url || 'https://e2e.control-tower.apikv.com' }}
+          # 与 e2e/playwright.config.ts 的 E2E_UA_MARKER 保持一致。
+          # 预检这一次 curl 同样会被 EdgeOne 计入请求数，不打标记就漏进真实用户流量里。
+          UA: "curl/8 control-tower-e2e/1.0 preflight"
         run: |
           set -uo pipefail
           echo "探测目标: $TARGET"
           for i in 1 2 3; do
-            if out=$(curl -sS --max-time 15 -o /tmp/pf.body -w '%{http_code} %{size_download}' "$TARGET" 2>&1); then
+            if out=$(curl -sS --max-time 15 -A "$UA" -o /tmp/pf.body -w '%{http_code} %{size_download}' "$TARGET" 2>&1); then
               echo "第 $i 次: $out 字节"
               break
             fi

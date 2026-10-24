@@ -5,7 +5,13 @@ import { defineConfig, devices } from "@playwright/test";
  * 暴露的东西 —— CSP 响应头、Casdoor 单点登录、Pangolin 隧道与 EdgeOne Pages 公网链路、
  * node3 上的 PG/Redis/VM。
  * 因此没有 webServer 段，地址一律由环境变量给。
- * 控制台默认打 EdgeOne Pages（control-tower.apikv.com）；要打 k8s 控制台就传
+ *
+ * 控制台默认打 **e2e 专属域** e2e.control-tower.apikv.com，不是生产域
+ * control-tower.apikv.com。两者指向同一份 EdgeOne Makers 部署（同一份 dist、同一套
+ * Casdoor 与后端），只是 Host 不同 —— 这样一天 4 轮的巡检流量不会混进生产域的
+ * EdgeOne 流量统计，看板里按域名筛就能只看真实用户。
+ * 要验证生产域自身的链路（DNS / 证书 / Casdoor 生产回调）就显式传
+ * E2E_CONFIG_URL=https://control-tower.apikv.com；要打 k8s 控制台传
  * E2E_CONFIG_URL=https://config.apikv.com。
  */
 /**
@@ -20,7 +26,34 @@ function envOr(name: string, fallback: string): string {
   return value ? value : fallback;
 }
 
-export const CONFIG_URL = envOr("E2E_CONFIG_URL", "https://control-tower.apikv.com");
+/**
+ * e2e 的 User-Agent 标记。
+ *
+ * 这套用例打的是真实公网环境，于是它的请求会被 EdgeOne Makers 的流量统计当成真实用户
+ * 访问：一天 4 轮，每轮整页加载要拉全量静态资源（含 12 个 woff2 与 Monaco 的 /vs），
+ * 量级足以把一个低频站点看板冲掉。在 UA 尾部追加专有标记后，就能在 EdgeOne
+ * 「数据分析 → 指标分析」里按 User-Agent 把这部分排除掉，只看真实用户。
+ *
+ * 为什么是 UA 而不是自定义请求头：指标分析的筛选项只有 UA / Referer / 客户端 IP 这些
+ * 标准维度，没有自定义头。为什么不是按 IP：GitHub Actions 托管 runner 的出口 IP 有
+ * 7081 个 CIDR（`curl https://api.github.com/meta` 的 actions 字段），没法维护。
+ *
+ * ⚠️ 改这里要同步改 `.github/workflows/e2e.yml` 里 preflight curl 的 `-A` 参数，
+ * 否则预检那一次请求不会被标记。
+ */
+export const E2E_UA_MARKER = "control-tower-e2e/1.0";
+
+/**
+ * 完整 UA = 桌面 Chrome 的 UA + 标记。
+ * 保留 Chrome 前缀是为了不触发任何基于 UA 的降级分支（Casdoor / Monaco / 控制台都没有，
+ * 但没必要冒这个险）；标记放尾部，服务端与 CDN 都按前缀识别，不受影响。
+ */
+const CHROME_UA =
+  devices["Desktop Chrome"].userAgent ??
+  "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36";
+export const E2E_USER_AGENT = `${CHROME_UA} ${E2E_UA_MARKER}`.trim();
+
+export const CONFIG_URL = envOr("E2E_CONFIG_URL", "https://e2e.control-tower.apikv.com");
 export const CONFIG_API_URL = envOr("E2E_CONFIG_API_URL", "https://config-api.apikv.com");
 export const GATEWAY_URL = envOr("E2E_GATEWAY_URL", "https://gateway.apikv.com");
 export const METRICS_URL = envOr("E2E_METRICS_URL", "https://metrics.apikv.com");
@@ -58,7 +91,7 @@ export default defineConfig({
   projects: [
     {
       name: "chromium",
-      use: { ...devices["Desktop Chrome"], storageState: STORAGE_STATE },
+      use: { ...devices["Desktop Chrome"], userAgent: E2E_USER_AGENT, storageState: STORAGE_STATE },
     },
   ],
 });

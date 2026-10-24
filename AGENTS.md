@@ -99,6 +99,24 @@ git tag X.Y.Z && git push origin X.Y.Z
 - 线上 config 的配置文件是 Secret `config-center/config-center-bootstrap` 的 `config.yaml` 键，本地对应
   `services/config/configs/pre.yaml`（gitignore）。改完要重灌 Secret 再滚动 Pod，否则两边静默漂移。
   Secret 里那份文件头部注释仍写着 node3 地址，以正文字段为准。
+- ⚠️ **重灌上面这个 Secret 只能用 `kubectl patch`，绝不能用 `create --dry-run | apply`**：
+  它有两个键 —— `config.yaml` 与 `casdoor.pem`（Casdoor JWT 验签证书；`iam.NewAuthorizer`
+  启动时读 `/etc/config-center/casdoor.pem`，读不到直接退出，表现为 CrashLoopBackOff）。
+  它当初不是 `kubectl apply` 建的，因此没有 `last-applied-configuration` 注解。
+  2026-10-25 用 `create secret generic ... --from-file=config.yaml=... --dry-run=client -o yaml | kubectl apply -f -`
+  重灌时，apply 的三路合并**把本次清单里没出现的 `casdoor.pem` 键整个删掉了**，
+  config 新 Pod 立刻 CrashLoopBackOff（旧 Pod 因证书已读进内存仍在服务，未造成中断）。
+  正确写法（只改一个键，其余原样保留）：
+
+  ```bash
+  kubectl -n config-center patch secret config-center-bootstrap --patch \
+    "$(python3 -c 'import base64,json;print(json.dumps({"data":{"config.yaml":base64.b64encode(open("services/config/configs/pre.yaml","rb").read()).decode()}}))')"
+  ```
+
+  **Casdoor 证书的真相源是 `external/casdoor` Secret 的 `certificate` 键**（1739 字节 X.509
+  PEM，`CN=cert_6nn2g3`，有效期至 2046）—— `casdoor.pem` 丢了就从那里取回。
+  注意 Casdoor 自己的 `/certs/casdoor.pem` 端点取不到：Casdoor 在 Pangolin 后面，
+  未命中的路径一律返回 SPA 外壳（HTML 200），不是证书。
 - 本地 `services/config/configs/dev.yaml` 已于 2026-09-29 删除（PG/Redis 指向已退役地址、凭据明文落盘，`dev-local.sh`
   早已不读它）。本机开发统一用 `scripts/dev-local.sh`；`services/config/Makefile` 的 `dev` 目标不再有默认配置，
   必须显式给 `CONFIG_FILE`。
@@ -228,17 +246,50 @@ scripts/promote-release.sh X.Y.Z   # 本地预演 release job 会做的事，只
   的 `configWeb.apiUrl` 与 `values.yaml` 的 `casdoor.*`。EdgeOne 那份由 `scripts/gen-web-config.sh`
   在部署前生成 `web/dist/config.json`（k8s 那份由 ConfigMap 注入，不重建镜像）。**不要**把 prod 地址写死进
   `web/public/config.json`（那份是 localhost，仅供本机 dev）。
-- **e2e 默认打 EdgeOne 控制台**（`e2e/playwright.config.ts` 的 `CONFIG_URL` 默认
-  `https://control-tower.apikv.com`）；要打 k8s 控制台就传 `E2E_CONFIG_URL=https://config.apikv.com`。
+- **e2e 默认打 e2e 专属域**（`e2e/playwright.config.ts` 的 `CONFIG_URL` 默认
+  `https://e2e.control-tower.apikv.com`，2026-10-25 起）。它与生产域 `control-tower.apikv.com`
+  指向**同一份 Makers 部署**（同一份 dist、同一套 Casdoor 与后端），只换 Host，为的是让一天
+  4 轮的巡检流量不混进生产域的 EdgeOne 流量统计 —— 指标分析里按域名筛就能只看真实用户，
+  且域名不在抽样维度里，是精确统计。要验证生产域自身的链路就显式传
+  `E2E_CONFIG_URL=https://control-tower.apikv.com`；要打 k8s 控制台传 `https://config.apikv.com`。
+- **所有 e2e 请求带 UA 标记 `control-tower-e2e/1.0`**（`E2E_UA_MARKER`，
+  `global-setup.ts` 里自己 launch 的 browser 也要显式设，它不走 config 的 `use.userAgent`；
+  `.github/workflows/e2e.yml` 的 preflight curl 用 `-A` 带同一个标记）。
+  这是域名隔离之外的第二道过滤：EdgeOne「数据分析 → 指标分析」可按 User-Agent 排除。
+  不用 IP 过滤是因为 GitHub Actions 托管 runner 的出口 IP 有 **7081 个 CIDR**
+  （`curl https://api.github.com/meta` 的 `actions` 字段）。
+- ⚠️ **Makers 的 preset 默认域名（`*.edgeone.cool`）不能当公开入口**：2026-10-25 实测
+  新建项目 `control-tower-e2e` 部署成功，但其默认域名 `control-tower-e2e-<hash>.edgeone.cool`
+  无论国内还是海外节点都返回 **401 UNAUTHORIZED**（"Access Restricted or Authentication
+  Expired"），部署时给的 `?eo_token=` 也无效（302 后仍 401）。只有**绑定自定义域**才可公开访问。
+  `edgeone makers deploy -e preview` 同理（域名还带 deploymentId，每次部署都变）。
+  所以「给 e2e 弄一个独立 Host」只能是给项目绑自定义域，不能在 preset 域名上凑合。
 
 让 EdgeOne 控制台真正能登录/调 API，需要四处外部配置（都不在本仓）：
 
 | # | 项目 | 状态 |
 |---|---|---|
-| 1 | **config-center CORS**：`config-center-bootstrap` Secret 的 `server.cors.allowed_origins` 含 `https://control-tower.apikv.com` | ✅ 2026-10-20 换域时改为新源并 rollout（旧 `egde-one` 源同步移除） |
+| 1 | **config-center CORS**：`config-center-bootstrap` Secret 的 `server.cors.allowed_origins` | ✅ 含 `https://control-tower.apikv.com`（2026-10-20 换域时改并 rollout）；2026-10-25 追加 `https://e2e.control-tower.apikv.com` 并验证预检 204 |
 | 2 | **自定义域**：DNS `control-tower.apikv.com` CNAME 到 `control-tower.apikv.com.pages.dnsoe5.com.` + EdgeOne 后台绑定 | ✅ 2026-10-20 已生效（旧 `egde-one` 及其 `_dnsauth` 记录已删） |
 | 3 | **HTTPS 证书**：域名的 `Https.CertInfo` 曾为空（回落到共享 `*.cdn.myqcloud.com` 证书，浏览器报证书不匹配） | ✅ 2026-10-20 控制台一键申请免费证书并自动绑定（TrustAsia，有效期至 2027-01-17） |
-| 4 | **Casdoor `redirect_uri` 白名单**：Casdoor 应用 `ecommerce`（org `lens`）的回调地址需含 `https://control-tower.apikv.com/callback` | ⏳ 2026-10-20 待用户操作（外部服务无管理员凭据；不加则登录报 `Redirect URI doesn't exist`） |
+| 4 | **Casdoor `redirect_uri` 白名单**：Casdoor 应用 `ecommerce`（org `lens`）的回调地址需含 `https://control-tower.apikv.com/callback` | ✅ 2026-10-20 用户已加，e2e 登录恢复（不加则报 `Redirect URI doesn't exist`） |
+
+### e2e 专属域还差四步（2026-10-25 起，均不在本仓）
+
+`e2e.control-tower.apikv.com` 已写进 e2e 默认目标、CORS 也已放行，但域名本身还不存在。
+在那之前 `schedule` 是注释掉的（见 `e2e/README.md`），否则每 6 小时必然红。
+
+| # | 项目 | 状态 |
+|---|---|---|
+| 1 | **Makers 控制台绑定自定义域**：给项目 `control-tower-web`（`makers-413onsgtkjz5`）添加 `e2e.control-tower.apikv.com`，拿到平台给的 CNAME 目标 | ⏳ 待用户操作 —— `tccli teo CreateAccelerationDomain / DescribeAccelerationDomains` 对这个 pages zone 返回 `UnauthorizedOperation`，Makers 项目与标准 EdgeOne 站点是两套资源体系，只能在控制台做 |
+| 2 | **DNS**：EO 通常会自动往 DNSPod 写 CNAME（现有 `control-tower` 那条备注就是「由 EO 添加用于提供安全加速服务」）；没自动写就手动 CNAME 到平台给的地址 | ⏳ 依赖 1 |
+| 3 | **HTTPS 证书**：控制台一键申请（同上第 3 条），或 teo 四步走 `http_challenge`（把 content 写进 `web/dist/.well-known/pki-validation/fileauth.txt` 重新部署） | ⏳ 依赖 2。⚠️ `ignoreHTTPSErrors: false`，证书不对 Playwright 直接失败 |
+| 4 | **Casdoor `redirect_uri` 白名单**：加 `https://e2e.control-tower.apikv.com/callback` | ⏳ 待用户操作（外部服务，本仓无管理员凭据） |
+
+四步齐了手动 `gh workflow run e2e.yml` 验证，通过后再取消 `.github/workflows/e2e.yml` 里
+`schedule` 的注释恢复 6 小时巡检。
+另：2026-10-25 为探路新建的 Makers 项目 `control-tower-e2e`（`makers-zuizj3e6xusj`）已无用
+（preset 域名 401 不可公开访问），可在控制台删除。
 
 四处齐了之后 e2e 于 **2026-10-16 恢复全绿**（run 38816036703：12 passed / 3 skipped）。
 

@@ -8,6 +8,29 @@
 Casdoor 单点登录、集群内的 PostgreSQL / Redis / VictoriaMetrics。本地起 mock 一个都测不到。
 代价是它依赖外部可用性，因此失败要先看是不是环境抖动，再看是不是代码回归。
 
+## 为什么默认不打生产域
+
+e2e 一天 4 轮，每轮整页加载要拉全量静态资源（含 12 个 woff2 字体与 Monaco 的 `/vs`），
+这些请求会被 EdgeOne Makers 的流量统计当成真实用户访问，足以把一个低频站点的看板冲掉。
+所以默认目标是 **e2e 专属域** `e2e.control-tower.apikv.com`：它与生产域
+`control-tower.apikv.com` 指向**同一份 Makers 部署**（同一份 dist、同一套 Casdoor 与后端
+API），只是 Host 不同，于是流量在 EdgeOne 指标里能按域名精确分开 —— 域名不在抽样维度里，
+是精确统计而不是抽样估算。
+
+要验证生产域自身的链路（DNS / 证书 / 生产回调）就显式传：
+
+```bash
+E2E_CONFIG_URL=https://control-tower.apikv.com pnpm test
+```
+
+此外所有请求都带 UA 标记 `control-tower-e2e/1.0`（`playwright.config.ts` 的
+`E2E_UA_MARKER`）：万一因域名没绑、白名单没加等原因临时回退到生产域，这部分流量仍能在
+EdgeOne「数据分析 → 指标分析」里按 User-Agent 筛掉。改这个常量要同步改
+`.github/workflows/e2e.yml` 里 preflight curl 的 `-A` 参数。
+
+为什么不是按 IP 过滤：GitHub Actions 托管 runner 的出口 IP 有 **7081 个 CIDR**
+（`curl https://api.github.com/meta` 的 `actions` 字段），根本没法维护。
+
 ## 跑起来
 
 ```bash
@@ -23,7 +46,7 @@ E2E_USERNAME=<账号> E2E_PASSWORD=<口令> pnpm test
 
 | 变量 | 默认值 |
 |---|---|
-| `E2E_CONFIG_URL` | `https://config.apikv.com` |
+| `E2E_CONFIG_URL` | `https://e2e.control-tower.apikv.com`（e2e 专属域，见下节） |
 | `E2E_CONFIG_API_URL` | `https://config-api.apikv.com` |
 | `E2E_GATEWAY_URL` | `https://gateway.apikv.com` |
 | `E2E_METRICS_URL` | `https://metrics.apikv.com` |
@@ -50,6 +73,12 @@ E2E_USERNAME=<账号> E2E_PASSWORD=<口令> E2E_ADMIN_MUTATIONS=true \
 
 2026-08-31 三条公网 HTTPRoute 已恢复，workflow 中的 6 小时 `schedule` 也已恢复，合入
 `main` 后生效。切换到 pre gateway 后，已用 `workflow_dispatch` 手动跑通一次真实环境验收。
+
+⚠️ 2026-10-25：`schedule` **暂时注释掉了**。原因是 e2e 默认目标切到了 e2e 专属域
+`e2e.control-tower.apikv.com`，而该域名要在 EdgeOne Makers 控制台绑定到项目
+`control-tower-web`、签发证书，并把 `https://e2e.control-tower.apikv.com/callback` 加进
+Casdoor 应用 `ecommerce` 的回调白名单。这三步完成前巡检必然红，且红的原因与代码无关。
+手动 dispatch 验证通过后取消 `.github/workflows/e2e.yml` 里 schedule 的注释即可恢复。
 
 ```bash
 # 常规发布后验收。
