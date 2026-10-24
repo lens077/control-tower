@@ -281,10 +281,16 @@ scripts/promote-release.sh X.Y.Z   # 本地预演 release job 会做的事，只
 
 | # | 项目 | 状态 |
 |---|---|---|
-| 1 | **Makers 控制台绑定自定义域**：给项目 `control-tower-web`（`makers-413onsgtkjz5`）添加 `e2e.control-tower.apikv.com`，拿到平台给的 CNAME 目标 | ⏳ 待用户操作 —— `tccli teo CreateAccelerationDomain / DescribeAccelerationDomains` 对这个 pages zone 返回 `UnauthorizedOperation`，Makers 项目与标准 EdgeOne 站点是两套资源体系，只能在控制台做 |
+| 1 | **Makers 控制台绑定自定义域**：给项目 `control-tower-web`（`makers-413onsgtkjz5`）添加 `e2e.control-tower.apikv.com`（⚠️ 环境选 **production**，不能选 preview），拿到平台给的 CNAME 目标 | ⏳ 待用户操作 —— `tccli teo CreateAccelerationDomain / DescribeAccelerationDomains` 对这个 pages zone 返回 `UnauthorizedOperation`，Makers 项目与标准 EdgeOne 站点是两套资源体系，只能在控制台做 |
 | 2 | **DNS**：EO 通常会自动往 DNSPod 写 CNAME（现有 `control-tower` 那条备注就是「由 EO 添加用于提供安全加速服务」）；没自动写就手动 CNAME 到平台给的地址 | ⏳ 依赖 1 |
 | 3 | **HTTPS 证书**：控制台一键申请（同上第 3 条），或 teo 四步走 `http_challenge`（把 content 写进 `web/dist/.well-known/pki-validation/fileauth.txt` 重新部署） | ⏳ 依赖 2。⚠️ `ignoreHTTPSErrors: false`，证书不对 Playwright 直接失败 |
 | 4 | **Casdoor `redirect_uri` 白名单**：加 `https://e2e.control-tower.apikv.com/callback` | ⏳ 待用户操作（外部服务，本仓无管理员凭据） |
+
+**为什么必须选 production**：`make deploy-web`（`edgeone makers deploy`，默认 `-e production`）
+只更新生产槽位，两个 Host 共用同一份 dist，所以 e2e 测到的一定是刚发布的那份产物。
+选 preview 则落在另一个独立槽位，**不随发布更新** —— 巡检会一直测到绑定那天那份旧 dist，
+绿了也没意义（静默漂移）；何况 preview 域名带 deploymentId 且无 token 时 401。
+（2026-10-25 探路时给 preview 槽位部署过一个副本 `dpb2i8a5octh`，可忽略或删掉。）
 
 四步齐了手动 `gh workflow run e2e.yml` 验证，通过后再取消 `.github/workflows/e2e.yml` 里
 `schedule` 的注释恢复 6 小时巡检。
