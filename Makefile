@@ -27,7 +27,9 @@ api-ts:
 # 生成物门禁：proto 改了但没重新生成（或生成物被误删）时在这里变红，而不是在控制台运行时。
 check-gen: api
 	@git diff --exit-code --stat -- '*.pb.go' '*.connect.go' web/src/gen \
-		|| { echo "generated files are out of date: run 'make api' and commit the result"; exit 1; }
+		|| { echo "generated files are out of date: run 'make api' and commit the result"; \
+		     git diff -- '*.pb.go' | grep -m3 "protoc-gen-go v\|protoc " || true; \
+		     exit 1; }
 	@untracked=$$(git ls-files --others --exclude-standard -- web/src/gen '*.pb.go' '*.connect.go'); \
 		if [ -n "$$untracked" ]; then echo "untracked generated files:"; echo "$$untracked"; exit 1; fi
 
