@@ -5,148 +5,144 @@
 package systemv1connect
 
 import (
-	connect "connectrpc.com/connect"
+	connect "connectrpc.com/connect/v2"
 	context "context"
-	errors "errors"
 	v1 "github.com/lens077/control-tower/api/system/v1"
-	http "net/http"
-	strings "strings"
+	sync "sync"
 )
-
-// This is a compile-time assertion to ensure that this generated file and the connect package are
-// compatible. If you get a compiler error that this constant is not defined, this code was
-// generated with a version of connect newer than the one compiled into your binary. You can fix the
-// problem by either regenerating this code with an older version of connect or updating the connect
-// version compiled into your binary.
-const _ = connect.IsAtLeastVersion1_13_0
 
 const (
 	// SystemServiceName is the fully-qualified name of the SystemService service.
 	SystemServiceName = "system.v1.SystemService"
 )
 
-// These constants are the fully-qualified names of the RPCs defined in this package. They're
-// exposed at runtime as Spec.Procedure and as the final two segments of the HTTP route.
+// These constants are the procedure names of the RPCs defined in this package. They're exposed at
+// runtime as Spec.Procedure and as the final two segments of the HTTP route.
 //
 // Note that these are different from the fully-qualified method names used by
 // google.golang.org/protobuf/reflect/protoreflect. To convert from these constants to
 // reflection-formatted method names, remove the leading slash and convert the remaining slash to a
 // period.
 const (
-	// SystemServiceGetSystemStatusProcedure is the fully-qualified name of the SystemService's
+	// SystemServiceGetSystemStatusProcedure is the procedure name of the SystemService's
 	// GetSystemStatus RPC.
 	SystemServiceGetSystemStatusProcedure = "/system.v1.SystemService/GetSystemStatus"
-	// SystemServiceQueryMetricsProcedure is the fully-qualified name of the SystemService's
-	// QueryMetrics RPC.
+	// SystemServiceQueryMetricsProcedure is the procedure name of the SystemService's QueryMetrics RPC.
 	SystemServiceQueryMetricsProcedure = "/system.v1.SystemService/QueryMetrics"
+)
+
+var (
+	systemServiceGetSystemStatusSpec = sync.OnceValue(func() connect.Spec {
+		return connect.Spec{
+			StreamType: connect.StreamTypeUnary,
+			Schema:     v1.File_api_system_v1_system_proto.Services().ByName("SystemService").Methods().ByName("GetSystemStatus"),
+			Procedure:  SystemServiceGetSystemStatusProcedure,
+		}
+	})
+	systemServiceQueryMetricsSpec = sync.OnceValue(func() connect.Spec {
+		return connect.Spec{
+			StreamType: connect.StreamTypeUnary,
+			Schema:     v1.File_api_system_v1_system_proto.Services().ByName("SystemService").Methods().ByName("QueryMetrics"),
+			Procedure:  SystemServiceQueryMetricsProcedure,
+		}
+	})
 )
 
 // SystemServiceClient is a client for the system.v1.SystemService service.
 type SystemServiceClient interface {
 	// 此刻的读数。数据来自进程内的后台采样器,不经过 VictoriaMetrics,
 	// 因此没有采集与推送延迟,VM 挂了也照常能看。
-	GetSystemStatus(context.Context, *connect.Request[v1.GetSystemStatusRequest]) (*connect.Response[v1.GetSystemStatusResponse], error)
+	GetSystemStatus(context.Context, *v1.GetSystemStatusRequest) (*v1.GetSystemStatusResponse, error)
 	// 历史曲线。服务端代理查询 VictoriaMetrics。
 	//
 	// 前端只能点名要哪几组曲线,不能传 PromQL —— 查询语句固定在服务端。
 	// 这不是洁癖:放开 PromQL 等于把时序库开放给任何登录用户,一句
 	// {__name__=~".+"}[30d] 就能把 VM 拖垮,而它没有任何自己的鉴权。
-	QueryMetrics(context.Context, *connect.Request[v1.QueryMetricsRequest]) (*connect.Response[v1.QueryMetricsResponse], error)
+	QueryMetrics(context.Context, *v1.QueryMetricsRequest) (*v1.QueryMetricsResponse, error)
 }
 
-// NewSystemServiceClient constructs a client for the system.v1.SystemService service. By default,
-// it uses the Connect protocol with the binary Protobuf Codec, asks for gzipped responses, and
-// sends uncompressed requests. To use the gRPC or gRPC-Web protocols, supply the connect.WithGRPC()
-// or connect.WithGRPCWeb() options.
-//
-// The URL supplied here should be the base URL for the Connect or gRPC server (for example,
-// http://api.acme.com or https://acme.com/grpc).
-func NewSystemServiceClient(httpClient connect.HTTPClient, baseURL string, opts ...connect.ClientOption) SystemServiceClient {
-	baseURL = strings.TrimRight(baseURL, "/")
-	systemServiceMethods := v1.File_api_system_v1_system_proto.Services().ByName("SystemService").Methods()
-	return &systemServiceClient{
-		getSystemStatus: connect.NewClient[v1.GetSystemStatusRequest, v1.GetSystemStatusResponse](
-			httpClient,
-			baseURL+SystemServiceGetSystemStatusProcedure,
-			connect.WithSchema(systemServiceMethods.ByName("GetSystemStatus")),
-			connect.WithClientOptions(opts...),
-		),
-		queryMetrics: connect.NewClient[v1.QueryMetricsRequest, v1.QueryMetricsResponse](
-			httpClient,
-			baseURL+SystemServiceQueryMetricsProcedure,
-			connect.WithSchema(systemServiceMethods.ByName("QueryMetrics")),
-			connect.WithClientOptions(opts...),
-		),
-	}
-}
-
-// systemServiceClient implements SystemServiceClient.
-type systemServiceClient struct {
-	getSystemStatus *connect.Client[v1.GetSystemStatusRequest, v1.GetSystemStatusResponse]
-	queryMetrics    *connect.Client[v1.QueryMetricsRequest, v1.QueryMetricsResponse]
-}
-
-// GetSystemStatus calls system.v1.SystemService.GetSystemStatus.
-func (c *systemServiceClient) GetSystemStatus(ctx context.Context, req *connect.Request[v1.GetSystemStatusRequest]) (*connect.Response[v1.GetSystemStatusResponse], error) {
-	return c.getSystemStatus.CallUnary(ctx, req)
-}
-
-// QueryMetrics calls system.v1.SystemService.QueryMetrics.
-func (c *systemServiceClient) QueryMetrics(ctx context.Context, req *connect.Request[v1.QueryMetricsRequest]) (*connect.Response[v1.QueryMetricsResponse], error) {
-	return c.queryMetrics.CallUnary(ctx, req)
+// NewSystemServiceClient constructs a client for the system.v1.SystemService service. Multiple
+// service clients may share a single connect.Client.
+func NewSystemServiceClient(client *connect.Client) SystemServiceClient {
+	return &systemServiceClient{client: client}
 }
 
 // SystemServiceHandler is an implementation of the system.v1.SystemService service.
 type SystemServiceHandler interface {
 	// 此刻的读数。数据来自进程内的后台采样器,不经过 VictoriaMetrics,
 	// 因此没有采集与推送延迟,VM 挂了也照常能看。
-	GetSystemStatus(context.Context, *connect.Request[v1.GetSystemStatusRequest]) (*connect.Response[v1.GetSystemStatusResponse], error)
+	GetSystemStatus(context.Context, *v1.GetSystemStatusRequest) (*v1.GetSystemStatusResponse, error)
 	// 历史曲线。服务端代理查询 VictoriaMetrics。
 	//
 	// 前端只能点名要哪几组曲线,不能传 PromQL —— 查询语句固定在服务端。
 	// 这不是洁癖:放开 PromQL 等于把时序库开放给任何登录用户,一句
 	// {__name__=~".+"}[30d] 就能把 VM 拖垮,而它没有任何自己的鉴权。
-	QueryMetrics(context.Context, *connect.Request[v1.QueryMetricsRequest]) (*connect.Response[v1.QueryMetricsResponse], error)
+	QueryMetrics(context.Context, *v1.QueryMetricsRequest) (*v1.QueryMetricsResponse, error)
 }
 
-// NewSystemServiceHandler builds an HTTP handler from the service implementation. It returns the
-// path on which to mount the handler and the handler itself.
-//
-// By default, handlers support the Connect, gRPC, and gRPC-Web protocols with the binary Protobuf
-// and JSON codecs. They also support gzip compression.
-func NewSystemServiceHandler(svc SystemServiceHandler, opts ...connect.HandlerOption) (string, http.Handler) {
-	systemServiceMethods := v1.File_api_system_v1_system_proto.Services().ByName("SystemService").Methods()
-	systemServiceGetSystemStatusHandler := connect.NewUnaryHandler(
-		SystemServiceGetSystemStatusProcedure,
-		svc.GetSystemStatus,
-		connect.WithSchema(systemServiceMethods.ByName("GetSystemStatus")),
-		connect.WithHandlerOptions(opts...),
+// RegisterSystemServiceHandler registers svc as the system.v1.SystemService implementation on
+// server.
+func RegisterSystemServiceHandler(server *connect.Server, svc SystemServiceHandler) {
+	adapter := systemServiceHandler{svc: svc}
+	server.Register(
+		connect.Method{Spec: systemServiceGetSystemStatusSpec(), Handler: adapter.getSystemStatus},
+		connect.Method{Spec: systemServiceQueryMetricsSpec(), Handler: adapter.queryMetrics},
 	)
-	systemServiceQueryMetricsHandler := connect.NewUnaryHandler(
-		SystemServiceQueryMetricsProcedure,
-		svc.QueryMetrics,
-		connect.WithSchema(systemServiceMethods.ByName("QueryMetrics")),
-		connect.WithHandlerOptions(opts...),
-	)
-	return "/system.v1.SystemService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		switch r.URL.Path {
-		case SystemServiceGetSystemStatusProcedure:
-			systemServiceGetSystemStatusHandler.ServeHTTP(w, r)
-		case SystemServiceQueryMetricsProcedure:
-			systemServiceQueryMetricsHandler.ServeHTTP(w, r)
-		default:
-			http.NotFound(w, r)
-		}
-	})
 }
 
 // UnimplementedSystemServiceHandler returns CodeUnimplemented from all methods.
 type UnimplementedSystemServiceHandler struct{}
 
-func (UnimplementedSystemServiceHandler) GetSystemStatus(context.Context, *connect.Request[v1.GetSystemStatusRequest]) (*connect.Response[v1.GetSystemStatusResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("system.v1.SystemService.GetSystemStatus is not implemented"))
+func (UnimplementedSystemServiceHandler) GetSystemStatus(context.Context, *v1.GetSystemStatusRequest) (*v1.GetSystemStatusResponse, error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, "system.v1.SystemService.GetSystemStatus is not implemented")
 }
 
-func (UnimplementedSystemServiceHandler) QueryMetrics(context.Context, *connect.Request[v1.QueryMetricsRequest]) (*connect.Response[v1.QueryMetricsResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("system.v1.SystemService.QueryMetrics is not implemented"))
+func (UnimplementedSystemServiceHandler) QueryMetrics(context.Context, *v1.QueryMetricsRequest) (*v1.QueryMetricsResponse, error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, "system.v1.SystemService.QueryMetrics is not implemented")
+}
+
+type systemServiceClient struct {
+	client *connect.Client
+}
+
+func (c *systemServiceClient) GetSystemStatus(ctx context.Context, req *v1.GetSystemStatusRequest) (*v1.GetSystemStatusResponse, error) {
+	var res v1.GetSystemStatusResponse
+	if err := c.client.CallUnary(ctx, systemServiceGetSystemStatusSpec(), req, &res); err != nil {
+		return nil, err
+	}
+	return &res, nil
+}
+
+func (c *systemServiceClient) QueryMetrics(ctx context.Context, req *v1.QueryMetricsRequest) (*v1.QueryMetricsResponse, error) {
+	var res v1.QueryMetricsResponse
+	if err := c.client.CallUnary(ctx, systemServiceQueryMetricsSpec(), req, &res); err != nil {
+		return nil, err
+	}
+	return &res, nil
+}
+
+type systemServiceHandler struct{ svc SystemServiceHandler }
+
+func (h systemServiceHandler) getSystemStatus(ctx context.Context, _ connect.Spec, stream connect.ServerStream) error {
+	var req v1.GetSystemStatusRequest
+	if err := stream.Receive(&req); err != nil {
+		return err
+	}
+	res, err := h.svc.GetSystemStatus(ctx, &req)
+	if err != nil {
+		return err
+	}
+	return stream.Send(res)
+}
+
+func (h systemServiceHandler) queryMetrics(ctx context.Context, _ connect.Spec, stream connect.ServerStream) error {
+	var req v1.QueryMetricsRequest
+	if err := stream.Receive(&req); err != nil {
+		return err
+	}
+	res, err := h.svc.QueryMetrics(ctx, &req)
+	if err != nil {
+		return err
+	}
+	return stream.Send(res)
 }

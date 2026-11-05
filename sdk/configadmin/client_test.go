@@ -8,7 +8,8 @@ import (
 	"sync"
 	"testing"
 
-	"connectrpc.com/connect"
+	"connectrpc.com/connect/v2"
+	"connectrpc.com/connect/v2/connecthttp"
 	configv1 "github.com/lens077/control-tower/api/config/v1"
 	"github.com/lens077/control-tower/api/config/v1/configv1connect"
 	"github.com/lens077/control-tower/constants"
@@ -30,6 +31,20 @@ func newFakeService() *fakeService {
 	return &fakeService{entries: map[string]*configv1.ConfigEntry{}}
 }
 
+// headerFromContext 把 CallInfo 请求头摊平成 http.Header,fake 的记录逻辑保持不变。
+// v2 的请求头随 ctx 走,直调 fake 时可能没有 CallInfo,返回空表。
+func headerFromContext(ctx context.Context) http.Header {
+	info, _ := connect.CallInfoForServerContext(ctx)
+	h := http.Header{}
+	if info == nil {
+		return h
+	}
+	for k, vs := range info.RequestHeader().All() {
+		h[k] = vs
+	}
+	return h
+}
+
 func (f *fakeService) record(header http.Header) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -49,68 +64,70 @@ func key(namespace, environment, name string) string {
 	return namespace + "\x00" + environment + "\x00" + name
 }
 
-func (f *fakeService) GetKey(_ context.Context, request *connect.Request[configv1.GetKeyRequest]) (*connect.Response[configv1.GetKeyResponse], error) {
-	f.record(request.Header())
+func (f *fakeService) GetKey(ctx context.Context, request *configv1.GetKeyRequest) (*configv1.GetKeyResponse, error) {
+	f.record(headerFromContext(ctx))
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	entry, ok := f.entries[key(request.Msg.GetNamespace(), request.Msg.GetEnvironment(), request.Msg.GetKey())]
+	entry, ok := f.entries[key(request.GetNamespace(), request.GetEnvironment(), request.GetKey())]
 	if !ok {
-		return nil, connect.NewError(connect.CodeNotFound, errors.New("key not found"))
+		return nil, connect.NewError(connect.CodeNotFound, "key not found")
 	}
-	return connect.NewResponse(&configv1.GetKeyResponse{Entry: entry}), nil
+	return &configv1.GetKeyResponse{Entry: entry}, nil
 }
 
-func (f *fakeService) PutKey(_ context.Context, request *connect.Request[configv1.PutKeyRequest]) (*connect.Response[configv1.PutKeyResponse], error) {
-	f.record(request.Header())
+func (f *fakeService) PutKey(ctx context.Context, request *configv1.PutKeyRequest) (*configv1.PutKeyResponse, error) {
+	f.record(headerFromContext(ctx))
 	if f.putErr != nil {
 		return nil, f.putErr
 	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	id := key(request.Msg.GetNamespace(), request.Msg.GetEnvironment(), request.Msg.GetKey())
+	id := key(request.GetNamespace(), request.GetEnvironment(), request.GetKey())
 	version := int32(1)
 	if previous, ok := f.entries[id]; ok {
 		version = previous.GetVersion() + 1
 	}
 	entry := &configv1.ConfigEntry{
-		Namespace:   request.Msg.GetNamespace(),
-		Environment: request.Msg.GetEnvironment(),
-		Key:         request.Msg.GetKey(),
-		Format:      request.Msg.GetFormat(),
-		Value:       request.Msg.GetValue(),
+		Namespace:   request.GetNamespace(),
+		Environment: request.GetEnvironment(),
+		Key:         request.GetKey(),
+		Format:      request.GetFormat(),
+		Value:       request.GetValue(),
 		Version:     version,
-		IsSecret:    request.Msg.GetIsSecret(),
-		Description: request.Msg.GetDescription(),
+		IsSecret:    request.GetIsSecret(),
+		Description: request.GetDescription(),
 	}
 	f.entries[id] = entry
-	return connect.NewResponse(&configv1.PutKeyResponse{Entry: entry}), nil
+	return &configv1.PutKeyResponse{Entry: entry}, nil
 }
 
-func (f *fakeService) ListKeys(_ context.Context, request *connect.Request[configv1.ListKeysRequest]) (*connect.Response[configv1.ListKeysResponse], error) {
-	f.record(request.Header())
+func (f *fakeService) ListKeys(ctx context.Context, request *configv1.ListKeysRequest) (*configv1.ListKeysResponse, error) {
+	f.record(headerFromContext(ctx))
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	var entries []*configv1.ConfigEntry
 	for _, entry := range f.entries {
-		if entry.GetNamespace() == request.Msg.GetNamespace() && entry.GetEnvironment() == request.Msg.GetEnvironment() {
+		if entry.GetNamespace() == request.GetNamespace() && entry.GetEnvironment() == request.GetEnvironment() {
 			entries = append(entries, entry)
 		}
 	}
-	return connect.NewResponse(&configv1.ListKeysResponse{Entries: entries}), nil
+	return &configv1.ListKeysResponse{Entries: entries}, nil
 }
 
-func (f *fakeService) ListNamespaces(_ context.Context, request *connect.Request[configv1.ListNamespacesRequest]) (*connect.Response[configv1.ListNamespacesResponse], error) {
-	f.record(request.Header())
-	return connect.NewResponse(&configv1.ListNamespacesResponse{
+func (f *fakeService) ListNamespaces(ctx context.Context, request *configv1.ListNamespacesRequest) (*configv1.ListNamespacesResponse, error) {
+	f.record(headerFromContext(ctx))
+	return &configv1.ListNamespacesResponse{
 		Namespaces: []*configv1.NamespaceInfo{{Namespace: "observability", Environments: []string{"dev", "prod"}}},
-	}), nil
+	}, nil
 }
 
 func startFake(t *testing.T) (*fakeService, string) {
 	t.Helper()
 	service := newFakeService()
 	mux := http.NewServeMux()
-	mux.Handle(configv1connect.NewConfigServiceHandler(service))
+	srv := connect.NewServer()
+	configv1connect.RegisterConfigServiceHandler(srv, service)
+	connecthttp.Mount(mux, srv, connecthttp.WithReadMaxBytes(0))
 	server := httptest.NewServer(mux)
 	t.Cleanup(server.Close)
 	return service, server.URL
@@ -221,7 +238,7 @@ func TestPutRejectsEmptyValue(t *testing.T) {
 
 func TestPutSurfacesPermissionDenied(t *testing.T) {
 	service, endpoint := startFake(t)
-	service.putErr = connect.NewError(connect.CodePermissionDenied, errors.New("scope does not allow prod"))
+	service.putErr = connect.NewError(connect.CodePermissionDenied, "scope does not allow prod")
 	client, err := configadmin.New(endpoint, configadmin.Credential{MachineToken: "ct_pre_only"})
 	if err != nil {
 		t.Fatalf("new client: %v", err)

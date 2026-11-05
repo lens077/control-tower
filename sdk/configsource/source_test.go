@@ -1,11 +1,13 @@
 package configsource
 
 import (
+	"connectrpc.com/connect/v2"
+	"context"
+
 	"os"
 	"path/filepath"
 	"testing"
 
-	configv1 "github.com/lens077/control-tower/api/config/v1"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -20,18 +22,21 @@ func TestLoadSourceConfig(t *testing.T) {
 	assert.Equal(t, "/etc/cart.yaml", cfg.File.Path)
 }
 
-func TestConfigCenterRequest_AddsClientIdentityHeaders(t *testing.T) {
-	request := configCenterRequest(&configv1.GetKeyRequest{}, ConfigCenterConfig{
+func TestConfigCenterContext_AddsClientIdentityHeaders(t *testing.T) {
+	ctx := configCenterContext(context.Background(), ConfigCenterConfig{
 		ServiceToken:   "reader-token",
 		ClientName:     "cart-service",
 		ClientInstance: "cart-7d8f",
 		ClientVersion:  "dev",
 	})
 
-	assert.Equal(t, "reader-token", request.Header().Get("x-config-center-service-token"))
-	assert.Equal(t, "cart-service", request.Header().Get("x-config-center-client-name"))
-	assert.Equal(t, "cart-7d8f", request.Header().Get("x-config-center-client-instance"))
-	assert.Equal(t, "dev", request.Header().Get("x-config-center-client-version"))
+	// v2 的请求头在客户端 CallInfo 里,不再挂在消息上。
+	info, ok := connect.CallInfoForClientContext(ctx)
+	require.True(t, ok)
+	assert.Equal(t, "reader-token", info.RequestHeader().Get("x-config-center-service-token"))
+	assert.Equal(t, "cart-service", info.RequestHeader().Get("x-config-center-client-name"))
+	assert.Equal(t, "cart-7d8f", info.RequestHeader().Get("x-config-center-client-instance"))
+	assert.Equal(t, "dev", info.RequestHeader().Get("x-config-center-client-version"))
 }
 
 func TestLoadSourceConfig_RejectsIncompleteSelection(t *testing.T) {

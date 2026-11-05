@@ -6,10 +6,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 
-	"connectrpc.com/connect"
+	"connectrpc.com/connect/v2"
+	"connectrpc.com/connect/v2/connecthttp"
 	configv1 "github.com/lens077/control-tower/api/config/v1"
 	"github.com/lens077/control-tower/api/config/v1/configv1connect"
 	"gopkg.in/yaml.v3"
@@ -110,14 +112,14 @@ func validate(cfg Config) error {
 }
 
 func loadConfigCenter(ctx context.Context, cfg ConfigCenterConfig) ([]byte, error) {
-	client := configv1connect.NewConfigServiceClient(http.DefaultClient, cfg.Address)
-	response, err := client.GetKey(ctx, configCenterRequest(&configv1.GetKeyRequest{
+	client := configv1connect.NewConfigServiceClient(connect.NewClient(connecthttp.NewTransport(http.DefaultClient, cfg.Address)))
+	response, err := client.GetKey(configCenterContext(ctx, cfg), &configv1.GetKeyRequest{
 		Namespace: cfg.Namespace, Environment: cfg.Environment, Key: cfg.Key,
-	}, cfg))
+	})
 	if err != nil {
 		return nil, fmt.Errorf("read config center key %s/%s/%s: %w", cfg.Namespace, cfg.Environment, cfg.Key, err)
 	}
-	value := response.Msg.GetEntry().GetValue()
+	value := response.GetEntry().GetValue()
 	if value == "" {
 		return nil, fmt.Errorf("config center key %s/%s/%s is empty", cfg.Namespace, cfg.Environment, cfg.Key)
 	}
@@ -133,17 +135,23 @@ func Watch(ctx context.Context, cfg Config, onEvent func(Event)) error {
 	if err := validate(cfg); err != nil {
 		return err
 	}
-	client := configv1connect.NewConfigServiceClient(http.DefaultClient, cfg.ConfigCenter.Address)
-	stream, err := client.WatchKeys(ctx, configCenterRequest(&configv1.WatchKeysRequest{
+	client := configv1connect.NewConfigServiceClient(connect.NewClient(connecthttp.NewTransport(http.DefaultClient, cfg.ConfigCenter.Address)))
+	stream, err := client.WatchKeys(configCenterContext(ctx, cfg.ConfigCenter), &configv1.WatchKeysRequest{
 		Namespace: cfg.ConfigCenter.Namespace, Environment: cfg.ConfigCenter.Environment, Keys: []string{cfg.ConfigCenter.Key},
-	}, cfg.ConfigCenter))
+	})
 	if err != nil {
 		return fmt.Errorf("watch config center key: %w", err)
 	}
 	defer func() { _ = stream.Close() }()
 
-	for stream.Receive() {
-		message := stream.Msg()
+	var streamErr error
+	for {
+		msg, err := stream.Receive()
+		if err != nil {
+			streamErr = err
+			break
+		}
+		message := msg
 		switch message.GetType() {
 		case configv1.WatchEventType_WATCH_EVENT_TYPE_HEARTBEAT:
 			continue
@@ -159,19 +167,24 @@ func Watch(ctx context.Context, cfg Config, onEvent func(Event)) error {
 			onEvent(Event{Value: []byte(entry.GetValue())})
 		}
 	}
-	return stream.Err()
-}
-
-func configCenterRequest[T any](message *T, cfg ConfigCenterConfig) *connect.Request[T] {
-	request := connect.NewRequest(message)
-	if cfg.ServiceToken != "" {
-		request.Header().Set("x-config-center-service-token", cfg.ServiceToken)
+	if errors.Is(streamErr, io.EOF) {
+		streamErr = nil
 	}
-	setClientHeaders(request, cfg)
-	return request
+	return streamErr
 }
 
-func setClientHeaders[T any](request *connect.Request[T], cfg ConfigCenterConfig) {
+// configCenterContext 把凭据与客户端自报身份写进客户端 CallInfo。
+// v2 的请求头不再挂在消息上,随 ctx 传播。
+func configCenterContext(ctx context.Context, cfg ConfigCenterConfig) context.Context {
+	ctx, info := connect.NewClientContext(ctx)
+	if cfg.ServiceToken != "" {
+		info.RequestHeader().Set("x-config-center-service-token", cfg.ServiceToken)
+	}
+	setClientHeaders(info, cfg)
+	return ctx
+}
+
+func setClientHeaders(info *connect.CallInfo, cfg ConfigCenterConfig) {
 	name := cfg.ClientName
 	if name == "" {
 		name = os.Getenv("SERVICE_NAME")
@@ -185,12 +198,12 @@ func setClientHeaders[T any](request *connect.Request[T], cfg ConfigCenterConfig
 		version = os.Getenv("SERVICE_VERSION")
 	}
 	if name != "" {
-		request.Header().Set("x-config-center-client-name", name)
+		info.RequestHeader().Set("x-config-center-client-name", name)
 	}
 	if instance != "" {
-		request.Header().Set("x-config-center-client-instance", instance)
+		info.RequestHeader().Set("x-config-center-client-instance", instance)
 	}
 	if version != "" {
-		request.Header().Set("x-config-center-client-version", version)
+		info.RequestHeader().Set("x-config-center-client-version", version)
 	}
 }

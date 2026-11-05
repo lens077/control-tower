@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"connectrpc.com/connect"
+	"connectrpc.com/connect/v2"
 	v1 "github.com/lens077/control-tower/api/config/v1"
 	"github.com/lens077/control-tower/services/config/internal/biz"
 	"github.com/lens077/control-tower/services/config/internal/iam"
@@ -84,11 +84,11 @@ func newTestService(repo *putTrackingRepo, tokens *fakeTokenRepo) *ConfigService
 	}
 }
 
-func putRequest(namespace, environment string) *connect.Request[v1.PutKeyRequest] {
-	return connect.NewRequest(&v1.PutKeyRequest{
+func putRequest(namespace, environment string) *v1.PutKeyRequest {
+	return &v1.PutKeyRequest{
 		Namespace: namespace, Environment: environment, Key: "bootstrap.yaml",
 		Format: v1.ConfigFormat_CONFIG_FORMAT_YAML, Value: "server:\n  addr: \"0.0.0.0:30006\"\n",
-	})
+	}
 }
 
 // operator 可在自身 environment 内 PutKey（namespace 通配）。
@@ -99,7 +99,7 @@ func TestPutKey_OperatorWithinEnvironment(t *testing.T) {
 	resp, err := service.PutKey(operatorCtx("pre"), putRequest("order", "pre"))
 	require.NoError(t, err)
 	assert.Equal(t, 1, repo.putCount)
-	assert.Equal(t, "order", resp.Msg.Entry.Namespace)
+	assert.Equal(t, "order", resp.Entry.Namespace)
 }
 
 // operator 跨 environment 写入被拒。
@@ -140,21 +140,21 @@ func TestIssueMachineToken_OperatorCanIssueServiceToken(t *testing.T) {
 	tokens := newFakeTokenRepo()
 	service := newTestService(&putTrackingRepo{}, tokens)
 
-	resp, err := service.IssueMachineToken(operatorCtx("pre"), connect.NewRequest(&v1.IssueMachineTokenRequest{
+	resp, err := service.IssueMachineToken(operatorCtx("pre"), &v1.IssueMachineTokenRequest{
 		ServiceName: "order", Environment: "pre", Role: v1.MachineTokenRole_MACHINE_TOKEN_ROLE_SERVICE,
-	}))
+	})
 	require.NoError(t, err)
-	assert.NotEmpty(t, resp.Msg.Token)
-	assert.Equal(t, v1.MachineTokenRole_MACHINE_TOKEN_ROLE_SERVICE, resp.Msg.Meta.Role)
-	assert.Equal(t, []string{"order"}, resp.Msg.Meta.AllowedNamespaces)
+	assert.NotEmpty(t, resp.Token)
+	assert.Equal(t, v1.MachineTokenRole_MACHINE_TOKEN_ROLE_SERVICE, resp.Meta.Role)
+	assert.Equal(t, []string{"order"}, resp.Meta.AllowedNamespaces)
 	assert.Len(t, tokens.tokens, 1)
 
 	// UNSPECIFIED 等价于 SERVICE。
-	resp, err = service.IssueMachineToken(operatorCtx("pre"), connect.NewRequest(&v1.IssueMachineTokenRequest{
+	resp, err = service.IssueMachineToken(operatorCtx("pre"), &v1.IssueMachineTokenRequest{
 		ServiceName: "cart", Environment: "pre",
-	}))
+	})
 	require.NoError(t, err)
-	assert.Equal(t, v1.MachineTokenRole_MACHINE_TOKEN_ROLE_SERVICE, resp.Msg.Meta.Role)
+	assert.Equal(t, v1.MachineTokenRole_MACHINE_TOKEN_ROLE_SERVICE, resp.Meta.Role)
 }
 
 // operator 不能签发 operator token（防止自我复制）。
@@ -162,9 +162,9 @@ func TestIssueMachineToken_OperatorCannotIssueOperator(t *testing.T) {
 	tokens := newFakeTokenRepo()
 	service := newTestService(&putTrackingRepo{}, tokens)
 
-	_, err := service.IssueMachineToken(operatorCtx("pre"), connect.NewRequest(&v1.IssueMachineTokenRequest{
+	_, err := service.IssueMachineToken(operatorCtx("pre"), &v1.IssueMachineTokenRequest{
 		ServiceName: "harvest", Environment: "pre", Role: v1.MachineTokenRole_MACHINE_TOKEN_ROLE_OPERATOR,
-	}))
+	})
 	require.Error(t, err)
 	assert.Equal(t, connect.CodePermissionDenied, connect.CodeOf(err))
 	assert.Empty(t, tokens.tokens)
@@ -175,20 +175,20 @@ func TestIssueMachineToken_AdminIssuesOperator(t *testing.T) {
 	tokens := newFakeTokenRepo()
 	service := newTestService(&putTrackingRepo{}, tokens)
 
-	resp, err := service.IssueMachineToken(adminCtx(), connect.NewRequest(&v1.IssueMachineTokenRequest{
+	resp, err := service.IssueMachineToken(adminCtx(), &v1.IssueMachineTokenRequest{
 		ServiceName: "harvest", Environment: "pre", Role: v1.MachineTokenRole_MACHINE_TOKEN_ROLE_OPERATOR,
-	}))
+	})
 	require.NoError(t, err)
-	assert.Equal(t, v1.MachineTokenRole_MACHINE_TOKEN_ROLE_OPERATOR, resp.Msg.Meta.Role)
-	assert.Equal(t, []string{"*"}, resp.Msg.Meta.AllowedNamespaces)
+	assert.Equal(t, v1.MachineTokenRole_MACHINE_TOKEN_ROLE_OPERATOR, resp.Meta.Role)
+	assert.Equal(t, []string{"*"}, resp.Meta.AllowedNamespaces)
 }
 
 // 普通 service token 不能触碰 token 管理（纵深防御）。
 func TestIssueMachineToken_ServiceTokenDenied(t *testing.T) {
 	service := newTestService(&putTrackingRepo{}, newFakeTokenRepo())
-	_, err := service.IssueMachineToken(serviceCtx("order", "dev"), connect.NewRequest(&v1.IssueMachineTokenRequest{
+	_, err := service.IssueMachineToken(serviceCtx("order", "dev"), &v1.IssueMachineTokenRequest{
 		ServiceName: "order", Environment: "dev",
-	}))
+	})
 	require.Error(t, err)
 	assert.Equal(t, connect.CodePermissionDenied, connect.CodeOf(err))
 }
@@ -201,20 +201,20 @@ func TestRevokeMachineToken_OperatorRules(t *testing.T) {
 	)
 	service := newTestService(&putTrackingRepo{}, tokens)
 
-	_, err := service.RevokeMachineToken(operatorCtx("pre"), connect.NewRequest(&v1.RevokeMachineTokenRequest{Id: "op-token"}))
+	_, err := service.RevokeMachineToken(operatorCtx("pre"), &v1.RevokeMachineTokenRequest{Id: "op-token"})
 	require.Error(t, err)
 	assert.Equal(t, connect.CodePermissionDenied, connect.CodeOf(err))
 	assert.Empty(t, tokens.revoked)
 
-	_, err = service.RevokeMachineToken(operatorCtx("pre"), connect.NewRequest(&v1.RevokeMachineTokenRequest{Id: "svc-token"}))
+	_, err = service.RevokeMachineToken(operatorCtx("pre"), &v1.RevokeMachineTokenRequest{Id: "svc-token"})
 	require.NoError(t, err)
 	assert.Equal(t, []string{"svc-token"}, tokens.revoked)
 
-	_, err = service.RevokeMachineToken(operatorCtx("pre"), connect.NewRequest(&v1.RevokeMachineTokenRequest{Id: "missing"}))
+	_, err = service.RevokeMachineToken(operatorCtx("pre"), &v1.RevokeMachineTokenRequest{Id: "missing"})
 	require.Error(t, err)
 	assert.Equal(t, connect.CodeNotFound, connect.CodeOf(err))
 
-	_, err = service.RevokeMachineToken(adminCtx(), connect.NewRequest(&v1.RevokeMachineTokenRequest{Id: "op-token"}))
+	_, err = service.RevokeMachineToken(adminCtx(), &v1.RevokeMachineTokenRequest{Id: "op-token"})
 	require.NoError(t, err)
 	assert.Equal(t, []string{"svc-token", "op-token"}, tokens.revoked)
 }
@@ -226,12 +226,12 @@ func TestListMachineTokens_OperatorSeesRoles(t *testing.T) {
 	)
 	service := newTestService(&putTrackingRepo{}, tokens)
 
-	resp, err := service.ListMachineTokens(operatorCtx("pre"), connect.NewRequest(&v1.ListMachineTokensRequest{}))
+	resp, err := service.ListMachineTokens(operatorCtx("pre"), &v1.ListMachineTokensRequest{})
 	require.NoError(t, err)
-	require.Len(t, resp.Msg.Tokens, 1)
-	assert.Equal(t, v1.MachineTokenRole_MACHINE_TOKEN_ROLE_OPERATOR, resp.Msg.Tokens[0].Role)
+	require.Len(t, resp.Tokens, 1)
+	assert.Equal(t, v1.MachineTokenRole_MACHINE_TOKEN_ROLE_OPERATOR, resp.Tokens[0].Role)
 
-	_, err = service.ListMachineTokens(serviceCtx("order", "dev"), connect.NewRequest(&v1.ListMachineTokensRequest{}))
+	_, err = service.ListMachineTokens(serviceCtx("order", "dev"), &v1.ListMachineTokensRequest{})
 	require.Error(t, err)
 	assert.Equal(t, connect.CodePermissionDenied, connect.CodeOf(err))
 }
@@ -240,9 +240,9 @@ func TestListMachineTokens_OperatorSeesRoles(t *testing.T) {
 func TestIssueMachineToken_OperatorDeniedForOtherEnvironment(t *testing.T) {
 	service := newTestService(&putTrackingRepo{}, newFakeTokenRepo())
 
-	_, err := service.IssueMachineToken(operatorCtx("pre"), connect.NewRequest(&v1.IssueMachineTokenRequest{
+	_, err := service.IssueMachineToken(operatorCtx("pre"), &v1.IssueMachineTokenRequest{
 		ServiceName: "order", Environment: "dev",
-	}))
+	})
 	require.Error(t, err)
 	assert.Equal(t, connect.CodePermissionDenied, connect.CodeOf(err))
 }
@@ -251,15 +251,15 @@ func TestRevokeMachineToken_OperatorDeniedForOtherEnvironment(t *testing.T) {
 	tokens := newFakeTokenRepo()
 	service := newTestService(&putTrackingRepo{}, tokens)
 
-	issued, err := service.IssueMachineToken(adminCtx(), connect.NewRequest(&v1.IssueMachineTokenRequest{
+	issued, err := service.IssueMachineToken(adminCtx(), &v1.IssueMachineTokenRequest{
 		ServiceName: "order", Environment: "dev",
-	}))
+	})
 	require.NoError(t, err)
 
-	_, err = service.RevokeMachineToken(operatorCtx("pre"), connect.NewRequest(&v1.RevokeMachineTokenRequest{Id: issued.Msg.Meta.Id}))
+	_, err = service.RevokeMachineToken(operatorCtx("pre"), &v1.RevokeMachineTokenRequest{Id: issued.Meta.Id})
 	require.Error(t, err)
 	assert.Equal(t, connect.CodePermissionDenied, connect.CodeOf(err))
 
-	_, err = service.RevokeMachineToken(operatorCtx("dev"), connect.NewRequest(&v1.RevokeMachineTokenRequest{Id: issued.Msg.Meta.Id}))
+	_, err = service.RevokeMachineToken(operatorCtx("dev"), &v1.RevokeMachineTokenRequest{Id: issued.Meta.Id})
 	require.NoError(t, err)
 }

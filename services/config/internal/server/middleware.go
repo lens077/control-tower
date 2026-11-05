@@ -1,14 +1,14 @@
 package server
 
 import (
-	"net/http"
-
-	"connectrpc.com/connect"
+	"connectrpc.com/connect/v2"
 	"connectrpc.com/otelconnect"
+	"connectrpc.com/validate"
 	confv1 "github.com/lens077/control-tower/services/config/internal/conf/v1"
 	"github.com/lens077/control-tower/services/config/internal/iam"
 	"go.uber.org/fx"
 	"go.uber.org/zap"
+	"net/http"
 )
 
 var MiddlewareModule = fx.Module("server.middleware",
@@ -16,32 +16,31 @@ var MiddlewareModule = fx.Module("server.middleware",
 		// 提供拦截器实例
 		NewLoggingInterceptor,
 
-		// 组装成一个拦截器切片，或者直接返回 Connect Option
+		// 组装成 connect v2 服务端拦截器切片
 		NewConnectOptions,
 	),
 )
 
 func NewConnectOptions(
 	logger *zap.Logger,
-	logging *LoggingInterceptor,
+	logging connect.ServerInterceptor,
 	observability *confv1.Observability,
-) []connect.HandlerOption {
-	var interceptors []connect.Interceptor
+) []connect.ServerInterceptor {
+	var interceptors []connect.ServerInterceptor
+
+	// 请求体校验始终启用,放在最外层:坏消息在记日志/开 span 之前就被打回。
+	interceptors = append(interceptors, validate.NewServerInterceptor())
 
 	// 只有当 observability 启用时才添加 otel 拦截器
 	if observability != nil && observability.Enable {
-		// WithoutServerPeerAttributes 去掉 net.peer.name / net.peer.port 两个属性。
-		//
-		// net.peer.port 是客户端的临时端口,取值无上界:每来一条新连接就是一个新值,
-		// 与 le 桶相乘后每个直方图会持续长出新序列,而已写入的旧序列不会自己消失。
-		// config-center 尤其受害 —— WatchKeys 是长连接,客户端每次重连都换端口。
-		//
-		// 实测(2026-08):VM 总共 4862 条序列,rpc_server_* 五个直方图占了 4076 条,
-		// net_peer_port 已有 39 个取值,且只会涨。
-		//
-		// 代价是丢掉「按调用方 IP 拆分」的能力。这在这里不是损失:进程只从网关入站,
-		// 真正的调用方身份在 IAM 的 service token 里,不在 TCP 四元组里。
-		otelInterceptor, err := otelconnect.NewInterceptor(otelconnect.WithoutServerPeerAttributes())
+		// v1 时代用 WithoutServerPeerAttributes 去掉 net.peer.name / net.peer.port:
+		// net.peer.port 是客户端临时端口,取值无上界,与 le 桶相乘后直方图序列只会涨
+		// —— config-center 尤其受害(WatchKeys 长连接每次重连都换端口)。实测(2026-08):
+		// VM 4862 条序列里 rpc_server_* 五个直方图占 4076 条。connect v2 中 server span
+		// 默认就不带这两个属性(选项反转为 WithServerPeerAttributes 选择开启),无需再传。
+		// 代价仍是丢掉「按调用方 IP 拆分」:进程只从网关入站,真正的调用方身份在
+		// IAM 的 service token 里,不在 TCP 四元组里。
+		otelInterceptor, err := otelconnect.NewServerInterceptor()
 		if err != nil {
 			logger.Fatal("failed to init otel interceptor", zap.Error(err))
 		}
@@ -51,9 +50,7 @@ func NewConnectOptions(
 	// 添加日志拦截器
 	interceptors = append(interceptors, logging)
 
-	return []connect.HandlerOption{
-		connect.WithInterceptors(interceptors...),
-	}
+	return interceptors
 }
 
 // NewIAMMiddleware authorizes the complete HTTP request before Connect decodes

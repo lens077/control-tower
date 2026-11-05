@@ -8,7 +8,6 @@ import (
 	"strings"
 	"time"
 
-	"connectrpc.com/connect"
 	v1 "github.com/lens077/control-tower/api/system/v1"
 	"github.com/lens077/control-tower/api/system/v1/systemv1connect"
 	"github.com/lens077/control-tower/services/config/internal/data"
@@ -55,11 +54,11 @@ func NewSystemService(
 
 func (s *SystemService) GetSystemStatus(
 	ctx context.Context,
-	_ *connect.Request[v1.GetSystemStatusRequest],
-) (*connect.Response[v1.GetSystemStatusResponse], error) {
+	_ *v1.GetSystemStatusRequest,
+) (*v1.GetSystemStatusResponse, error) {
 	snap := s.sampler.Snapshot()
 
-	return connect.NewResponse(&v1.GetSystemStatusResponse{
+	return &v1.GetSystemStatusResponse{
 		Process: &v1.ProcessStatus{
 			CpuPercent:       snap.CPUPercent,
 			CpuLimitCores:    snap.CPULimitCores,
@@ -87,7 +86,7 @@ func (s *SystemService) GetSystemStatus(
 			BuildVersion: meta.Version, // 构建制品版本,ldflags 注入
 		},
 		MetricsBackendAvailable: s.metrics != nil,
-	}), nil
+	}, nil
 }
 
 // dependencies 复用 server 那边健康检查用的同一组探测。
@@ -118,25 +117,25 @@ func (s *SystemService) dependencies(ctx context.Context) []*v1.DependencyStatus
 
 func (s *SystemService) QueryMetrics(
 	ctx context.Context,
-	req *connect.Request[v1.QueryMetricsRequest],
-) (*connect.Response[v1.QueryMetricsResponse], error) {
+	req *v1.QueryMetricsRequest,
+) (*v1.QueryMetricsResponse, error) {
 	if s.metrics == nil {
 		// 不报错:这是一个合法的部署形态(没接 VM)。前端据此隐藏曲线区,
 		// 报错的话页面会弹一个红条,而其实什么都没坏。
-		return connect.NewResponse(&v1.QueryMetricsResponse{MetricsBackendAvailable: false}), nil
+		return &v1.QueryMetricsResponse{MetricsBackendAvailable: false}, nil
 	}
 
-	step := time.Duration(req.Msg.GetStepSeconds()) * time.Second
+	step := time.Duration(req.GetStepSeconds()) * time.Second
 	if step <= 0 {
 		step = defaultStep
 	}
 	end := time.Now()
-	start := end.Add(-req.Msg.GetWindow().AsDuration())
+	start := end.Add(-req.GetWindow().AsDuration())
 
 	// 一个请求只读一次清单。它与利用率查询分开,常数1不会流入图表。
 	var expected []promql.Series
 	var expectedErr error
-	for _, series := range req.Msg.GetSeries() {
+	for _, series := range req.GetSeries() {
 		queries, _, _ := s.plan(series)
 		if len(queries) > 0 && queries[0].ExpectedHosts {
 			expected, expectedErr = s.metrics.QueryRange(ctx, s.catalog.HostExpectedInfo().Expr, start, end, step)
@@ -144,8 +143,8 @@ func (s *SystemService) QueryMetrics(
 		}
 	}
 
-	results := make([]*v1.SeriesResult, 0, len(req.Msg.GetSeries()))
-	for _, series := range req.Msg.GetSeries() {
+	results := make([]*v1.SeriesResult, 0, len(req.GetSeries()))
+	for _, series := range req.GetSeries() {
 		result := s.querySeries(ctx, series, start, end, step)
 		queries, unit, _ := s.plan(series)
 		if len(queries) > 0 && queries[0].ExpectedHosts {
@@ -178,10 +177,10 @@ func (s *SystemService) QueryMetrics(
 		results = append(results, result)
 	}
 
-	return connect.NewResponse(&v1.QueryMetricsResponse{
+	return &v1.QueryMetricsResponse{
 		Results:                 results,
 		MetricsBackendAvailable: true,
-	}), nil
+	}, nil
 }
 
 // querySeries 查一组曲线。任何失败都收进 SeriesResult.error 返回,

@@ -3,7 +3,6 @@ package main
 import (
 	"bytes"
 	"context"
-	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -12,7 +11,8 @@ import (
 	"sync"
 	"testing"
 
-	"connectrpc.com/connect"
+	"connectrpc.com/connect/v2"
+	"connectrpc.com/connect/v2/connecthttp"
 	configv1 "github.com/lens077/control-tower/api/config/v1"
 	"github.com/lens077/control-tower/api/config/v1/configv1connect"
 )
@@ -35,54 +35,56 @@ func entryKey(namespace, environment, key string) string {
 	return namespace + "\x00" + environment + "\x00" + key
 }
 
-func (f *fakeService) GetKey(_ context.Context, request *connect.Request[configv1.GetKeyRequest]) (*connect.Response[configv1.GetKeyResponse], error) {
+func (f *fakeService) GetKey(_ context.Context, request *configv1.GetKeyRequest) (*configv1.GetKeyResponse, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	entry, ok := f.entries[entryKey(request.Msg.GetNamespace(), request.Msg.GetEnvironment(), request.Msg.GetKey())]
+	entry, ok := f.entries[entryKey(request.GetNamespace(), request.GetEnvironment(), request.GetKey())]
 	if !ok {
-		return nil, connect.NewError(connect.CodeNotFound, errors.New("key not found"))
+		return nil, connect.NewError(connect.CodeNotFound, "key not found")
 	}
-	return connect.NewResponse(&configv1.GetKeyResponse{Entry: entry}), nil
+	return &configv1.GetKeyResponse{Entry: entry}, nil
 }
 
-func (f *fakeService) PutKey(_ context.Context, request *connect.Request[configv1.PutKeyRequest]) (*connect.Response[configv1.PutKeyResponse], error) {
+func (f *fakeService) PutKey(_ context.Context, request *configv1.PutKeyRequest) (*configv1.PutKeyResponse, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	f.puts = append(f.puts, request.Msg)
-	id := entryKey(request.Msg.GetNamespace(), request.Msg.GetEnvironment(), request.Msg.GetKey())
+	f.puts = append(f.puts, request)
+	id := entryKey(request.GetNamespace(), request.GetEnvironment(), request.GetKey())
 	version := int32(1)
 	if previous, ok := f.entries[id]; ok {
 		version = previous.GetVersion() + 1
 	}
 	entry := &configv1.ConfigEntry{
-		Namespace:   request.Msg.GetNamespace(),
-		Environment: request.Msg.GetEnvironment(),
-		Key:         request.Msg.GetKey(),
-		Format:      request.Msg.GetFormat(),
-		Value:       request.Msg.GetValue(),
+		Namespace:   request.GetNamespace(),
+		Environment: request.GetEnvironment(),
+		Key:         request.GetKey(),
+		Format:      request.GetFormat(),
+		Value:       request.GetValue(),
 		Version:     version,
 	}
 	f.entries[id] = entry
-	return connect.NewResponse(&configv1.PutKeyResponse{Entry: entry}), nil
+	return &configv1.PutKeyResponse{Entry: entry}, nil
 }
 
-func (f *fakeService) ListKeys(_ context.Context, request *connect.Request[configv1.ListKeysRequest]) (*connect.Response[configv1.ListKeysResponse], error) {
+func (f *fakeService) ListKeys(_ context.Context, request *configv1.ListKeysRequest) (*configv1.ListKeysResponse, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	var entries []*configv1.ConfigEntry
 	for _, entry := range f.entries {
-		if entry.GetNamespace() == request.Msg.GetNamespace() && entry.GetEnvironment() == request.Msg.GetEnvironment() {
+		if entry.GetNamespace() == request.GetNamespace() && entry.GetEnvironment() == request.GetEnvironment() {
 			entries = append(entries, entry)
 		}
 	}
-	return connect.NewResponse(&configv1.ListKeysResponse{Entries: entries}), nil
+	return &configv1.ListKeysResponse{Entries: entries}, nil
 }
 
 func startFake(t *testing.T) (*fakeService, string) {
 	t.Helper()
 	service := newFakeService()
 	mux := http.NewServeMux()
-	mux.Handle(configv1connect.NewConfigServiceHandler(service))
+	srv := connect.NewServer()
+	configv1connect.RegisterConfigServiceHandler(srv, service)
+	connecthttp.Mount(mux, srv, connecthttp.WithReadMaxBytes(0))
 	server := httptest.NewServer(mux)
 	t.Cleanup(server.Close)
 	t.Setenv("CONFIG_CENTER_SERVICE_TOKEN", "ct_operator")

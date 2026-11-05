@@ -4,15 +4,17 @@ import (
 	"context"
 	"fmt"
 	"testing"
-	"time"
 
-	"connectrpc.com/connect"
+	"connectrpc.com/connect/v2"
+	"connectrpc.com/connect/v2/connectinprocess"
 	v1 "github.com/lens077/control-tower/api/config/v1"
+	"github.com/lens077/control-tower/api/config/v1/configv1connect"
 	"github.com/lens077/control-tower/services/config/internal/biz"
 	"github.com/lens077/control-tower/services/config/internal/presence"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
+	"time"
 )
 
 // 历史版本存的是写入当时的明文。GetKey 把密钥打成 ****** 而 ListRevisions/GetRevision
@@ -60,16 +62,21 @@ func TestListClientConnections_MapsPresenceWithoutSecrets(t *testing.T) {
 	registry.StartWatch(identity, []presence.Target{target})
 
 	service := &ConfigService{presence: registry}
-	response, err := service.ListClientConnections(context.Background(), connect.NewRequest(&v1.ListClientConnectionsRequest{}))
+	// v2 的响应头经 CallInfo 写出:改走内存传输,客户端从 info 里断言。
+	server := connect.NewServer()
+	configv1connect.RegisterConfigServiceHandler(server, service)
+	client := configv1connect.NewConfigServiceClient(connect.NewClient(connectinprocess.New(server)))
+	ctx, info := connect.NewClientContext(t.Context())
+	response, err := client.ListClientConnections(ctx, &v1.ListClientConnectionsRequest{})
 	require.NoError(t, err)
-	require.Len(t, response.Msg.Connections, 1)
-	connection := response.Msg.Connections[0]
+	require.Len(t, response.Connections, 1)
+	connection := response.Connections[0]
 	assert.Equal(t, "cart-service", connection.ClientName)
 	assert.Equal(t, "cart-1", connection.ClientInstance)
 	assert.True(t, connection.Watching)
 	require.Len(t, connection.Targets, 1)
 	assert.Equal(t, "bootstrap.yaml", connection.Targets[0].Key)
-	assert.Equal(t, string(presence.ModeLocal), response.Header().Get(presence.ModeHeader))
+	assert.Equal(t, string(presence.ModeLocal), info.ResponseHeader().Get(presence.ModeHeader))
 }
 
 func TestToPBRevision_KeepsPlainValue(t *testing.T) {
@@ -136,14 +143,14 @@ func TestPutKeyRejectsMaskedSecretBeforePersistence(t *testing.T) {
 	repo := &putTrackingRepo{}
 	service := &ConfigService{uc: biz.NewConfigUseCase(repo, nil, nil, zap.NewNop())}
 
-	_, err := service.PutKey(context.Background(), connect.NewRequest(&v1.PutKeyRequest{
+	_, err := service.PutKey(context.Background(), &v1.PutKeyRequest{
 		Namespace:   "gateway",
 		Environment: "pre",
 		Key:         "credentials.txt",
 		Format:      v1.ConfigFormat_CONFIG_FORMAT_PLAINTEXT,
 		Value:       maskedValue,
 		IsSecret:    true,
-	}))
+	})
 
 	require.Error(t, err)
 	assert.Equal(t, connect.CodeInvalidArgument, connect.CodeOf(err))
@@ -154,14 +161,14 @@ func TestPutKeyCannotBypassMaskedPlaceholderGuardByClearingSecretFlag(t *testing
 	repo := &putTrackingRepo{}
 	service := &ConfigService{uc: biz.NewConfigUseCase(repo, nil, nil, zap.NewNop())}
 
-	_, err := service.PutKey(context.Background(), connect.NewRequest(&v1.PutKeyRequest{
+	_, err := service.PutKey(context.Background(), &v1.PutKeyRequest{
 		Namespace:   "gateway",
 		Environment: "pre",
 		Key:         "credentials.txt",
 		Format:      v1.ConfigFormat_CONFIG_FORMAT_PLAINTEXT,
 		Value:       maskedValue,
 		IsSecret:    false,
-	}))
+	})
 
 	require.Error(t, err)
 	assert.Equal(t, connect.CodeInvalidArgument, connect.CodeOf(err))

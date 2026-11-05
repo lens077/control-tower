@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"connectrpc.com/connect"
+	"connectrpc.com/connect/v2"
 )
 
 // Connect unary POST：走 connect.ErrorWriter，响应体必须是规范错误 JSON 且 details 非空。

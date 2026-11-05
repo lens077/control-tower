@@ -5,7 +5,7 @@ import (
 	"errors"
 	"time"
 
-	"connectrpc.com/connect"
+	"connectrpc.com/connect/v2"
 	v1 "github.com/lens077/control-tower/api/config/v1"
 	"github.com/lens077/control-tower/api/config/v1/configv1connect"
 	"github.com/lens077/control-tower/services/config/internal/biz"
@@ -51,15 +51,15 @@ func actor(ctx context.Context) string {
 func (s *ConfigService) toErr(err error) error {
 	switch {
 	case errors.Is(err, biz.ErrKeyNotFound), errors.Is(err, biz.ErrRevisionNotFound):
-		return connect.NewError(connect.CodeNotFound, err)
+		return connect.NewError(connect.CodeNotFound, err.Error()).WithCause(err)
 	case errors.Is(err, biz.ErrInvalidFormat):
-		return connect.NewError(connect.CodeInvalidArgument, err)
+		return connect.NewError(connect.CodeInvalidArgument, err.Error()).WithCause(err)
 	default:
-		return connect.NewError(connect.CodeInternal, err)
+		return connect.NewError(connect.CodeInternal, err.Error()).WithCause(err)
 	}
 }
 
-func (s *ConfigService) ListNamespaces(ctx context.Context, _ *connect.Request[v1.ListNamespacesRequest]) (*connect.Response[v1.ListNamespacesResponse], error) {
+func (s *ConfigService) ListNamespaces(ctx context.Context, _ *v1.ListNamespacesRequest) (*v1.ListNamespacesResponse, error) {
 	infos, err := s.uc.ListNamespaces(ctx)
 	if err != nil {
 		return nil, s.toErr(err)
@@ -72,10 +72,10 @@ func (s *ConfigService) ListNamespaces(ctx context.Context, _ *connect.Request[v
 			KeyCount:     n.KeyCount,
 		})
 	}
-	return connect.NewResponse(&v1.ListNamespacesResponse{Namespaces: pb}), nil
+	return &v1.ListNamespacesResponse{Namespaces: pb}, nil
 }
 
-func (s *ConfigService) ListClientConnections(_ context.Context, _ *connect.Request[v1.ListClientConnectionsRequest]) (*connect.Response[v1.ListClientConnectionsResponse], error) {
+func (s *ConfigService) ListClientConnections(ctx context.Context, _ *v1.ListClientConnectionsRequest) (*v1.ListClientConnectionsResponse, error) {
 	connections := s.presence.List()
 	pb := make([]*v1.ClientConnection, 0, len(connections))
 	for _, connection := range connections {
@@ -107,15 +107,18 @@ func (s *ConfigService) ListClientConnections(_ context.Context, _ *connect.Requ
 		}
 		pb = append(pb, item)
 	}
-	response := connect.NewResponse(&v1.ListClientConnectionsResponse{Connections: pb})
+	response := &v1.ListClientConnectionsResponse{Connections: pb}
 	// Keep the public protobuf payload stable while exposing the observation
 	// scope to the Web console through a CORS-exposed response header.
-	response.Header().Set(presence.ModeHeader, string(s.presence.Mode()))
+	// v2:响应头经 CallInfo 写出(跨域暴露给 Web 控制台的观察范围头,契约不变)。
+	if info, ok := connect.CallInfoForServerContext(ctx); ok {
+		info.ResponseHeader().Set(presence.ModeHeader, string(s.presence.Mode()))
+	}
 	return response, nil
 }
 
-func (s *ConfigService) ListKeys(ctx context.Context, c *connect.Request[v1.ListKeysRequest]) (*connect.Response[v1.ListKeysResponse], error) {
-	entries, err := s.uc.ListKeys(ctx, c.Msg.Namespace, c.Msg.Environment, c.Msg.KeyPrefix)
+func (s *ConfigService) ListKeys(ctx context.Context, c *v1.ListKeysRequest) (*v1.ListKeysResponse, error) {
+	entries, err := s.uc.ListKeys(ctx, c.Namespace, c.Environment, c.KeyPrefix)
 	if err != nil {
 		return nil, s.toErr(err)
 	}
@@ -123,60 +126,60 @@ func (s *ConfigService) ListKeys(ctx context.Context, c *connect.Request[v1.List
 	for _, e := range entries {
 		pb = append(pb, toPBEntry(e, true))
 	}
-	return connect.NewResponse(&v1.ListKeysResponse{Entries: pb}), nil
+	return &v1.ListKeysResponse{Entries: pb}, nil
 }
 
-func (s *ConfigService) GetKey(ctx context.Context, c *connect.Request[v1.GetKeyRequest]) (*connect.Response[v1.GetKeyResponse], error) {
+func (s *ConfigService) GetKey(ctx context.Context, c *v1.GetKeyRequest) (*v1.GetKeyResponse, error) {
 	// machine 主体的 namespace×environment 范围校验（设计：docs/design/machine-token.md）。
-	if err := machineScopeGuard(ctx, c.Msg.Namespace, c.Msg.Environment); err != nil {
+	if err := machineScopeGuard(ctx, c.Namespace, c.Environment); err != nil {
 		return nil, err
 	}
-	e, err := s.uc.GetKey(ctx, c.Msg.Namespace, c.Msg.Environment, c.Msg.Key)
+	e, err := s.uc.GetKey(ctx, c.Namespace, c.Environment, c.Key)
 	if err != nil {
 		return nil, s.toErr(err)
 	}
-	s.presence.RecordRead(clientIdentity(c), presence.Target{
-		Namespace: c.Msg.Namespace, Environment: c.Msg.Environment, Key: c.Msg.Key,
+	s.presence.RecordRead(clientIdentity(ctx), presence.Target{
+		Namespace: c.Namespace, Environment: c.Environment, Key: c.Key,
 	})
-	return connect.NewResponse(&v1.GetKeyResponse{Entry: toPBEntry(e, false)}), nil
+	return &v1.GetKeyResponse{Entry: toPBEntry(e, false)}, nil
 }
 
-func (s *ConfigService) PutKey(ctx context.Context, c *connect.Request[v1.PutKeyRequest]) (*connect.Response[v1.PutKeyResponse], error) {
+func (s *ConfigService) PutKey(ctx context.Context, c *v1.PutKeyRequest) (*v1.PutKeyResponse, error) {
 	// 读接口用该保留值脱敏；即使清掉 is_secret 也不能把它写回数据库。
-	if c.Msg.Value == maskedValue {
-		return nil, connect.NewError(connect.CodeInvalidArgument, errMaskedSecretPlaceholder)
+	if c.Value == maskedValue {
+		return nil, connect.NewError(connect.CodeInvalidArgument, errMaskedSecretPlaceholder.Error()).WithCause(errMaskedSecretPlaceholder)
 	}
 	// 只有 operator token 能走到这里（iam 白名单）；写范围与读范围同一条规则。
-	if err := machineScopeGuard(ctx, c.Msg.Namespace, c.Msg.Environment); err != nil {
+	if err := machineScopeGuard(ctx, c.Namespace, c.Environment); err != nil {
 		return nil, err
 	}
 	e, err := s.uc.PutKey(ctx, biz.PutParams{
-		Namespace:   c.Msg.Namespace,
-		Environment: c.Msg.Environment,
-		Key:         c.Msg.Key,
-		Format:      fromPBFormat(c.Msg.Format),
-		Value:       c.Msg.Value,
-		Comment:     c.Msg.Comment,
-		Description: c.Msg.Description,
-		IsSecret:    c.Msg.IsSecret,
+		Namespace:   c.Namespace,
+		Environment: c.Environment,
+		Key:         c.Key,
+		Format:      fromPBFormat(c.Format),
+		Value:       c.Value,
+		Comment:     c.Comment,
+		Description: c.Description,
+		IsSecret:    c.IsSecret,
 		Author:      actor(ctx),
 	})
 	if err != nil {
 		return nil, s.toErr(err)
 	}
-	return connect.NewResponse(&v1.PutKeyResponse{Entry: toPBEntry(e, false)}), nil
+	return &v1.PutKeyResponse{Entry: toPBEntry(e, false)}, nil
 }
 
-func (s *ConfigService) DeleteKey(ctx context.Context, c *connect.Request[v1.DeleteKeyRequest]) (*connect.Response[v1.DeleteKeyResponse], error) {
-	ok, err := s.uc.DeleteKey(ctx, c.Msg.Namespace, c.Msg.Environment, c.Msg.Key)
+func (s *ConfigService) DeleteKey(ctx context.Context, c *v1.DeleteKeyRequest) (*v1.DeleteKeyResponse, error) {
+	ok, err := s.uc.DeleteKey(ctx, c.Namespace, c.Environment, c.Key)
 	if err != nil {
 		return nil, s.toErr(err)
 	}
-	return connect.NewResponse(&v1.DeleteKeyResponse{Deleted: ok}), nil
+	return &v1.DeleteKeyResponse{Deleted: ok}, nil
 }
 
-func (s *ConfigService) ListRevisions(ctx context.Context, c *connect.Request[v1.ListRevisionsRequest]) (*connect.Response[v1.ListRevisionsResponse], error) {
-	revs, err := s.uc.ListRevisions(ctx, c.Msg.Namespace, c.Msg.Environment, c.Msg.Key)
+func (s *ConfigService) ListRevisions(ctx context.Context, c *v1.ListRevisionsRequest) (*v1.ListRevisionsResponse, error) {
+	revs, err := s.uc.ListRevisions(ctx, c.Namespace, c.Environment, c.Key)
 	if err != nil {
 		return nil, s.toErr(err)
 	}
@@ -184,23 +187,23 @@ func (s *ConfigService) ListRevisions(ctx context.Context, c *connect.Request[v1
 	for _, r := range revs {
 		pb = append(pb, toPBRevision(r))
 	}
-	return connect.NewResponse(&v1.ListRevisionsResponse{Revisions: pb}), nil
+	return &v1.ListRevisionsResponse{Revisions: pb}, nil
 }
 
-func (s *ConfigService) GetRevision(ctx context.Context, c *connect.Request[v1.GetRevisionRequest]) (*connect.Response[v1.GetRevisionResponse], error) {
-	r, err := s.uc.GetRevision(ctx, c.Msg.Namespace, c.Msg.Environment, c.Msg.Key, c.Msg.Version)
+func (s *ConfigService) GetRevision(ctx context.Context, c *v1.GetRevisionRequest) (*v1.GetRevisionResponse, error) {
+	r, err := s.uc.GetRevision(ctx, c.Namespace, c.Environment, c.Key, c.Version)
 	if err != nil {
 		return nil, s.toErr(err)
 	}
-	return connect.NewResponse(&v1.GetRevisionResponse{Revision: toPBRevision(r)}), nil
+	return &v1.GetRevisionResponse{Revision: toPBRevision(r)}, nil
 }
 
-func (s *ConfigService) Rollback(ctx context.Context, c *connect.Request[v1.RollbackRequest]) (*connect.Response[v1.RollbackResponse], error) {
-	e, err := s.uc.Rollback(ctx, c.Msg.Namespace, c.Msg.Environment, c.Msg.Key, c.Msg.Version, c.Msg.Comment, actor(ctx))
+func (s *ConfigService) Rollback(ctx context.Context, c *v1.RollbackRequest) (*v1.RollbackResponse, error) {
+	e, err := s.uc.Rollback(ctx, c.Namespace, c.Environment, c.Key, c.Version, c.Comment, actor(ctx))
 	if err != nil {
 		return nil, s.toErr(err)
 	}
-	return connect.NewResponse(&v1.RollbackResponse{Entry: toPBEntry(e, false)}), nil
+	return &v1.RollbackResponse{Entry: toPBEntry(e, false)}, nil
 }
 
 // watchHeartbeatInterval 空闲时的保活间隔。配置可能几天不变,
@@ -210,15 +213,15 @@ const watchHeartbeatInterval = 30 * time.Second
 // WatchKeys 订阅配置变更。建流先推一遍当前值(SNAPSHOT),之后推增量。
 func (s *ConfigService) WatchKeys(
 	ctx context.Context,
-	req *connect.Request[v1.WatchKeysRequest],
-	stream *connect.ServerStream[v1.WatchKeysResponse],
+	req *v1.WatchKeysRequest,
+	stream configv1connect.ConfigServiceWatchKeysServerStream,
 ) error {
-	ns, env, keys := req.Msg.GetNamespace(), req.Msg.GetEnvironment(), req.Msg.GetKeys()
+	ns, env, keys := req.GetNamespace(), req.GetEnvironment(), req.GetKeys()
 	// machine 主体的范围校验（建流一次 + 心跳复验，见下）。
 	if err := machineScopeGuard(ctx, ns, env); err != nil {
 		return err
 	}
-	identity := clientIdentity(req)
+	identity := clientIdentity(ctx)
 	targets := watchTargets(ns, env, keys)
 	disconnectReason := "client_closed"
 	s.presence.StartWatch(identity, targets)
@@ -249,7 +252,7 @@ func (s *ConfigService) WatchKeys(
 				// 结束这条流让客户端重连重取快照,而不是留一条收不到事件的死流。
 				disconnectReason = "config_feed_interrupted"
 				return connect.NewError(connect.CodeUnavailable,
-					errors.New("config change feed interrupted, reconnect to resync"))
+					"config change feed interrupted, reconnect to resync")
 			}
 			if err := s.sendEvent(ctx, stream, ev); err != nil {
 				disconnectReason = "send_failed"
@@ -267,7 +270,7 @@ func (s *ConfigService) WatchKeys(
 				} else if !active {
 					disconnectReason = "token_revoked"
 					return connect.NewError(connect.CodePermissionDenied,
-						errors.New("machine token revoked; stream terminated"))
+						"machine token revoked; stream terminated")
 				}
 			}
 			if err := stream.Send(&v1.WatchKeysResponse{
@@ -281,11 +284,17 @@ func (s *ConfigService) WatchKeys(
 	}
 }
 
-func clientIdentity[T any](req *connect.Request[T]) presence.Identity {
+// clientIdentity 从 CallInfo 读客户端自报的身份(仅用于 presence 展示)。
+// v2 拿不到请求包装对象;直调(单测)无 CallInfo 时返回空身份。
+func clientIdentity(ctx context.Context) presence.Identity {
+	info, _ := connect.CallInfoForServerContext(ctx)
+	if info == nil {
+		return presence.Identity{}
+	}
 	return presence.Identity{
-		Name:     req.Header().Get("x-config-center-client-name"),
-		Instance: req.Header().Get("x-config-center-client-instance"),
-		Version:  req.Header().Get("x-config-center-client-version"),
+		Name:     info.RequestHeader().Get("x-config-center-client-name"),
+		Instance: info.RequestHeader().Get("x-config-center-client-instance"),
+		Version:  info.RequestHeader().Get("x-config-center-client-version"),
 	}
 }
 
@@ -308,7 +317,7 @@ func watchTargets(namespace, environment string, keys []string) []presence.Targe
 // sendSnapshot 推送当前值。keys 为空时覆盖该 namespace+environment 下的全部 key。
 func (s *ConfigService) sendSnapshot(
 	ctx context.Context,
-	stream *connect.ServerStream[v1.WatchKeysResponse],
+	stream configv1connect.ConfigServiceWatchKeysServerStream,
 	ns, env string,
 	keys []string,
 ) error {
@@ -346,7 +355,7 @@ func (s *ConfigService) sendSnapshot(
 // sendEvent 把一条变更事件补齐成完整条目后下发。
 func (s *ConfigService) sendEvent(
 	ctx context.Context,
-	stream *connect.ServerStream[v1.WatchKeysResponse],
+	stream configv1connect.ConfigServiceWatchKeysServerStream,
 	ev biz.ChangeEvent,
 ) error {
 	deleted := &v1.WatchKeysResponse{

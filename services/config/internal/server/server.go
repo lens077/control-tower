@@ -9,9 +9,9 @@ import (
 	"fmt"
 	"net/http"
 
-	"connectrpc.com/connect"
+	"connectrpc.com/connect/v2"
+	"connectrpc.com/connect/v2/connecthttp"
 	connectcors "connectrpc.com/cors"
-	"connectrpc.com/validate"
 	"github.com/lens077/control-tower/api/config/v1/configv1connect"
 	"github.com/lens077/control-tower/api/system/v1/systemv1connect"
 	conf "github.com/lens077/control-tower/services/config/internal/conf/v1"
@@ -39,7 +39,7 @@ func NewHTTPServer(
 	configv1Service configv1connect.ConfigServiceHandler,
 	systemv1Service systemv1connect.SystemServiceHandler,
 	logger *zap.Logger,
-	connectOptions []connect.HandlerOption,
+	interceptors []connect.ServerInterceptor,
 	deps *data.Data, // 基础设施依赖
 	authorizer *iam.Authorizer,
 	info meta.AppInfo, // /healthz 回显 API 契约版本;构建版本直接读 meta.Version
@@ -47,24 +47,20 @@ func NewHTTPServer(
 
 	mux := http.NewServeMux()
 
-	// 将 validate 拦截器添加到选项中
-	combinedOptions := append(connectOptions, connect.WithInterceptors(validate.NewInterceptor()))
+	// connect v2:拦截器挂在 Server 上,对 Server 上全部服务生效;validate 已并进
+	// middleware 组装(最外层)。所有 Register 必须在 Mount 之前 —— Mount 按当前
+	// 过程表装配 HTTP 路由,后注册的过程不会被路由。
+	server := connect.NewServer(interceptors...)
 
 	// 注册 Connect 业务处理器
-	configv1connectPath, configv1connectHandler := configv1connect.NewConfigServiceHandler(
-		configv1Service,
-		combinedOptions...,
-	)
-	mux.Handle(configv1connectPath, configv1connectHandler)
+	configv1connect.RegisterConfigServiceHandler(server, configv1Service)
 
 	// 系统信息(控制台的资源与指标页)。挂在同一个 mux 上,因此自动继承
 	// IAM 中间件 —— 那里除 /healthz 外一律要求管理员 JWT,机器 service token
 	// 只能走 GetKey/WatchKeys,所以这组接口默认就是管理员专属,不必额外配白名单。
-	systemv1connectPath, systemv1connectHandler := systemv1connect.NewSystemServiceHandler(
-		systemv1Service,
-		combinedOptions...,
-	)
-	mux.Handle(systemv1connectPath, systemv1connectHandler)
+	systemv1connect.RegisterSystemServiceHandler(server, systemv1Service)
+
+	connecthttp.Mount(mux, server)
 
 	// 应用本身的健康检查
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
@@ -95,7 +91,7 @@ func NewHTTPServer(
 
 	handlerChain = withCORS(handlerChain, cfg.Server.Cors.AllowedOrigins)
 
-	server := &http.Server{
+	httpServer := &http.Server{
 		Addr:        cfg.Server.Addr,
 		Handler:     handlerChain,
 		ReadTimeout: cfg.Server.Http.ReadTimeout.AsDuration(),
@@ -115,11 +111,11 @@ func NewHTTPServer(
 		},
 		OnStop: func(ctx context.Context) error {
 			logger.Info("http server shutting down...")
-			return server.Shutdown(ctx)
+			return httpServer.Shutdown(ctx)
 		},
 	})
 
-	return server, nil
+	return httpServer, nil
 }
 
 // withCORS 为处理器添加跨域支持

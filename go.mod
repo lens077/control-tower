@@ -3,19 +3,19 @@ module github.com/lens077/control-tower
 go 1.26.5
 
 require (
-	buf.build/gen/go/bufbuild/protovalidate/protocolbuffers/go v1.36.12-20260825204119-511051f7f437.1
-	buf.build/go/protovalidate v1.3.0
-	connectrpc.com/connect v1.20.0
+	buf.build/gen/go/bufbuild/protovalidate/protocolbuffers/go v1.36.12-20260825204119-511051f7f437.2
+	buf.build/go/protovalidate v1.4.0
+	connectrpc.com/connect v1.21.0
 	connectrpc.com/cors v0.1.0
-	connectrpc.com/otelconnect v0.9.0
-	connectrpc.com/validate v0.6.0
+	connectrpc.com/otelconnect v0.12.0
+	connectrpc.com/validate v0.9.0
 	github.com/casbin/casbin/v2 v2.103.0
 	github.com/exaring/otelpgx v0.11.1
 	github.com/golang-jwt/jwt/v5 v5.3.1
 	github.com/google/uuid v1.6.0
 	github.com/hashicorp/consul/api v1.34.4
 	github.com/jackc/pgx/v5 v5.10.0
-	github.com/lens077/go-connect-kit v0.4.3
+	github.com/lens077/go-connect-kit v1.0.0
 	github.com/pelletier/go-toml/v2 v2.4.3
 	github.com/pressly/goose/v3 v3.27.3
 	github.com/redis/go-redis/v9 v9.22.0
@@ -40,7 +40,9 @@ require (
 )
 
 require (
+	cel.dev/cel-go v0.32.0 // indirect
 	cel.dev/expr v0.25.3 // indirect
+	connectrpc.com/connect/v2 v2.0.2 // indirect
 	github.com/antlr4-go/antlr/v4 v4.13.1 // indirect
 	github.com/armon/go-metrics v0.4.1 // indirect
 	github.com/bmatcuk/doublestar/v4 v4.6.1 // indirect
@@ -110,3 +112,5 @@ require (
 	google.golang.org/genproto/googleapis/api v0.0.0-20260819154853-08b0e4226688 // indirect
 	google.golang.org/grpc v1.83.1 // indirect
 )
+
+replace github.com/lens077/go-connect-kit => /Users/lens/lens077/go-connect-kit

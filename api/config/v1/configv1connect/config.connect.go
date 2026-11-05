@@ -5,67 +5,151 @@
 package configv1connect
 
 import (
-	connect "connectrpc.com/connect"
+	connect "connectrpc.com/connect/v2"
 	context "context"
-	errors "errors"
 	v1 "github.com/lens077/control-tower/api/config/v1"
-	http "net/http"
-	strings "strings"
+	sync "sync"
 )
-
-// This is a compile-time assertion to ensure that this generated file and the connect package are
-// compatible. If you get a compiler error that this constant is not defined, this code was
-// generated with a version of connect newer than the one compiled into your binary. You can fix the
-// problem by either regenerating this code with an older version of connect or updating the connect
-// version compiled into your binary.
-const _ = connect.IsAtLeastVersion1_13_0
 
 const (
 	// ConfigServiceName is the fully-qualified name of the ConfigService service.
 	ConfigServiceName = "config.v1.ConfigService"
 )
 
-// These constants are the fully-qualified names of the RPCs defined in this package. They're
-// exposed at runtime as Spec.Procedure and as the final two segments of the HTTP route.
+// These constants are the procedure names of the RPCs defined in this package. They're exposed at
+// runtime as Spec.Procedure and as the final two segments of the HTTP route.
 //
 // Note that these are different from the fully-qualified method names used by
 // google.golang.org/protobuf/reflect/protoreflect. To convert from these constants to
 // reflection-formatted method names, remove the leading slash and convert the remaining slash to a
 // period.
 const (
-	// ConfigServiceListClientConnectionsProcedure is the fully-qualified name of the ConfigService's
+	// ConfigServiceListClientConnectionsProcedure is the procedure name of the ConfigService's
 	// ListClientConnections RPC.
 	ConfigServiceListClientConnectionsProcedure = "/config.v1.ConfigService/ListClientConnections"
-	// ConfigServiceListNamespacesProcedure is the fully-qualified name of the ConfigService's
-	// ListNamespaces RPC.
-	ConfigServiceListNamespacesProcedure = "/config.v1.ConfigService/ListNamespaces"
-	// ConfigServiceListKeysProcedure is the fully-qualified name of the ConfigService's ListKeys RPC.
-	ConfigServiceListKeysProcedure = "/config.v1.ConfigService/ListKeys"
-	// ConfigServiceGetKeyProcedure is the fully-qualified name of the ConfigService's GetKey RPC.
-	ConfigServiceGetKeyProcedure = "/config.v1.ConfigService/GetKey"
-	// ConfigServicePutKeyProcedure is the fully-qualified name of the ConfigService's PutKey RPC.
-	ConfigServicePutKeyProcedure = "/config.v1.ConfigService/PutKey"
-	// ConfigServiceDeleteKeyProcedure is the fully-qualified name of the ConfigService's DeleteKey RPC.
-	ConfigServiceDeleteKeyProcedure = "/config.v1.ConfigService/DeleteKey"
-	// ConfigServiceListRevisionsProcedure is the fully-qualified name of the ConfigService's
-	// ListRevisions RPC.
-	ConfigServiceListRevisionsProcedure = "/config.v1.ConfigService/ListRevisions"
-	// ConfigServiceGetRevisionProcedure is the fully-qualified name of the ConfigService's GetRevision
+	// ConfigServiceListNamespacesProcedure is the procedure name of the ConfigService's ListNamespaces
 	// RPC.
+	ConfigServiceListNamespacesProcedure = "/config.v1.ConfigService/ListNamespaces"
+	// ConfigServiceListKeysProcedure is the procedure name of the ConfigService's ListKeys RPC.
+	ConfigServiceListKeysProcedure = "/config.v1.ConfigService/ListKeys"
+	// ConfigServiceGetKeyProcedure is the procedure name of the ConfigService's GetKey RPC.
+	ConfigServiceGetKeyProcedure = "/config.v1.ConfigService/GetKey"
+	// ConfigServicePutKeyProcedure is the procedure name of the ConfigService's PutKey RPC.
+	ConfigServicePutKeyProcedure = "/config.v1.ConfigService/PutKey"
+	// ConfigServiceDeleteKeyProcedure is the procedure name of the ConfigService's DeleteKey RPC.
+	ConfigServiceDeleteKeyProcedure = "/config.v1.ConfigService/DeleteKey"
+	// ConfigServiceListRevisionsProcedure is the procedure name of the ConfigService's ListRevisions
+	// RPC.
+	ConfigServiceListRevisionsProcedure = "/config.v1.ConfigService/ListRevisions"
+	// ConfigServiceGetRevisionProcedure is the procedure name of the ConfigService's GetRevision RPC.
 	ConfigServiceGetRevisionProcedure = "/config.v1.ConfigService/GetRevision"
-	// ConfigServiceRollbackProcedure is the fully-qualified name of the ConfigService's Rollback RPC.
+	// ConfigServiceRollbackProcedure is the procedure name of the ConfigService's Rollback RPC.
 	ConfigServiceRollbackProcedure = "/config.v1.ConfigService/Rollback"
-	// ConfigServiceWatchKeysProcedure is the fully-qualified name of the ConfigService's WatchKeys RPC.
+	// ConfigServiceWatchKeysProcedure is the procedure name of the ConfigService's WatchKeys RPC.
 	ConfigServiceWatchKeysProcedure = "/config.v1.ConfigService/WatchKeys"
-	// ConfigServiceListMachineTokensProcedure is the fully-qualified name of the ConfigService's
+	// ConfigServiceListMachineTokensProcedure is the procedure name of the ConfigService's
 	// ListMachineTokens RPC.
 	ConfigServiceListMachineTokensProcedure = "/config.v1.ConfigService/ListMachineTokens"
-	// ConfigServiceIssueMachineTokenProcedure is the fully-qualified name of the ConfigService's
+	// ConfigServiceIssueMachineTokenProcedure is the procedure name of the ConfigService's
 	// IssueMachineToken RPC.
 	ConfigServiceIssueMachineTokenProcedure = "/config.v1.ConfigService/IssueMachineToken"
-	// ConfigServiceRevokeMachineTokenProcedure is the fully-qualified name of the ConfigService's
+	// ConfigServiceRevokeMachineTokenProcedure is the procedure name of the ConfigService's
 	// RevokeMachineToken RPC.
 	ConfigServiceRevokeMachineTokenProcedure = "/config.v1.ConfigService/RevokeMachineToken"
+)
+
+var (
+	configServiceListClientConnectionsSpec = sync.OnceValue(func() connect.Spec {
+		return connect.Spec{
+			StreamType: connect.StreamTypeUnary,
+			Schema:     v1.File_api_config_v1_config_proto.Services().ByName("ConfigService").Methods().ByName("ListClientConnections"),
+			Procedure:  ConfigServiceListClientConnectionsProcedure,
+		}
+	})
+	configServiceListNamespacesSpec = sync.OnceValue(func() connect.Spec {
+		return connect.Spec{
+			StreamType: connect.StreamTypeUnary,
+			Schema:     v1.File_api_config_v1_config_proto.Services().ByName("ConfigService").Methods().ByName("ListNamespaces"),
+			Procedure:  ConfigServiceListNamespacesProcedure,
+		}
+	})
+	configServiceListKeysSpec = sync.OnceValue(func() connect.Spec {
+		return connect.Spec{
+			StreamType: connect.StreamTypeUnary,
+			Schema:     v1.File_api_config_v1_config_proto.Services().ByName("ConfigService").Methods().ByName("ListKeys"),
+			Procedure:  ConfigServiceListKeysProcedure,
+		}
+	})
+	configServiceGetKeySpec = sync.OnceValue(func() connect.Spec {
+		return connect.Spec{
+			StreamType: connect.StreamTypeUnary,
+			Schema:     v1.File_api_config_v1_config_proto.Services().ByName("ConfigService").Methods().ByName("GetKey"),
+			Procedure:  ConfigServiceGetKeyProcedure,
+		}
+	})
+	configServicePutKeySpec = sync.OnceValue(func() connect.Spec {
+		return connect.Spec{
+			StreamType: connect.StreamTypeUnary,
+			Schema:     v1.File_api_config_v1_config_proto.Services().ByName("ConfigService").Methods().ByName("PutKey"),
+			Procedure:  ConfigServicePutKeyProcedure,
+		}
+	})
+	configServiceDeleteKeySpec = sync.OnceValue(func() connect.Spec {
+		return connect.Spec{
+			StreamType: connect.StreamTypeUnary,
+			Schema:     v1.File_api_config_v1_config_proto.Services().ByName("ConfigService").Methods().ByName("DeleteKey"),
+			Procedure:  ConfigServiceDeleteKeyProcedure,
+		}
+	})
+	configServiceListRevisionsSpec = sync.OnceValue(func() connect.Spec {
+		return connect.Spec{
+			StreamType: connect.StreamTypeUnary,
+			Schema:     v1.File_api_config_v1_config_proto.Services().ByName("ConfigService").Methods().ByName("ListRevisions"),
+			Procedure:  ConfigServiceListRevisionsProcedure,
+		}
+	})
+	configServiceGetRevisionSpec = sync.OnceValue(func() connect.Spec {
+		return connect.Spec{
+			StreamType: connect.StreamTypeUnary,
+			Schema:     v1.File_api_config_v1_config_proto.Services().ByName("ConfigService").Methods().ByName("GetRevision"),
+			Procedure:  ConfigServiceGetRevisionProcedure,
+		}
+	})
+	configServiceRollbackSpec = sync.OnceValue(func() connect.Spec {
+		return connect.Spec{
+			StreamType: connect.StreamTypeUnary,
+			Schema:     v1.File_api_config_v1_config_proto.Services().ByName("ConfigService").Methods().ByName("Rollback"),
+			Procedure:  ConfigServiceRollbackProcedure,
+		}
+	})
+	configServiceWatchKeysSpec = sync.OnceValue(func() connect.Spec {
+		return connect.Spec{
+			StreamType: connect.StreamTypeServer,
+			Schema:     v1.File_api_config_v1_config_proto.Services().ByName("ConfigService").Methods().ByName("WatchKeys"),
+			Procedure:  ConfigServiceWatchKeysProcedure,
+		}
+	})
+	configServiceListMachineTokensSpec = sync.OnceValue(func() connect.Spec {
+		return connect.Spec{
+			StreamType: connect.StreamTypeUnary,
+			Schema:     v1.File_api_config_v1_config_proto.Services().ByName("ConfigService").Methods().ByName("ListMachineTokens"),
+			Procedure:  ConfigServiceListMachineTokensProcedure,
+		}
+	})
+	configServiceIssueMachineTokenSpec = sync.OnceValue(func() connect.Spec {
+		return connect.Spec{
+			StreamType: connect.StreamTypeUnary,
+			Schema:     v1.File_api_config_v1_config_proto.Services().ByName("ConfigService").Methods().ByName("IssueMachineToken"),
+			Procedure:  ConfigServiceIssueMachineTokenProcedure,
+		}
+	})
+	configServiceRevokeMachineTokenSpec = sync.OnceValue(func() connect.Spec {
+		return connect.Spec{
+			StreamType: connect.StreamTypeUnary,
+			Schema:     v1.File_api_config_v1_config_proto.Services().ByName("ConfigService").Methods().ByName("RevokeMachineToken"),
+			Procedure:  ConfigServiceRevokeMachineTokenProcedure,
+		}
+	})
 )
 
 // ConfigServiceClient is a client for the config.v1.ConfigService service.
@@ -74,206 +158,58 @@ type ConfigServiceClient interface {
 	// The response header x-config-center-presence-mode declares whether the
 	// result is process-local, Redis TTL aggregated, or a local fallback.
 	// It is administrator-only; machine service tokens cannot call it.
-	ListClientConnections(context.Context, *connect.Request[v1.ListClientConnectionsRequest]) (*connect.Response[v1.ListClientConnectionsResponse], error)
+	ListClientConnections(context.Context, *v1.ListClientConnectionsRequest) (*v1.ListClientConnectionsResponse, error)
 	// 列出配置中心已有的 namespace 及其下已有配置的 environment,供前端下拉选择(免手输)。
-	ListNamespaces(context.Context, *connect.Request[v1.ListNamespacesRequest]) (*connect.Response[v1.ListNamespacesResponse], error)
+	ListNamespaces(context.Context, *v1.ListNamespacesRequest) (*v1.ListNamespacesResponse, error)
 	// 列出某 namespace+environment 下(可按前缀过滤)的 key 元数据,不返回大 value。
-	ListKeys(context.Context, *connect.Request[v1.ListKeysRequest]) (*connect.Response[v1.ListKeysResponse], error)
+	ListKeys(context.Context, *v1.ListKeysRequest) (*v1.ListKeysResponse, error)
 	// 取单个 key 的当前值。
-	GetKey(context.Context, *connect.Request[v1.GetKeyRequest]) (*connect.Response[v1.GetKeyResponse], error)
+	GetKey(context.Context, *v1.GetKeyRequest) (*v1.GetKeyResponse, error)
 	// 创建或更新 key,产生一条新的版本记录;服务端按 format 校验语法。
-	PutKey(context.Context, *connect.Request[v1.PutKeyRequest]) (*connect.Response[v1.PutKeyResponse], error)
+	PutKey(context.Context, *v1.PutKeyRequest) (*v1.PutKeyResponse, error)
 	// 删除 key(连同其历史)。
-	DeleteKey(context.Context, *connect.Request[v1.DeleteKeyRequest]) (*connect.Response[v1.DeleteKeyResponse], error)
+	DeleteKey(context.Context, *v1.DeleteKeyRequest) (*v1.DeleteKeyResponse, error)
 	// 列出某 key 的版本历史。
-	ListRevisions(context.Context, *connect.Request[v1.ListRevisionsRequest]) (*connect.Response[v1.ListRevisionsResponse], error)
+	ListRevisions(context.Context, *v1.ListRevisionsRequest) (*v1.ListRevisionsResponse, error)
 	// 取某个历史版本的值。
-	GetRevision(context.Context, *connect.Request[v1.GetRevisionRequest]) (*connect.Response[v1.GetRevisionResponse], error)
+	GetRevision(context.Context, *v1.GetRevisionRequest) (*v1.GetRevisionResponse, error)
 	// 回滚:用指定历史版本的值写为新版本。
-	Rollback(context.Context, *connect.Request[v1.RollbackRequest]) (*connect.Response[v1.RollbackResponse], error)
+	Rollback(context.Context, *v1.RollbackRequest) (*v1.RollbackResponse, error)
 	// 订阅配置变更(服务端流)。建流时先推一遍当前值(SNAPSHOT),之后推增量。
 	// 断线重连会重新收到 SNAPSHOT —— 断连期间漏掉的变更由此自愈,客户端无需自己补偿。
-	WatchKeys(context.Context, *connect.Request[v1.WatchKeysRequest]) (*connect.ServerStreamForClient[v1.WatchKeysResponse], error)
+	WatchKeys(context.Context, *v1.WatchKeysRequest) (ConfigServiceWatchKeysClientStream, error)
 	// ── machine token 管理(仅管理员 JWT;machine token 自身不可调用)。
 	// 设计见 docs/design/machine-token.md。签发明文仅在 IssueMachineToken 响应出现一次,
 	// 服务端只存 SHA-256;轮换 = Issue 新 + 换 Secret + Revoke 旧(两代重叠)。
-	ListMachineTokens(context.Context, *connect.Request[v1.ListMachineTokensRequest]) (*connect.Response[v1.ListMachineTokensResponse], error)
-	IssueMachineToken(context.Context, *connect.Request[v1.IssueMachineTokenRequest]) (*connect.Response[v1.IssueMachineTokenResponse], error)
-	RevokeMachineToken(context.Context, *connect.Request[v1.RevokeMachineTokenRequest]) (*connect.Response[v1.RevokeMachineTokenResponse], error)
+	ListMachineTokens(context.Context, *v1.ListMachineTokensRequest) (*v1.ListMachineTokensResponse, error)
+	IssueMachineToken(context.Context, *v1.IssueMachineTokenRequest) (*v1.IssueMachineTokenResponse, error)
+	RevokeMachineToken(context.Context, *v1.RevokeMachineTokenRequest) (*v1.RevokeMachineTokenResponse, error)
 }
 
-// NewConfigServiceClient constructs a client for the config.v1.ConfigService service. By default,
-// it uses the Connect protocol with the binary Protobuf Codec, asks for gzipped responses, and
-// sends uncompressed requests. To use the gRPC or gRPC-Web protocols, supply the connect.WithGRPC()
-// or connect.WithGRPCWeb() options.
-//
-// The URL supplied here should be the base URL for the Connect or gRPC server (for example,
-// http://api.acme.com or https://acme.com/grpc).
-func NewConfigServiceClient(httpClient connect.HTTPClient, baseURL string, opts ...connect.ClientOption) ConfigServiceClient {
-	baseURL = strings.TrimRight(baseURL, "/")
-	configServiceMethods := v1.File_api_config_v1_config_proto.Services().ByName("ConfigService").Methods()
-	return &configServiceClient{
-		listClientConnections: connect.NewClient[v1.ListClientConnectionsRequest, v1.ListClientConnectionsResponse](
-			httpClient,
-			baseURL+ConfigServiceListClientConnectionsProcedure,
-			connect.WithSchema(configServiceMethods.ByName("ListClientConnections")),
-			connect.WithClientOptions(opts...),
-		),
-		listNamespaces: connect.NewClient[v1.ListNamespacesRequest, v1.ListNamespacesResponse](
-			httpClient,
-			baseURL+ConfigServiceListNamespacesProcedure,
-			connect.WithSchema(configServiceMethods.ByName("ListNamespaces")),
-			connect.WithClientOptions(opts...),
-		),
-		listKeys: connect.NewClient[v1.ListKeysRequest, v1.ListKeysResponse](
-			httpClient,
-			baseURL+ConfigServiceListKeysProcedure,
-			connect.WithSchema(configServiceMethods.ByName("ListKeys")),
-			connect.WithClientOptions(opts...),
-		),
-		getKey: connect.NewClient[v1.GetKeyRequest, v1.GetKeyResponse](
-			httpClient,
-			baseURL+ConfigServiceGetKeyProcedure,
-			connect.WithSchema(configServiceMethods.ByName("GetKey")),
-			connect.WithClientOptions(opts...),
-		),
-		putKey: connect.NewClient[v1.PutKeyRequest, v1.PutKeyResponse](
-			httpClient,
-			baseURL+ConfigServicePutKeyProcedure,
-			connect.WithSchema(configServiceMethods.ByName("PutKey")),
-			connect.WithClientOptions(opts...),
-		),
-		deleteKey: connect.NewClient[v1.DeleteKeyRequest, v1.DeleteKeyResponse](
-			httpClient,
-			baseURL+ConfigServiceDeleteKeyProcedure,
-			connect.WithSchema(configServiceMethods.ByName("DeleteKey")),
-			connect.WithClientOptions(opts...),
-		),
-		listRevisions: connect.NewClient[v1.ListRevisionsRequest, v1.ListRevisionsResponse](
-			httpClient,
-			baseURL+ConfigServiceListRevisionsProcedure,
-			connect.WithSchema(configServiceMethods.ByName("ListRevisions")),
-			connect.WithClientOptions(opts...),
-		),
-		getRevision: connect.NewClient[v1.GetRevisionRequest, v1.GetRevisionResponse](
-			httpClient,
-			baseURL+ConfigServiceGetRevisionProcedure,
-			connect.WithSchema(configServiceMethods.ByName("GetRevision")),
-			connect.WithClientOptions(opts...),
-		),
-		rollback: connect.NewClient[v1.RollbackRequest, v1.RollbackResponse](
-			httpClient,
-			baseURL+ConfigServiceRollbackProcedure,
-			connect.WithSchema(configServiceMethods.ByName("Rollback")),
-			connect.WithClientOptions(opts...),
-		),
-		watchKeys: connect.NewClient[v1.WatchKeysRequest, v1.WatchKeysResponse](
-			httpClient,
-			baseURL+ConfigServiceWatchKeysProcedure,
-			connect.WithSchema(configServiceMethods.ByName("WatchKeys")),
-			connect.WithClientOptions(opts...),
-		),
-		listMachineTokens: connect.NewClient[v1.ListMachineTokensRequest, v1.ListMachineTokensResponse](
-			httpClient,
-			baseURL+ConfigServiceListMachineTokensProcedure,
-			connect.WithSchema(configServiceMethods.ByName("ListMachineTokens")),
-			connect.WithClientOptions(opts...),
-		),
-		issueMachineToken: connect.NewClient[v1.IssueMachineTokenRequest, v1.IssueMachineTokenResponse](
-			httpClient,
-			baseURL+ConfigServiceIssueMachineTokenProcedure,
-			connect.WithSchema(configServiceMethods.ByName("IssueMachineToken")),
-			connect.WithClientOptions(opts...),
-		),
-		revokeMachineToken: connect.NewClient[v1.RevokeMachineTokenRequest, v1.RevokeMachineTokenResponse](
-			httpClient,
-			baseURL+ConfigServiceRevokeMachineTokenProcedure,
-			connect.WithSchema(configServiceMethods.ByName("RevokeMachineToken")),
-			connect.WithClientOptions(opts...),
-		),
+// NewConfigServiceClient constructs a client for the config.v1.ConfigService service. Multiple
+// service clients may share a single connect.Client.
+func NewConfigServiceClient(client *connect.Client) ConfigServiceClient {
+	return &configServiceClient{client: client}
+}
+
+// ConfigServiceWatchKeysClientStream is the client stream for the ConfigService's WatchKeys RPC.
+type ConfigServiceWatchKeysClientStream struct {
+	stream connect.ClientStream
+}
+
+// Receive returns the next response message from the server.
+func (s ConfigServiceWatchKeysClientStream) Receive() (*v1.WatchKeysResponse, error) {
+	var res v1.WatchKeysResponse
+	if err := s.stream.Receive(&res); err != nil {
+		return nil, err
 	}
+	return &res, nil
 }
 
-// configServiceClient implements ConfigServiceClient.
-type configServiceClient struct {
-	listClientConnections *connect.Client[v1.ListClientConnectionsRequest, v1.ListClientConnectionsResponse]
-	listNamespaces        *connect.Client[v1.ListNamespacesRequest, v1.ListNamespacesResponse]
-	listKeys              *connect.Client[v1.ListKeysRequest, v1.ListKeysResponse]
-	getKey                *connect.Client[v1.GetKeyRequest, v1.GetKeyResponse]
-	putKey                *connect.Client[v1.PutKeyRequest, v1.PutKeyResponse]
-	deleteKey             *connect.Client[v1.DeleteKeyRequest, v1.DeleteKeyResponse]
-	listRevisions         *connect.Client[v1.ListRevisionsRequest, v1.ListRevisionsResponse]
-	getRevision           *connect.Client[v1.GetRevisionRequest, v1.GetRevisionResponse]
-	rollback              *connect.Client[v1.RollbackRequest, v1.RollbackResponse]
-	watchKeys             *connect.Client[v1.WatchKeysRequest, v1.WatchKeysResponse]
-	listMachineTokens     *connect.Client[v1.ListMachineTokensRequest, v1.ListMachineTokensResponse]
-	issueMachineToken     *connect.Client[v1.IssueMachineTokenRequest, v1.IssueMachineTokenResponse]
-	revokeMachineToken    *connect.Client[v1.RevokeMachineTokenRequest, v1.RevokeMachineTokenResponse]
-}
-
-// ListClientConnections calls config.v1.ConfigService.ListClientConnections.
-func (c *configServiceClient) ListClientConnections(ctx context.Context, req *connect.Request[v1.ListClientConnectionsRequest]) (*connect.Response[v1.ListClientConnectionsResponse], error) {
-	return c.listClientConnections.CallUnary(ctx, req)
-}
-
-// ListNamespaces calls config.v1.ConfigService.ListNamespaces.
-func (c *configServiceClient) ListNamespaces(ctx context.Context, req *connect.Request[v1.ListNamespacesRequest]) (*connect.Response[v1.ListNamespacesResponse], error) {
-	return c.listNamespaces.CallUnary(ctx, req)
-}
-
-// ListKeys calls config.v1.ConfigService.ListKeys.
-func (c *configServiceClient) ListKeys(ctx context.Context, req *connect.Request[v1.ListKeysRequest]) (*connect.Response[v1.ListKeysResponse], error) {
-	return c.listKeys.CallUnary(ctx, req)
-}
-
-// GetKey calls config.v1.ConfigService.GetKey.
-func (c *configServiceClient) GetKey(ctx context.Context, req *connect.Request[v1.GetKeyRequest]) (*connect.Response[v1.GetKeyResponse], error) {
-	return c.getKey.CallUnary(ctx, req)
-}
-
-// PutKey calls config.v1.ConfigService.PutKey.
-func (c *configServiceClient) PutKey(ctx context.Context, req *connect.Request[v1.PutKeyRequest]) (*connect.Response[v1.PutKeyResponse], error) {
-	return c.putKey.CallUnary(ctx, req)
-}
-
-// DeleteKey calls config.v1.ConfigService.DeleteKey.
-func (c *configServiceClient) DeleteKey(ctx context.Context, req *connect.Request[v1.DeleteKeyRequest]) (*connect.Response[v1.DeleteKeyResponse], error) {
-	return c.deleteKey.CallUnary(ctx, req)
-}
-
-// ListRevisions calls config.v1.ConfigService.ListRevisions.
-func (c *configServiceClient) ListRevisions(ctx context.Context, req *connect.Request[v1.ListRevisionsRequest]) (*connect.Response[v1.ListRevisionsResponse], error) {
-	return c.listRevisions.CallUnary(ctx, req)
-}
-
-// GetRevision calls config.v1.ConfigService.GetRevision.
-func (c *configServiceClient) GetRevision(ctx context.Context, req *connect.Request[v1.GetRevisionRequest]) (*connect.Response[v1.GetRevisionResponse], error) {
-	return c.getRevision.CallUnary(ctx, req)
-}
-
-// Rollback calls config.v1.ConfigService.Rollback.
-func (c *configServiceClient) Rollback(ctx context.Context, req *connect.Request[v1.RollbackRequest]) (*connect.Response[v1.RollbackResponse], error) {
-	return c.rollback.CallUnary(ctx, req)
-}
-
-// WatchKeys calls config.v1.ConfigService.WatchKeys.
-func (c *configServiceClient) WatchKeys(ctx context.Context, req *connect.Request[v1.WatchKeysRequest]) (*connect.ServerStreamForClient[v1.WatchKeysResponse], error) {
-	return c.watchKeys.CallServerStream(ctx, req)
-}
-
-// ListMachineTokens calls config.v1.ConfigService.ListMachineTokens.
-func (c *configServiceClient) ListMachineTokens(ctx context.Context, req *connect.Request[v1.ListMachineTokensRequest]) (*connect.Response[v1.ListMachineTokensResponse], error) {
-	return c.listMachineTokens.CallUnary(ctx, req)
-}
-
-// IssueMachineToken calls config.v1.ConfigService.IssueMachineToken.
-func (c *configServiceClient) IssueMachineToken(ctx context.Context, req *connect.Request[v1.IssueMachineTokenRequest]) (*connect.Response[v1.IssueMachineTokenResponse], error) {
-	return c.issueMachineToken.CallUnary(ctx, req)
-}
-
-// RevokeMachineToken calls config.v1.ConfigService.RevokeMachineToken.
-func (c *configServiceClient) RevokeMachineToken(ctx context.Context, req *connect.Request[v1.RevokeMachineTokenRequest]) (*connect.Response[v1.RevokeMachineTokenResponse], error) {
-	return c.revokeMachineToken.CallUnary(ctx, req)
+// Close releases the stream's resources. It is idempotent and is typically deferred to clean up a
+// stream abandoned before io.EOF.
+func (s ConfigServiceWatchKeysClientStream) Close() error {
+	return s.stream.Close()
 }
 
 // ConfigServiceHandler is an implementation of the config.v1.ConfigService service.
@@ -282,204 +218,383 @@ type ConfigServiceHandler interface {
 	// The response header x-config-center-presence-mode declares whether the
 	// result is process-local, Redis TTL aggregated, or a local fallback.
 	// It is administrator-only; machine service tokens cannot call it.
-	ListClientConnections(context.Context, *connect.Request[v1.ListClientConnectionsRequest]) (*connect.Response[v1.ListClientConnectionsResponse], error)
+	ListClientConnections(context.Context, *v1.ListClientConnectionsRequest) (*v1.ListClientConnectionsResponse, error)
 	// 列出配置中心已有的 namespace 及其下已有配置的 environment,供前端下拉选择(免手输)。
-	ListNamespaces(context.Context, *connect.Request[v1.ListNamespacesRequest]) (*connect.Response[v1.ListNamespacesResponse], error)
+	ListNamespaces(context.Context, *v1.ListNamespacesRequest) (*v1.ListNamespacesResponse, error)
 	// 列出某 namespace+environment 下(可按前缀过滤)的 key 元数据,不返回大 value。
-	ListKeys(context.Context, *connect.Request[v1.ListKeysRequest]) (*connect.Response[v1.ListKeysResponse], error)
+	ListKeys(context.Context, *v1.ListKeysRequest) (*v1.ListKeysResponse, error)
 	// 取单个 key 的当前值。
-	GetKey(context.Context, *connect.Request[v1.GetKeyRequest]) (*connect.Response[v1.GetKeyResponse], error)
+	GetKey(context.Context, *v1.GetKeyRequest) (*v1.GetKeyResponse, error)
 	// 创建或更新 key,产生一条新的版本记录;服务端按 format 校验语法。
-	PutKey(context.Context, *connect.Request[v1.PutKeyRequest]) (*connect.Response[v1.PutKeyResponse], error)
+	PutKey(context.Context, *v1.PutKeyRequest) (*v1.PutKeyResponse, error)
 	// 删除 key(连同其历史)。
-	DeleteKey(context.Context, *connect.Request[v1.DeleteKeyRequest]) (*connect.Response[v1.DeleteKeyResponse], error)
+	DeleteKey(context.Context, *v1.DeleteKeyRequest) (*v1.DeleteKeyResponse, error)
 	// 列出某 key 的版本历史。
-	ListRevisions(context.Context, *connect.Request[v1.ListRevisionsRequest]) (*connect.Response[v1.ListRevisionsResponse], error)
+	ListRevisions(context.Context, *v1.ListRevisionsRequest) (*v1.ListRevisionsResponse, error)
 	// 取某个历史版本的值。
-	GetRevision(context.Context, *connect.Request[v1.GetRevisionRequest]) (*connect.Response[v1.GetRevisionResponse], error)
+	GetRevision(context.Context, *v1.GetRevisionRequest) (*v1.GetRevisionResponse, error)
 	// 回滚:用指定历史版本的值写为新版本。
-	Rollback(context.Context, *connect.Request[v1.RollbackRequest]) (*connect.Response[v1.RollbackResponse], error)
+	Rollback(context.Context, *v1.RollbackRequest) (*v1.RollbackResponse, error)
 	// 订阅配置变更(服务端流)。建流时先推一遍当前值(SNAPSHOT),之后推增量。
 	// 断线重连会重新收到 SNAPSHOT —— 断连期间漏掉的变更由此自愈,客户端无需自己补偿。
-	WatchKeys(context.Context, *connect.Request[v1.WatchKeysRequest], *connect.ServerStream[v1.WatchKeysResponse]) error
+	WatchKeys(context.Context, *v1.WatchKeysRequest, ConfigServiceWatchKeysServerStream) error
 	// ── machine token 管理(仅管理员 JWT;machine token 自身不可调用)。
 	// 设计见 docs/design/machine-token.md。签发明文仅在 IssueMachineToken 响应出现一次,
 	// 服务端只存 SHA-256;轮换 = Issue 新 + 换 Secret + Revoke 旧(两代重叠)。
-	ListMachineTokens(context.Context, *connect.Request[v1.ListMachineTokensRequest]) (*connect.Response[v1.ListMachineTokensResponse], error)
-	IssueMachineToken(context.Context, *connect.Request[v1.IssueMachineTokenRequest]) (*connect.Response[v1.IssueMachineTokenResponse], error)
-	RevokeMachineToken(context.Context, *connect.Request[v1.RevokeMachineTokenRequest]) (*connect.Response[v1.RevokeMachineTokenResponse], error)
+	ListMachineTokens(context.Context, *v1.ListMachineTokensRequest) (*v1.ListMachineTokensResponse, error)
+	IssueMachineToken(context.Context, *v1.IssueMachineTokenRequest) (*v1.IssueMachineTokenResponse, error)
+	RevokeMachineToken(context.Context, *v1.RevokeMachineTokenRequest) (*v1.RevokeMachineTokenResponse, error)
 }
 
-// NewConfigServiceHandler builds an HTTP handler from the service implementation. It returns the
-// path on which to mount the handler and the handler itself.
-//
-// By default, handlers support the Connect, gRPC, and gRPC-Web protocols with the binary Protobuf
-// and JSON codecs. They also support gzip compression.
-func NewConfigServiceHandler(svc ConfigServiceHandler, opts ...connect.HandlerOption) (string, http.Handler) {
-	configServiceMethods := v1.File_api_config_v1_config_proto.Services().ByName("ConfigService").Methods()
-	configServiceListClientConnectionsHandler := connect.NewUnaryHandler(
-		ConfigServiceListClientConnectionsProcedure,
-		svc.ListClientConnections,
-		connect.WithSchema(configServiceMethods.ByName("ListClientConnections")),
-		connect.WithHandlerOptions(opts...),
+// RegisterConfigServiceHandler registers svc as the config.v1.ConfigService implementation on
+// server.
+func RegisterConfigServiceHandler(server *connect.Server, svc ConfigServiceHandler) {
+	adapter := configServiceHandler{svc: svc}
+	server.Register(
+		connect.Method{Spec: configServiceListClientConnectionsSpec(), Handler: adapter.listClientConnections},
+		connect.Method{Spec: configServiceListNamespacesSpec(), Handler: adapter.listNamespaces},
+		connect.Method{Spec: configServiceListKeysSpec(), Handler: adapter.listKeys},
+		connect.Method{Spec: configServiceGetKeySpec(), Handler: adapter.getKey},
+		connect.Method{Spec: configServicePutKeySpec(), Handler: adapter.putKey},
+		connect.Method{Spec: configServiceDeleteKeySpec(), Handler: adapter.deleteKey},
+		connect.Method{Spec: configServiceListRevisionsSpec(), Handler: adapter.listRevisions},
+		connect.Method{Spec: configServiceGetRevisionSpec(), Handler: adapter.getRevision},
+		connect.Method{Spec: configServiceRollbackSpec(), Handler: adapter.rollback},
+		connect.Method{Spec: configServiceWatchKeysSpec(), Handler: adapter.watchKeys},
+		connect.Method{Spec: configServiceListMachineTokensSpec(), Handler: adapter.listMachineTokens},
+		connect.Method{Spec: configServiceIssueMachineTokenSpec(), Handler: adapter.issueMachineToken},
+		connect.Method{Spec: configServiceRevokeMachineTokenSpec(), Handler: adapter.revokeMachineToken},
 	)
-	configServiceListNamespacesHandler := connect.NewUnaryHandler(
-		ConfigServiceListNamespacesProcedure,
-		svc.ListNamespaces,
-		connect.WithSchema(configServiceMethods.ByName("ListNamespaces")),
-		connect.WithHandlerOptions(opts...),
-	)
-	configServiceListKeysHandler := connect.NewUnaryHandler(
-		ConfigServiceListKeysProcedure,
-		svc.ListKeys,
-		connect.WithSchema(configServiceMethods.ByName("ListKeys")),
-		connect.WithHandlerOptions(opts...),
-	)
-	configServiceGetKeyHandler := connect.NewUnaryHandler(
-		ConfigServiceGetKeyProcedure,
-		svc.GetKey,
-		connect.WithSchema(configServiceMethods.ByName("GetKey")),
-		connect.WithHandlerOptions(opts...),
-	)
-	configServicePutKeyHandler := connect.NewUnaryHandler(
-		ConfigServicePutKeyProcedure,
-		svc.PutKey,
-		connect.WithSchema(configServiceMethods.ByName("PutKey")),
-		connect.WithHandlerOptions(opts...),
-	)
-	configServiceDeleteKeyHandler := connect.NewUnaryHandler(
-		ConfigServiceDeleteKeyProcedure,
-		svc.DeleteKey,
-		connect.WithSchema(configServiceMethods.ByName("DeleteKey")),
-		connect.WithHandlerOptions(opts...),
-	)
-	configServiceListRevisionsHandler := connect.NewUnaryHandler(
-		ConfigServiceListRevisionsProcedure,
-		svc.ListRevisions,
-		connect.WithSchema(configServiceMethods.ByName("ListRevisions")),
-		connect.WithHandlerOptions(opts...),
-	)
-	configServiceGetRevisionHandler := connect.NewUnaryHandler(
-		ConfigServiceGetRevisionProcedure,
-		svc.GetRevision,
-		connect.WithSchema(configServiceMethods.ByName("GetRevision")),
-		connect.WithHandlerOptions(opts...),
-	)
-	configServiceRollbackHandler := connect.NewUnaryHandler(
-		ConfigServiceRollbackProcedure,
-		svc.Rollback,
-		connect.WithSchema(configServiceMethods.ByName("Rollback")),
-		connect.WithHandlerOptions(opts...),
-	)
-	configServiceWatchKeysHandler := connect.NewServerStreamHandler(
-		ConfigServiceWatchKeysProcedure,
-		svc.WatchKeys,
-		connect.WithSchema(configServiceMethods.ByName("WatchKeys")),
-		connect.WithHandlerOptions(opts...),
-	)
-	configServiceListMachineTokensHandler := connect.NewUnaryHandler(
-		ConfigServiceListMachineTokensProcedure,
-		svc.ListMachineTokens,
-		connect.WithSchema(configServiceMethods.ByName("ListMachineTokens")),
-		connect.WithHandlerOptions(opts...),
-	)
-	configServiceIssueMachineTokenHandler := connect.NewUnaryHandler(
-		ConfigServiceIssueMachineTokenProcedure,
-		svc.IssueMachineToken,
-		connect.WithSchema(configServiceMethods.ByName("IssueMachineToken")),
-		connect.WithHandlerOptions(opts...),
-	)
-	configServiceRevokeMachineTokenHandler := connect.NewUnaryHandler(
-		ConfigServiceRevokeMachineTokenProcedure,
-		svc.RevokeMachineToken,
-		connect.WithSchema(configServiceMethods.ByName("RevokeMachineToken")),
-		connect.WithHandlerOptions(opts...),
-	)
-	return "/config.v1.ConfigService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		switch r.URL.Path {
-		case ConfigServiceListClientConnectionsProcedure:
-			configServiceListClientConnectionsHandler.ServeHTTP(w, r)
-		case ConfigServiceListNamespacesProcedure:
-			configServiceListNamespacesHandler.ServeHTTP(w, r)
-		case ConfigServiceListKeysProcedure:
-			configServiceListKeysHandler.ServeHTTP(w, r)
-		case ConfigServiceGetKeyProcedure:
-			configServiceGetKeyHandler.ServeHTTP(w, r)
-		case ConfigServicePutKeyProcedure:
-			configServicePutKeyHandler.ServeHTTP(w, r)
-		case ConfigServiceDeleteKeyProcedure:
-			configServiceDeleteKeyHandler.ServeHTTP(w, r)
-		case ConfigServiceListRevisionsProcedure:
-			configServiceListRevisionsHandler.ServeHTTP(w, r)
-		case ConfigServiceGetRevisionProcedure:
-			configServiceGetRevisionHandler.ServeHTTP(w, r)
-		case ConfigServiceRollbackProcedure:
-			configServiceRollbackHandler.ServeHTTP(w, r)
-		case ConfigServiceWatchKeysProcedure:
-			configServiceWatchKeysHandler.ServeHTTP(w, r)
-		case ConfigServiceListMachineTokensProcedure:
-			configServiceListMachineTokensHandler.ServeHTTP(w, r)
-		case ConfigServiceIssueMachineTokenProcedure:
-			configServiceIssueMachineTokenHandler.ServeHTTP(w, r)
-		case ConfigServiceRevokeMachineTokenProcedure:
-			configServiceRevokeMachineTokenHandler.ServeHTTP(w, r)
-		default:
-			http.NotFound(w, r)
-		}
-	})
+}
+
+// ConfigServiceWatchKeysServerStream is the server stream for the ConfigService's WatchKeys RPC.
+type ConfigServiceWatchKeysServerStream struct {
+	stream connect.ServerStream
+}
+
+// SendHeaders flushes the response headers without a message. The first Send does this implicitly.
+func (s ConfigServiceWatchKeysServerStream) SendHeaders() error {
+	return s.stream.SendHeaders()
+}
+
+// Send sends a response message to the client.
+func (s ConfigServiceWatchKeysServerStream) Send(res *v1.WatchKeysResponse) error {
+	return s.stream.Send(res)
 }
 
 // UnimplementedConfigServiceHandler returns CodeUnimplemented from all methods.
 type UnimplementedConfigServiceHandler struct{}
 
-func (UnimplementedConfigServiceHandler) ListClientConnections(context.Context, *connect.Request[v1.ListClientConnectionsRequest]) (*connect.Response[v1.ListClientConnectionsResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("config.v1.ConfigService.ListClientConnections is not implemented"))
+func (UnimplementedConfigServiceHandler) ListClientConnections(context.Context, *v1.ListClientConnectionsRequest) (*v1.ListClientConnectionsResponse, error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, "config.v1.ConfigService.ListClientConnections is not implemented")
 }
 
-func (UnimplementedConfigServiceHandler) ListNamespaces(context.Context, *connect.Request[v1.ListNamespacesRequest]) (*connect.Response[v1.ListNamespacesResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("config.v1.ConfigService.ListNamespaces is not implemented"))
+func (UnimplementedConfigServiceHandler) ListNamespaces(context.Context, *v1.ListNamespacesRequest) (*v1.ListNamespacesResponse, error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, "config.v1.ConfigService.ListNamespaces is not implemented")
 }
 
-func (UnimplementedConfigServiceHandler) ListKeys(context.Context, *connect.Request[v1.ListKeysRequest]) (*connect.Response[v1.ListKeysResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("config.v1.ConfigService.ListKeys is not implemented"))
+func (UnimplementedConfigServiceHandler) ListKeys(context.Context, *v1.ListKeysRequest) (*v1.ListKeysResponse, error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, "config.v1.ConfigService.ListKeys is not implemented")
 }
 
-func (UnimplementedConfigServiceHandler) GetKey(context.Context, *connect.Request[v1.GetKeyRequest]) (*connect.Response[v1.GetKeyResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("config.v1.ConfigService.GetKey is not implemented"))
+func (UnimplementedConfigServiceHandler) GetKey(context.Context, *v1.GetKeyRequest) (*v1.GetKeyResponse, error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, "config.v1.ConfigService.GetKey is not implemented")
 }
 
-func (UnimplementedConfigServiceHandler) PutKey(context.Context, *connect.Request[v1.PutKeyRequest]) (*connect.Response[v1.PutKeyResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("config.v1.ConfigService.PutKey is not implemented"))
+func (UnimplementedConfigServiceHandler) PutKey(context.Context, *v1.PutKeyRequest) (*v1.PutKeyResponse, error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, "config.v1.ConfigService.PutKey is not implemented")
 }
 
-func (UnimplementedConfigServiceHandler) DeleteKey(context.Context, *connect.Request[v1.DeleteKeyRequest]) (*connect.Response[v1.DeleteKeyResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("config.v1.ConfigService.DeleteKey is not implemented"))
+func (UnimplementedConfigServiceHandler) DeleteKey(context.Context, *v1.DeleteKeyRequest) (*v1.DeleteKeyResponse, error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, "config.v1.ConfigService.DeleteKey is not implemented")
 }
 
-func (UnimplementedConfigServiceHandler) ListRevisions(context.Context, *connect.Request[v1.ListRevisionsRequest]) (*connect.Response[v1.ListRevisionsResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("config.v1.ConfigService.ListRevisions is not implemented"))
+func (UnimplementedConfigServiceHandler) ListRevisions(context.Context, *v1.ListRevisionsRequest) (*v1.ListRevisionsResponse, error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, "config.v1.ConfigService.ListRevisions is not implemented")
 }
 
-func (UnimplementedConfigServiceHandler) GetRevision(context.Context, *connect.Request[v1.GetRevisionRequest]) (*connect.Response[v1.GetRevisionResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("config.v1.ConfigService.GetRevision is not implemented"))
+func (UnimplementedConfigServiceHandler) GetRevision(context.Context, *v1.GetRevisionRequest) (*v1.GetRevisionResponse, error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, "config.v1.ConfigService.GetRevision is not implemented")
 }
 
-func (UnimplementedConfigServiceHandler) Rollback(context.Context, *connect.Request[v1.RollbackRequest]) (*connect.Response[v1.RollbackResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("config.v1.ConfigService.Rollback is not implemented"))
+func (UnimplementedConfigServiceHandler) Rollback(context.Context, *v1.RollbackRequest) (*v1.RollbackResponse, error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, "config.v1.ConfigService.Rollback is not implemented")
 }
 
-func (UnimplementedConfigServiceHandler) WatchKeys(context.Context, *connect.Request[v1.WatchKeysRequest], *connect.ServerStream[v1.WatchKeysResponse]) error {
-	return connect.NewError(connect.CodeUnimplemented, errors.New("config.v1.ConfigService.WatchKeys is not implemented"))
+func (UnimplementedConfigServiceHandler) WatchKeys(context.Context, *v1.WatchKeysRequest, ConfigServiceWatchKeysServerStream) error {
+	return connect.NewError(connect.CodeUnimplemented, "config.v1.ConfigService.WatchKeys is not implemented")
 }
 
-func (UnimplementedConfigServiceHandler) ListMachineTokens(context.Context, *connect.Request[v1.ListMachineTokensRequest]) (*connect.Response[v1.ListMachineTokensResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("config.v1.ConfigService.ListMachineTokens is not implemented"))
+func (UnimplementedConfigServiceHandler) ListMachineTokens(context.Context, *v1.ListMachineTokensRequest) (*v1.ListMachineTokensResponse, error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, "config.v1.ConfigService.ListMachineTokens is not implemented")
 }
 
-func (UnimplementedConfigServiceHandler) IssueMachineToken(context.Context, *connect.Request[v1.IssueMachineTokenRequest]) (*connect.Response[v1.IssueMachineTokenResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("config.v1.ConfigService.IssueMachineToken is not implemented"))
+func (UnimplementedConfigServiceHandler) IssueMachineToken(context.Context, *v1.IssueMachineTokenRequest) (*v1.IssueMachineTokenResponse, error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, "config.v1.ConfigService.IssueMachineToken is not implemented")
 }
 
-func (UnimplementedConfigServiceHandler) RevokeMachineToken(context.Context, *connect.Request[v1.RevokeMachineTokenRequest]) (*connect.Response[v1.RevokeMachineTokenResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("config.v1.ConfigService.RevokeMachineToken is not implemented"))
+func (UnimplementedConfigServiceHandler) RevokeMachineToken(context.Context, *v1.RevokeMachineTokenRequest) (*v1.RevokeMachineTokenResponse, error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, "config.v1.ConfigService.RevokeMachineToken is not implemented")
+}
+
+type configServiceClient struct {
+	client *connect.Client
+}
+
+func (c *configServiceClient) ListClientConnections(ctx context.Context, req *v1.ListClientConnectionsRequest) (*v1.ListClientConnectionsResponse, error) {
+	var res v1.ListClientConnectionsResponse
+	if err := c.client.CallUnary(ctx, configServiceListClientConnectionsSpec(), req, &res); err != nil {
+		return nil, err
+	}
+	return &res, nil
+}
+
+func (c *configServiceClient) ListNamespaces(ctx context.Context, req *v1.ListNamespacesRequest) (*v1.ListNamespacesResponse, error) {
+	var res v1.ListNamespacesResponse
+	if err := c.client.CallUnary(ctx, configServiceListNamespacesSpec(), req, &res); err != nil {
+		return nil, err
+	}
+	return &res, nil
+}
+
+func (c *configServiceClient) ListKeys(ctx context.Context, req *v1.ListKeysRequest) (*v1.ListKeysResponse, error) {
+	var res v1.ListKeysResponse
+	if err := c.client.CallUnary(ctx, configServiceListKeysSpec(), req, &res); err != nil {
+		return nil, err
+	}
+	return &res, nil
+}
+
+func (c *configServiceClient) GetKey(ctx context.Context, req *v1.GetKeyRequest) (*v1.GetKeyResponse, error) {
+	var res v1.GetKeyResponse
+	if err := c.client.CallUnary(ctx, configServiceGetKeySpec(), req, &res); err != nil {
+		return nil, err
+	}
+	return &res, nil
+}
+
+func (c *configServiceClient) PutKey(ctx context.Context, req *v1.PutKeyRequest) (*v1.PutKeyResponse, error) {
+	var res v1.PutKeyResponse
+	if err := c.client.CallUnary(ctx, configServicePutKeySpec(), req, &res); err != nil {
+		return nil, err
+	}
+	return &res, nil
+}
+
+func (c *configServiceClient) DeleteKey(ctx context.Context, req *v1.DeleteKeyRequest) (*v1.DeleteKeyResponse, error) {
+	var res v1.DeleteKeyResponse
+	if err := c.client.CallUnary(ctx, configServiceDeleteKeySpec(), req, &res); err != nil {
+		return nil, err
+	}
+	return &res, nil
+}
+
+func (c *configServiceClient) ListRevisions(ctx context.Context, req *v1.ListRevisionsRequest) (*v1.ListRevisionsResponse, error) {
+	var res v1.ListRevisionsResponse
+	if err := c.client.CallUnary(ctx, configServiceListRevisionsSpec(), req, &res); err != nil {
+		return nil, err
+	}
+	return &res, nil
+}
+
+func (c *configServiceClient) GetRevision(ctx context.Context, req *v1.GetRevisionRequest) (*v1.GetRevisionResponse, error) {
+	var res v1.GetRevisionResponse
+	if err := c.client.CallUnary(ctx, configServiceGetRevisionSpec(), req, &res); err != nil {
+		return nil, err
+	}
+	return &res, nil
+}
+
+func (c *configServiceClient) Rollback(ctx context.Context, req *v1.RollbackRequest) (*v1.RollbackResponse, error) {
+	var res v1.RollbackResponse
+	if err := c.client.CallUnary(ctx, configServiceRollbackSpec(), req, &res); err != nil {
+		return nil, err
+	}
+	return &res, nil
+}
+
+func (c *configServiceClient) WatchKeys(ctx context.Context, req *v1.WatchKeysRequest) (ConfigServiceWatchKeysClientStream, error) {
+	stream, err := c.client.CallServerStream(ctx, configServiceWatchKeysSpec(), req)
+	if err != nil {
+		return ConfigServiceWatchKeysClientStream{}, err
+	}
+	return ConfigServiceWatchKeysClientStream{stream: stream}, nil
+}
+
+func (c *configServiceClient) ListMachineTokens(ctx context.Context, req *v1.ListMachineTokensRequest) (*v1.ListMachineTokensResponse, error) {
+	var res v1.ListMachineTokensResponse
+	if err := c.client.CallUnary(ctx, configServiceListMachineTokensSpec(), req, &res); err != nil {
+		return nil, err
+	}
+	return &res, nil
+}
+
+func (c *configServiceClient) IssueMachineToken(ctx context.Context, req *v1.IssueMachineTokenRequest) (*v1.IssueMachineTokenResponse, error) {
+	var res v1.IssueMachineTokenResponse
+	if err := c.client.CallUnary(ctx, configServiceIssueMachineTokenSpec(), req, &res); err != nil {
+		return nil, err
+	}
+	return &res, nil
+}
+
+func (c *configServiceClient) RevokeMachineToken(ctx context.Context, req *v1.RevokeMachineTokenRequest) (*v1.RevokeMachineTokenResponse, error) {
+	var res v1.RevokeMachineTokenResponse
+	if err := c.client.CallUnary(ctx, configServiceRevokeMachineTokenSpec(), req, &res); err != nil {
+		return nil, err
+	}
+	return &res, nil
+}
+
+type configServiceHandler struct{ svc ConfigServiceHandler }
+
+func (h configServiceHandler) listClientConnections(ctx context.Context, _ connect.Spec, stream connect.ServerStream) error {
+	var req v1.ListClientConnectionsRequest
+	if err := stream.Receive(&req); err != nil {
+		return err
+	}
+	res, err := h.svc.ListClientConnections(ctx, &req)
+	if err != nil {
+		return err
+	}
+	return stream.Send(res)
+}
+
+func (h configServiceHandler) listNamespaces(ctx context.Context, _ connect.Spec, stream connect.ServerStream) error {
+	var req v1.ListNamespacesRequest
+	if err := stream.Receive(&req); err != nil {
+		return err
+	}
+	res, err := h.svc.ListNamespaces(ctx, &req)
+	if err != nil {
+		return err
+	}
+	return stream.Send(res)
+}
+
+func (h configServiceHandler) listKeys(ctx context.Context, _ connect.Spec, stream connect.ServerStream) error {
+	var req v1.ListKeysRequest
+	if err := stream.Receive(&req); err != nil {
+		return err
+	}
+	res, err := h.svc.ListKeys(ctx, &req)
+	if err != nil {
+		return err
+	}
+	return stream.Send(res)
+}
+
+func (h configServiceHandler) getKey(ctx context.Context, _ connect.Spec, stream connect.ServerStream) error {
+	var req v1.GetKeyRequest
+	if err := stream.Receive(&req); err != nil {
+		return err
+	}
+	res, err := h.svc.GetKey(ctx, &req)
+	if err != nil {
+		return err
+	}
+	return stream.Send(res)
+}
+
+func (h configServiceHandler) putKey(ctx context.Context, _ connect.Spec, stream connect.ServerStream) error {
+	var req v1.PutKeyRequest
+	if err := stream.Receive(&req); err != nil {
+		return err
+	}
+	res, err := h.svc.PutKey(ctx, &req)
+	if err != nil {
+		return err
+	}
+	return stream.Send(res)
+}
+
+func (h configServiceHandler) deleteKey(ctx context.Context, _ connect.Spec, stream connect.ServerStream) error {
+	var req v1.DeleteKeyRequest
+	if err := stream.Receive(&req); err != nil {
+		return err
+	}
+	res, err := h.svc.DeleteKey(ctx, &req)
+	if err != nil {
+		return err
+	}
+	return stream.Send(res)
+}
+
+func (h configServiceHandler) listRevisions(ctx context.Context, _ connect.Spec, stream connect.ServerStream) error {
+	var req v1.ListRevisionsRequest
+	if err := stream.Receive(&req); err != nil {
+		return err
+	}
+	res, err := h.svc.ListRevisions(ctx, &req)
+	if err != nil {
+		return err
+	}
+	return stream.Send(res)
+}
+
+func (h configServiceHandler) getRevision(ctx context.Context, _ connect.Spec, stream connect.ServerStream) error {
+	var req v1.GetRevisionRequest
+	if err := stream.Receive(&req); err != nil {
+		return err
+	}
+	res, err := h.svc.GetRevision(ctx, &req)
+	if err != nil {
+		return err
+	}
+	return stream.Send(res)
+}
+
+func (h configServiceHandler) rollback(ctx context.Context, _ connect.Spec, stream connect.ServerStream) error {
+	var req v1.RollbackRequest
+	if err := stream.Receive(&req); err != nil {
+		return err
+	}
+	res, err := h.svc.Rollback(ctx, &req)
+	if err != nil {
+		return err
+	}
+	return stream.Send(res)
+}
+
+func (h configServiceHandler) watchKeys(ctx context.Context, _ connect.Spec, stream connect.ServerStream) error {
+	var req v1.WatchKeysRequest
+	if err := stream.Receive(&req); err != nil {
+		return err
+	}
+	return h.svc.WatchKeys(ctx, &req, ConfigServiceWatchKeysServerStream{stream: stream})
+}
+
+func (h configServiceHandler) listMachineTokens(ctx context.Context, _ connect.Spec, stream connect.ServerStream) error {
+	var req v1.ListMachineTokensRequest
+	if err := stream.Receive(&req); err != nil {
+		return err
+	}
+	res, err := h.svc.ListMachineTokens(ctx, &req)
+	if err != nil {
+		return err
+	}
+	return stream.Send(res)
+}
+
+func (h configServiceHandler) issueMachineToken(ctx context.Context, _ connect.Spec, stream connect.ServerStream) error {
+	var req v1.IssueMachineTokenRequest
+	if err := stream.Receive(&req); err != nil {
+		return err
+	}
+	res, err := h.svc.IssueMachineToken(ctx, &req)
+	if err != nil {
+		return err
+	}
+	return stream.Send(res)
+}
+
+func (h configServiceHandler) revokeMachineToken(ctx context.Context, _ connect.Spec, stream connect.ServerStream) error {
+	var req v1.RevokeMachineTokenRequest
+	if err := stream.Receive(&req); err != nil {
+		return err
+	}
+	res, err := h.svc.RevokeMachineToken(ctx, &req)
+	if err != nil {
+		return err
+	}
+	return stream.Send(res)
 }

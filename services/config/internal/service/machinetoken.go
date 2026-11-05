@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 
-	"connectrpc.com/connect"
+	"connectrpc.com/connect/v2"
 	v1 "github.com/lens077/control-tower/api/config/v1"
 	"github.com/lens077/control-tower/services/config/internal/biz"
 	"github.com/lens077/control-tower/services/config/internal/iam"
@@ -18,11 +18,11 @@ func requireAdmin(ctx context.Context) error {
 	p, ok := iam.PrincipalFromContext(ctx)
 	if !ok {
 		return connect.NewError(connect.CodePermissionDenied,
-			errors.New("machine tokens cannot manage machine tokens"))
+			"machine tokens cannot manage machine tokens")
 	}
 	if p.Machine && !isOperator(p) {
 		return connect.NewError(connect.CodePermissionDenied,
-			errors.New("machine tokens cannot manage machine tokens"))
+			"machine tokens cannot manage machine tokens")
 	}
 	return nil
 }
@@ -42,11 +42,11 @@ func operatorPrincipal(ctx context.Context) (iam.Principal, bool) {
 }
 
 // ListMachineTokens 列出 token 元数据（仅管理员）。
-func (s *ConfigService) ListMachineTokens(ctx context.Context, c *connect.Request[v1.ListMachineTokensRequest]) (*connect.Response[v1.ListMachineTokensResponse], error) {
+func (s *ConfigService) ListMachineTokens(ctx context.Context, c *v1.ListMachineTokensRequest) (*v1.ListMachineTokensResponse, error) {
 	if err := requireAdmin(ctx); err != nil {
 		return nil, err
 	}
-	tokens, err := s.machineTokens.List(ctx, c.Msg.GetServiceName(), c.Msg.GetEnvironment())
+	tokens, err := s.machineTokens.List(ctx, c.GetServiceName(), c.GetEnvironment())
 	if err != nil {
 		return nil, s.toErr(err)
 	}
@@ -54,72 +54,72 @@ func (s *ConfigService) ListMachineTokens(ctx context.Context, c *connect.Reques
 	for _, t := range tokens {
 		pb = append(pb, toPBMachineToken(t))
 	}
-	return connect.NewResponse(&v1.ListMachineTokensResponse{Tokens: pb}), nil
+	return &v1.ListMachineTokensResponse{Tokens: pb}, nil
 }
 
 // IssueMachineToken 签发（管理员或 operator）。明文只在本响应出现一次。
 // operator 只能签发 role=service 的 token，不能自我复制。
-func (s *ConfigService) IssueMachineToken(ctx context.Context, c *connect.Request[v1.IssueMachineTokenRequest]) (*connect.Response[v1.IssueMachineTokenResponse], error) {
+func (s *ConfigService) IssueMachineToken(ctx context.Context, c *v1.IssueMachineTokenRequest) (*v1.IssueMachineTokenResponse, error) {
 	if err := requireAdmin(ctx); err != nil {
 		return nil, err
 	}
-	role := fromPBRole(c.Msg.GetRole())
+	role := fromPBRole(c.GetRole())
 	if p, ok := operatorPrincipal(ctx); ok {
 		if role == biz.RoleOperator {
 			return nil, connect.NewError(connect.CodePermissionDenied,
-				errors.New("operator token cannot issue operator tokens"))
+				"operator token cannot issue operator tokens")
 		}
 		// 最小权限：operator 只能为自身 environment 签发（与其读写范围一致）。
-		if c.Msg.GetEnvironment() != p.Scope.Environment {
+		if c.GetEnvironment() != p.Scope.Environment {
 			return nil, connect.NewError(connect.CodePermissionDenied,
-				errors.New("operator token can only issue tokens for its own environment"))
+				"operator token can only issue tokens for its own environment")
 		}
 	}
 	plaintext, meta, err := s.machineTokens.Issue(ctx,
-		c.Msg.GetServiceName(), c.Msg.GetEnvironment(),
-		c.Msg.GetAllowedNamespaces(), c.Msg.GetNote(), actor(ctx), role)
+		c.GetServiceName(), c.GetEnvironment(),
+		c.GetAllowedNamespaces(), c.GetNote(), actor(ctx), role)
 	if err != nil {
 		if errors.Is(err, biz.ErrInvalidTokenRole) {
-			return nil, connect.NewError(connect.CodeInvalidArgument, err)
+			return nil, connect.NewError(connect.CodeInvalidArgument, err.Error()).WithCause(err)
 		}
 		return nil, s.toErr(err)
 	}
-	return connect.NewResponse(&v1.IssueMachineTokenResponse{
+	return &v1.IssueMachineTokenResponse{
 		Token: plaintext,
 		Meta:  toPBMachineToken(meta),
-	}), nil
+	}, nil
 }
 
 // RevokeMachineToken 吊销（管理员或 operator）。已建立的 WatchKeys 流在心跳周期内断开。
 // operator 不能吊销 operator token（含自身）：先查目标角色再吊销。
-func (s *ConfigService) RevokeMachineToken(ctx context.Context, c *connect.Request[v1.RevokeMachineTokenRequest]) (*connect.Response[v1.RevokeMachineTokenResponse], error) {
+func (s *ConfigService) RevokeMachineToken(ctx context.Context, c *v1.RevokeMachineTokenRequest) (*v1.RevokeMachineTokenResponse, error) {
 	if err := requireAdmin(ctx); err != nil {
 		return nil, err
 	}
 	if _, ok := operatorPrincipal(ctx); ok {
-		target, err := s.machineTokens.Get(ctx, c.Msg.GetId())
+		target, err := s.machineTokens.Get(ctx, c.GetId())
 		if err != nil {
 			if errors.Is(err, biz.ErrTokenNotFound) {
-				return nil, connect.NewError(connect.CodeNotFound, err)
+				return nil, connect.NewError(connect.CodeNotFound, err.Error()).WithCause(err)
 			}
 			return nil, s.toErr(err)
 		}
 		if target.IsOperator() {
 			return nil, connect.NewError(connect.CodePermissionDenied,
-				errors.New("operator token cannot revoke operator tokens"))
+				"operator token cannot revoke operator tokens")
 		}
 		if p, _ := operatorPrincipal(ctx); target.Environment != p.Scope.Environment {
 			return nil, connect.NewError(connect.CodePermissionDenied,
-				errors.New("operator token can only revoke tokens in its own environment"))
+				"operator token can only revoke tokens in its own environment")
 		}
 	}
-	if _, err := s.machineTokens.Revoke(ctx, c.Msg.GetId(), actor(ctx)); err != nil {
+	if _, err := s.machineTokens.Revoke(ctx, c.GetId(), actor(ctx)); err != nil {
 		if errors.Is(err, biz.ErrTokenNotFound) {
-			return nil, connect.NewError(connect.CodeNotFound, err)
+			return nil, connect.NewError(connect.CodeNotFound, err.Error()).WithCause(err)
 		}
 		return nil, s.toErr(err)
 	}
-	return connect.NewResponse(&v1.RevokeMachineTokenResponse{}), nil
+	return &v1.RevokeMachineTokenResponse{}, nil
 }
 
 // machineScopeGuard 对数据面请求执行 namespace×environment 范围校验。
@@ -134,7 +134,7 @@ func machineScopeGuard(ctx context.Context, namespace, environment string) error
 		return nil
 	}
 	return connect.NewError(connect.CodePermissionDenied,
-		errors.New("machine token scope does not cover this namespace/environment"))
+		"machine token scope does not cover this namespace/environment")
 }
 
 func toPBMachineToken(t biz.MachineToken) *v1.MachineTokenMeta {

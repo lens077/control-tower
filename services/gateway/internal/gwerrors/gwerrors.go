@@ -13,7 +13,9 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"connectrpc.com/connect"
+	"connectrpc.com/connect/v2"
+	"connectrpc.com/connect/v2/connecthttp"
+	"connectrpc.com/connect/v2/connectproto"
 	"google.golang.org/genproto/googleapis/rpc/errdetails"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
@@ -27,12 +29,12 @@ const Domain = "gateway.control-tower"
 
 // Writer 负责写出协议正确的错误响应。零值不可用，必须经 NewWriter 构造。
 type Writer struct {
-	ew *connect.ErrorWriter
+	ew *connecthttp.ErrorWriter
 }
 
 // NewWriter 构造错误写出器。
 func NewWriter() *Writer {
-	return &Writer{ew: connect.NewErrorWriter()}
+	return &Writer{ew: connecthttp.NewErrorWriter()}
 }
 
 // Write 写出一个网关错误。reason 用 SCREAMING_SNAKE_CASE（如 ROUTE_NOT_FOUND）。
@@ -45,9 +47,9 @@ func (w *Writer) Write(rw http.ResponseWriter, r *http.Request, code connect.Cod
 	}
 
 	if w.ew.IsSupported(r) {
-		err := connect.NewError(code, connectMessageError(message))
-		if detail, derr := connect.NewErrorDetail(info); derr == nil {
-			err.AddDetail(detail)
+		err := connect.NewError(code, message)
+		if detail, derr := connectproto.NewErrorDetail(info); derr == nil {
+			err = err.WithDetail(detail)
 		}
 		_ = w.ew.Write(rw, r, err)
 		return
@@ -56,12 +58,6 @@ func (w *Writer) Write(rw http.ResponseWriter, r *http.Request, code connect.Cod
 	// 非 RPC 请求的回退：Connect 风格 JSON + 等价 HTTP 状态码。
 	writeFallbackJSON(rw, code, message, info)
 }
-
-type stringError string
-
-func (e stringError) Error() string { return string(e) }
-
-func connectMessageError(message string) error { return stringError(message) }
 
 // writeFallbackJSON 按 Connect unary 错误体形状手写 JSON。
 func writeFallbackJSON(rw http.ResponseWriter, code connect.Code, message string, info proto.Message) {

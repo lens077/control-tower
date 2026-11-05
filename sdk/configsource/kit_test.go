@@ -3,12 +3,14 @@ package configsource
 import (
 	"context"
 	"net/http"
+
+	"connectrpc.com/connect/v2"
+	"connectrpc.com/connect/v2/connecthttp"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"testing"
 
-	"connectrpc.com/connect"
 	configv1 "github.com/lens077/control-tower/api/config/v1"
 	"github.com/lens077/control-tower/api/config/v1/configv1connect"
 	kitconfig "github.com/lens077/go-connect-kit/config"
@@ -36,13 +38,13 @@ type kitTestConfigService struct {
 	configv1connect.UnimplementedConfigServiceHandler
 }
 
-func (kitTestConfigService) GetKey(context.Context, *connect.Request[configv1.GetKeyRequest]) (*connect.Response[configv1.GetKeyResponse], error) {
-	return connect.NewResponse(&configv1.GetKeyResponse{Entry: &configv1.ConfigEntry{
+func (kitTestConfigService) GetKey(context.Context, *configv1.GetKeyRequest) (*configv1.GetKeyResponse, error) {
+	return &configv1.GetKeyResponse{Entry: &configv1.ConfigEntry{
 		Value: "server:\n  addr: 0.0.0.0:30006\n",
-	}}), nil
+	}}, nil
 }
 
-func (kitTestConfigService) WatchKeys(ctx context.Context, _ *connect.Request[configv1.WatchKeysRequest], stream *connect.ServerStream[configv1.WatchKeysResponse]) error {
+func (kitTestConfigService) WatchKeys(ctx context.Context, _ *configv1.WatchKeysRequest, stream configv1connect.ConfigServiceWatchKeysServerStream) error {
 	if err := stream.Send(&configv1.WatchKeysResponse{
 		Type:  configv1.WatchEventType_WATCH_EVENT_TYPE_SNAPSHOT,
 		Entry: &configv1.ConfigEntry{Value: "server:\n  addr: 0.0.0.0:30007\n"},
@@ -57,9 +59,10 @@ func (kitTestConfigService) WatchKeys(ctx context.Context, _ *connect.Request[co
 }
 
 func TestKitSourceLoadsAndMapsWatchEvents(t *testing.T) {
-	path, handler := configv1connect.NewConfigServiceHandler(kitTestConfigService{})
+	connectSrv := connect.NewServer()
+	configv1connect.RegisterConfigServiceHandler(connectSrv, kitTestConfigService{})
 	mux := http.NewServeMux()
-	mux.Handle(path, handler)
+	connecthttp.Mount(mux, connectSrv)
 	server := httptest.NewServer(mux)
 	t.Cleanup(server.Close)
 

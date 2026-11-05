@@ -6,7 +6,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"connectrpc.com/connect"
+	"connectrpc.com/connect/v2"
 	connectcors "connectrpc.com/cors"
 	confv1 "github.com/lens077/control-tower/services/gateway/internal/conf/v1"
 	"github.com/lens077/control-tower/services/gateway/internal/gwctx"

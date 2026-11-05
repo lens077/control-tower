@@ -19,7 +19,8 @@ import (
 	"strings"
 	"time"
 
-	"connectrpc.com/connect"
+	"connectrpc.com/connect/v2"
+	"connectrpc.com/connect/v2/connecthttp"
 	configv1 "github.com/lens077/control-tower/api/config/v1"
 	"github.com/lens077/control-tower/api/config/v1/configv1connect"
 	"github.com/lens077/control-tower/constants"
@@ -48,12 +49,12 @@ type Client struct {
 type Option func(*options)
 
 type options struct {
-	httpClient connect.HTTPClient
+	httpClient connecthttp.HTTPClient
 	clientName string
 }
 
 // WithHTTPClient 替换传输（测试注入、代理、自定义 TLS）。
-func WithHTTPClient(client connect.HTTPClient) Option {
+func WithHTTPClient(client connecthttp.HTTPClient) Option {
 	return func(o *options) { o.httpClient = client }
 }
 
@@ -84,7 +85,7 @@ func New(endpoint string, credential Credential, opts ...Option) (*Client, error
 		opt(&resolved)
 	}
 	return &Client{
-		rpc:        configv1connect.NewConfigServiceClient(resolved.httpClient, strings.TrimSuffix(endpoint, "/")),
+		rpc:        configv1connect.NewConfigServiceClient(connect.NewClient(connecthttp.NewTransport(resolved.httpClient, strings.TrimSuffix(endpoint, "/"), connecthttp.WithReadMaxBytes(0)))),
 		credential: credential,
 		clientName: resolved.clientName,
 	}, nil
@@ -160,18 +161,18 @@ func (c *Client) Get(ctx context.Context, selector Selector) (Entry, error) {
 	if err := selector.validate(); err != nil {
 		return Entry{}, err
 	}
-	response, err := c.rpc.GetKey(ctx, newRequest(c, &configv1.GetKeyRequest{
+	response, err := c.rpc.GetKey(newContext(c, ctx), &configv1.GetKeyRequest{
 		Namespace:   selector.Namespace,
 		Environment: selector.Environment,
 		Key:         selector.Key,
-	}))
+	})
 	if err != nil {
 		if connect.CodeOf(err) == connect.CodeNotFound {
 			return Entry{}, fmt.Errorf("%s: %w", selector, ErrNotFound)
 		}
 		return Entry{}, fmt.Errorf("get %s: %w", selector, err)
 	}
-	return entryFrom(response.Msg.GetEntry()), nil
+	return entryFrom(response.GetEntry()), nil
 }
 
 // Put 创建或更新 key，返回写入后的条目（含新版本号）。
@@ -179,7 +180,7 @@ func (c *Client) Put(ctx context.Context, request PutRequest) (Entry, error) {
 	if err := request.validate(); err != nil {
 		return Entry{}, err
 	}
-	response, err := c.rpc.PutKey(ctx, newRequest(c, &configv1.PutKeyRequest{
+	response, err := c.rpc.PutKey(newContext(c, ctx), &configv1.PutKeyRequest{
 		Namespace:   request.Namespace,
 		Environment: request.Environment,
 		Key:         request.Key,
@@ -188,11 +189,11 @@ func (c *Client) Put(ctx context.Context, request PutRequest) (Entry, error) {
 		Comment:     request.Comment,
 		Description: request.Description,
 		IsSecret:    request.IsSecret,
-	}))
+	})
 	if err != nil {
 		return Entry{}, fmt.Errorf("put %s: %w", request.Selector, err)
 	}
-	return entryFrom(response.Msg.GetEntry()), nil
+	return entryFrom(response.GetEntry()), nil
 }
 
 func (r PutRequest) validate() error {
@@ -214,16 +215,16 @@ func (c *Client) ListKeys(ctx context.Context, namespace, environment, keyPrefix
 	if strings.TrimSpace(namespace) == "" || strings.TrimSpace(environment) == "" {
 		return nil, errors.New("namespace and environment are required")
 	}
-	response, err := c.rpc.ListKeys(ctx, newRequest(c, &configv1.ListKeysRequest{
+	response, err := c.rpc.ListKeys(newContext(c, ctx), &configv1.ListKeysRequest{
 		Namespace:   namespace,
 		Environment: environment,
 		KeyPrefix:   keyPrefix,
-	}))
+	})
 	if err != nil {
 		return nil, fmt.Errorf("list keys in %s/%s: %w", namespace, environment, err)
 	}
-	entries := make([]Entry, 0, len(response.Msg.GetEntries()))
-	for _, item := range response.Msg.GetEntries() {
+	entries := make([]Entry, 0, len(response.GetEntries()))
+	for _, item := range response.GetEntries() {
 		entries = append(entries, entryFrom(item))
 	}
 	return entries, nil
@@ -237,27 +238,28 @@ type Namespace struct {
 
 // ListNamespaces 列出已有 namespace，用于写之前确认拼写。
 func (c *Client) ListNamespaces(ctx context.Context) ([]Namespace, error) {
-	response, err := c.rpc.ListNamespaces(ctx, newRequest(c, &configv1.ListNamespacesRequest{}))
+	response, err := c.rpc.ListNamespaces(newContext(c, ctx), &configv1.ListNamespacesRequest{})
 	if err != nil {
 		return nil, fmt.Errorf("list namespaces: %w", err)
 	}
-	namespaces := make([]Namespace, 0, len(response.Msg.GetNamespaces()))
-	for _, item := range response.Msg.GetNamespaces() {
+	namespaces := make([]Namespace, 0, len(response.GetNamespaces()))
+	for _, item := range response.GetNamespaces() {
 		namespaces = append(namespaces, Namespace{Name: item.GetNamespace(), Environments: item.GetEnvironments()})
 	}
 	return namespaces, nil
 }
 
-// newRequest 统一贴凭据与客户端标识。写成自由函数是因为 Go 的方法不能带类型参数。
-func newRequest[T any](c *Client, message *T) *connect.Request[T] {
-	request := connect.NewRequest(message)
+// newContext 统一贴凭据与客户端标识,随 ctx 传播(v2 的请求头不再挂消息上)。
+// 写成自由函数是因为 Go 的方法不能带类型参数。
+func newContext(c *Client, ctx context.Context) context.Context {
+	ctx, info := connect.NewClientContext(ctx)
 	if token := strings.TrimSpace(c.credential.MachineToken); token != "" {
-		request.Header().Set(constants.ServiceTokenHeader, token)
+		info.RequestHeader().Set(constants.ServiceTokenHeader, token)
 	} else if bearer := strings.TrimSpace(c.credential.BearerToken); bearer != "" {
-		request.Header().Set("Authorization", "Bearer "+bearer)
+		info.RequestHeader().Set("Authorization", "Bearer "+bearer)
 	}
-	request.Header().Set(constants.ClientNameHeader, c.clientName)
-	return request
+	info.RequestHeader().Set(constants.ClientNameHeader, c.clientName)
+	return ctx
 }
 
 // ParseFormat 把 CLI 的 --format 值映射到枚举。

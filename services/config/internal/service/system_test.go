@@ -11,7 +11,6 @@ import (
 	"testing"
 	"time"
 
-	"connectrpc.com/connect"
 	confv1 "github.com/lens077/control-tower/services/config/internal/conf/v1"
 	"go.uber.org/zap"
 	"google.golang.org/protobuf/types/known/durationpb"
@@ -76,14 +75,14 @@ func TestQueryMetrics_预期主机整窗缺失保留空点而非零(t *testing.T
 		}
 		return []map[string]any{hostMatrix("k1", end, 0), hostMatrix("k2", end, 25)}, 0
 	})
-	response, err := svc.QueryMetrics(context.Background(), connect.NewRequest(&v1.QueryMetricsRequest{
+	response, err := svc.QueryMetrics(context.Background(), &v1.QueryMetricsRequest{
 		Series: []v1.MetricSeries{v1.MetricSeries_METRIC_SERIES_HOST_MEMORY, v1.MetricSeries_METRIC_SERIES_HOST_DISK},
 		Window: durationpb.New(time.Hour), StepSeconds: 30,
-	}))
+	})
 	require.NoError(t, err)
-	require.Len(t, response.Msg.Results, 2)
+	require.Len(t, response.Results, 2)
 	assert.Equal(t, 1, inventoryCalls, "一个 API 请求只取一次主机清单")
-	for _, result := range response.Msg.Results {
+	for _, result := range response.Results {
 		require.Len(t, result.Lines, 7)
 		for i, line := range result.Lines {
 			assert.Equal(t, expectedHostNames[i], line.Label)
@@ -105,13 +104,13 @@ func TestQueryMetrics_全缺时仍列出七台预期主机(t *testing.T) {
 		}
 		return nil, 0 // 规则缺失、signal_present=0 或 freshness 失败都只能返回空
 	})
-	response, err := svc.QueryMetrics(context.Background(), connect.NewRequest(&v1.QueryMetricsRequest{
+	response, err := svc.QueryMetrics(context.Background(), &v1.QueryMetricsRequest{
 		Series: []v1.MetricSeries{v1.MetricSeries_METRIC_SERIES_HOST_NETWORK},
 		Window: durationpb.New(time.Hour), StepSeconds: 30,
-	}))
+	})
 	require.NoError(t, err)
-	require.Len(t, response.Msg.Results[0].Lines, 14)
-	for _, line := range response.Msg.Results[0].Lines {
+	require.Len(t, response.Results[0].Lines, 14)
+	for _, line := range response.Results[0].Lines {
 		assert.Empty(t, line.Points)
 		assert.Equal(t, v1.MetricUnit_METRIC_UNIT_BYTES_PER_SECOND, line.Unit)
 	}
@@ -132,12 +131,12 @@ func TestQueryMetrics_部分查询与清单失败不被已有曲线掩盖(t *tes
 				}
 				return []map[string]any{hostMatrix("k1", end, 20)}, 0
 			})
-			response, err := svc.QueryMetrics(context.Background(), connect.NewRequest(&v1.QueryMetricsRequest{
+			response, err := svc.QueryMetrics(context.Background(), &v1.QueryMetricsRequest{
 				Series: []v1.MetricSeries{v1.MetricSeries_METRIC_SERIES_HOST_CPU},
 				Window: durationpb.New(time.Hour), StepSeconds: 30,
-			}))
+			})
 			require.NoError(t, err)
-			result := response.Msg.Results[0]
+			result := response.Results[0]
 			assert.NotEmpty(t, result.Error)
 			assert.NotEmpty(t, result.Lines)
 		})
@@ -151,12 +150,12 @@ func TestQueryMetrics_保留合法历史但提示尾部记录已过旧(t *testin
 		}
 		return []map[string]any{hostMatrix("k1", end-600, 15)}, 0
 	})
-	response, err := svc.QueryMetrics(context.Background(), connect.NewRequest(&v1.QueryMetricsRequest{
+	response, err := svc.QueryMetrics(context.Background(), &v1.QueryMetricsRequest{
 		Series: []v1.MetricSeries{v1.MetricSeries_METRIC_SERIES_HOST_MEMORY},
 		Window: durationpb.New(time.Hour), StepSeconds: 30,
-	}))
+	})
 	require.NoError(t, err)
-	result := response.Msg.Results[0]
+	result := response.Results[0]
 	assert.Contains(t, result.Error, "180s")
 	assert.Contains(t, result.Error, "k1")
 	require.NotEmpty(t, result.Lines[0].Points, "历史点不可用当前时间过滤掉")
