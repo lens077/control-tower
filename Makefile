@@ -14,7 +14,9 @@ api-go:
 # 把 Go 插件钉到 go.mod 里的库版本：生成物头部带插件版本号，插件漂移就是一次假 diff。
 tools:
 	go install google.golang.org/protobuf/cmd/protoc-gen-go@$$(go list -m -f '{{.Version}}' google.golang.org/protobuf)
-	go install connectrpc.com/connect/cmd/protoc-gen-connect-go@$$(go list -m -f '{{.Version}}' connectrpc.com/connect)
+	# 生成物迁移 connect-go v2 后插件路径带 /v2;装错代会让 CI 的 check-gen
+	# 在 Regenerate and diff 一步把 v2 产物改回 v1 形状而假红。
+	go install connectrpc.com/connect/v2/cmd/protoc-gen-connect-go@$$(go list -m -f '{{.Version}}' connectrpc.com/connect/v2)
 
 # protoc-gen-es 来自 web/node_modules（先 cd web && pnpm install）。
 # NODE_OPTIONS 关掉 Node 25+ 的实验性 Web Storage，否则每个插件进程都刷一条无关警告。
