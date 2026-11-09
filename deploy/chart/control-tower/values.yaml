@@ -91,6 +91,9 @@ gateway:
     requests: { cpu: 150m, memory: 256Mi }
     limits: { cpu: 300m, memory: 512Mi }
   hosts: []
+  # PalCommerce 站点：只把 /shop.v1.shopService/ 转到本网关。为空表示不渲染
+  # （dev 没有 palcommerce 命名空间，只有 pre 打开）。
+  palcommerceHost: ""
   # selector（type=config_center，key=routes.yaml）+ machine token，按环境各一份 Secret。
   configSourceSecret: ""
   bff:

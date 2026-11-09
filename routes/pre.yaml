@@ -51,6 +51,13 @@ routes:
   - package: payment
     target: direct://ecommerce-payment-service.ecommerce.svc:30008
     timeout: 8s
+  # PalCommerce 商城（仓外服务，namespace palcommerce）。只在 pre 出现：
+  # dev 模板不加，因为它的 30011 与 behavior 端口相同，dev-local 的
+  # direct://→127.0.0.1 改写会让两条路由抢同一个本地端口。
+  # 商城下单要走支付宝，8s 与 payment 保持一致。
+  - package: shop
+    target: direct://pal-shop-service.palcommerce.svc:30011
+    timeout: 8s
 
 # 匿名清单（authn 跳过 + authz 跳过共用；进入后端前仍会剥离并不注入身份头）。
 anonymous:
@@ -65,6 +72,12 @@ anonymous:
   - /telemetry.v1.TelemetryService/CollectWebVitals
   # 行政区划是公开只读字典：未登录也要能在地址表单选省市区。
   - /address.v1.RegionService/ListRegions
+  # 商城目录/套餐是公开只读数据；钱包、订单、充值仍要登录（见 policies.csv 的 shop 行）。
+  - /shop.v1.shopService/ListCategories
+  - /shop.v1.shopService/ListProducts
+  - /shop.v1.shopService/GetPalOptions
+  - /shop.v1.shopService/ListPalPassives
+  - /shop.v1.shopService/ListTopUpPackages
 
 # 访客清单（匿名购物 B 级）：不验 JWT，但网关签发/识别访客 cookie 并注入
 # x-md-global-user-id + x-md-global-anonymous=true。与 anonymous 的区别是
@@ -101,6 +114,8 @@ cors:
     - http://192.168.3.118:30080
     # 正式站点（经 Pangolin 暴露）。Casdoor 侧跨域由 Casdoor 管，与此无关。
     - https://shop.apikv.com
+    # PalCommerce 站点；商城前端与 /shop.v1.* 同源，列出来是为跨源调试留口子。
+    - https://pal.apikv.com
   allow_headers:
     - Authorization
     - Content-Type

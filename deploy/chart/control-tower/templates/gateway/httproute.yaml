@@ -24,4 +24,30 @@ spec:
       backendRefs:
         - name: ecommerce-gateway-service
           port: 8080
+{{- if .Values.gateway.palcommerceHost }}
+---
+# PalCommerce 站点上的商城主机只借道本网关的 RPC 前缀，
+# 其余路径（/、/alipay/*）仍由 palcommerce 自己的 HTTPRoute 负责：
+# 这里只声明 /shop.v1.shopService/，更具体的路径优先，不会与 landing 的 / 冲突。
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: control-tower-gateway-pal
+  namespace: {{ .Values.gateway.namespace }}
+spec:
+  parentRefs:
+    - name: cilium-gateway
+      namespace: default
+      sectionName: https
+  hostnames:
+    - {{ .Values.gateway.palcommerceHost | quote }}
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /shop.v1.shopService/
+      backendRefs:
+        - name: ecommerce-gateway-service
+          port: 8080
+{{- end }}
 {{- end }}

@@ -168,7 +168,7 @@ spec:
             # （frontend packages/configs/src/auth/bff.ts 的 startBffLogin 已归一化），
             # 这里逐条列出允许跳回的前端源。
             - name: BFF_ALLOWED_REDIRECTS
-              value: https://shop.apikv.com
+              value: https://shop.apikv.com,https://pal.apikv.com
             # optional=true：Secret 缺失时 env 不注入，会话轨自动保持关闭而不是 CrashLoop。
             - name: CASDOOR_CLIENT_ID
               valueFrom:

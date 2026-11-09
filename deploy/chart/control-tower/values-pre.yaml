@@ -17,8 +17,9 @@ gateway:
   image:
     tag: 0.3.0
   hosts: [gateway.dev.test, gateway.apikv.com]
+  palcommerceHost: pal.apikv.com
   configSourceSecret: control-tower-config-source-pre
   bff:
     publicBaseUrl: https://gateway.apikv.com
-    allowedRedirects: https://shop.apikv.com
+    allowedRedirects: "https://shop.apikv.com,https://pal.apikv.com"
     cookieInsecure: false
