@@ -65,7 +65,11 @@ spec:
         app: control-tower-gateway
         app.kubernetes.io/part-of: ecommerce
     spec:
-      # anti-affinity 保证双副本分节点；suite-wide spread 让网关与单副本业务共同计数。
+      # anti-affinity 保证双副本分节点；suite-wide spread 只是让网关与单副本业务
+      # 尽量共同分摊节点。2026-11-10 实测：suite 计数一旦漂移（k1/k2 各 7/6 个、
+      # k3 只有 1 个），硬约束会与 anti-affinity 互锁——唯一满足 skew 的 k3 被
+      # anti-affinity 排除，第二个副本永久 Pending。HA 由上面的 required
+      # anti-affinity 保证，spread 退化为软约束，避免滚动更新把网关卡在单副本。
       affinity:
         podAntiAffinity:
           requiredDuringSchedulingIgnoredDuringExecution:
@@ -76,7 +80,7 @@ spec:
       topologySpreadConstraints:
         - maxSkew: 1
           topologyKey: kubernetes.io/hostname
-          whenUnsatisfiable: DoNotSchedule
+          whenUnsatisfiable: ScheduleAnyway
           nodeAffinityPolicy: Honor
           nodeTaintsPolicy: Honor
           labelSelector:
