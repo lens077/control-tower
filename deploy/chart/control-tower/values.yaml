@@ -22,6 +22,9 @@ casdoor:
   issuer: https://casdoor.apikv.com
   # 共享 client id（非机密）：config 服务校验 audience，config-web 发起登录，网关作 JWT audiences。
   clientId: baxf6718e392099b7915
+  # 网关 JWT audiences 的追加白名单（非机密，CSV 追加在 clientId 之后）：
+  # 各前端应用的 client id，如 PalCommerce 商城（casdoor 应用 Pal，证书 CN=Pal）。
+  extraAudiences: []
   organizationName: lens
   appName: ecommerce
 
