@@ -20,6 +20,7 @@ import (
 
 	capi "github.com/hashicorp/consul/api"
 	"github.com/lens077/control-tower/services/gateway/internal/app"
+	"github.com/lens077/control-tower/services/gateway/internal/assertion"
 	"github.com/lens077/control-tower/services/gateway/internal/authn"
 	"github.com/lens077/control-tower/services/gateway/internal/authz"
 	"github.com/lens077/control-tower/services/gateway/internal/bff"
@@ -28,6 +29,7 @@ import (
 	"github.com/lens077/control-tower/services/gateway/internal/httpmw"
 	"github.com/lens077/control-tower/services/gateway/internal/loader"
 	"github.com/lens077/control-tower/services/gateway/internal/observability"
+	"github.com/lens077/control-tower/services/gateway/internal/proxy"
 	"github.com/lens077/control-tower/services/gateway/internal/resolver"
 	"github.com/lens077/control-tower/services/gateway/internal/session"
 	kitlog "github.com/lens077/go-connect-kit/log"
@@ -344,6 +346,65 @@ func runWithObservability(lc fx.Lifecycle, log *zap.Logger, setup observabilityS
 		log.Info("匿名购物访客轨被 GUEST_ENABLED=false 显式关闭")
 	}
 
+	// ── T1 可信身份边界（WP-2）：对 PalCommerce shop 上游签发内部断言。
+	// 共享契约见 palcommerce/docs/shop/T1-implementation-plan.md §1.4/§1.7。
+	// ASSERTION_ENABLED_PACKAGES 为空 = 整体关闭，行为与 T1 之前完全一致；
+	// 配置不齐（缺私钥/kid/角色映射）直接启动失败——shop 侧要求断言，
+	// 带病启动只会把故障推迟到第一笔请求。
+	assertionPkgs := splitCSV(os.Getenv("ASSERTION_ENABLED_PACKAGES"))
+	var assertionIssuer *assertion.Issuer
+	if len(assertionPkgs) > 0 {
+		ttl := assertion.DefaultTTL
+		if v := os.Getenv("ASSERTION_TTL"); v != "" {
+			parsed, perr := time.ParseDuration(v)
+			if perr != nil {
+				cancelLoader()
+				return fmt.Errorf("ASSERTION_TTL: %w", perr)
+			}
+			ttl = parsed
+		}
+		loaded, lerr := assertion.Load(assertion.Config{
+			Packages:        assertionPkgs,
+			Issuer:          envOr("ASSERTION_ISSUER", assertion.DefaultIssuer),
+			Audience:        envOr("ASSERTION_AUDIENCE", assertion.DefaultAudience),
+			TTL:             ttl,
+			KeyFile:         os.Getenv("ASSERTION_SIGNING_KEY_FILE"),
+			KeyID:           os.Getenv("ASSERTION_KEY_ID"),
+			RolePermissions: os.Getenv("ASSERTION_ROLE_PERMISSIONS"),
+		})
+		if lerr != nil {
+			cancelLoader()
+			return fmt.Errorf("断言签发器装配: %w", lerr)
+		}
+		assertionIssuer = loaded
+		log.Info("内部断言签发已启用",
+			zap.Strings("packages", assertionPkgs),
+			zap.String("kid", assertionIssuer.KeyID()),
+			zap.Duration("ttl", assertionIssuer.TTL()))
+	}
+
+	// ── 上游 mTLS（SHOP_UPSTREAM_TLS_*）。契约 §三：mTLS 与 JWT 断言必须同时强制、
+	// 不提供单边降级，因此 TLS 只挂给断言启用包（T1 里即 shop）。
+	// 默认关：未启用时 upstreamTLS 为空，所有 direct:// 拨号行为完全不变。
+	var upstreamTLS map[string]http.RoundTripper
+	if envOr("SHOP_UPSTREAM_TLS_ENABLED", "false") == "true" {
+		if assertionIssuer == nil {
+			log.Warn("SHOP_UPSTREAM_TLS_ENABLED=true 但断言未启用（ASSERTION_ENABLED_PACKAGES 为空），TLS 配置被忽略——契约禁止单边降级")
+		} else {
+			tlsCfg, terr := buildShopUpstreamTLS()
+			if terr != nil {
+				cancelLoader()
+				return fmt.Errorf("shop 上游 TLS 配置: %w", terr)
+			}
+			rt := proxy.NewTLSRoundTripper(tlsCfg)
+			upstreamTLS = make(map[string]http.RoundTripper, len(assertionPkgs))
+			for _, pkg := range assertionPkgs {
+				upstreamTLS[pkg] = rt
+			}
+			log.Info("shop 上游 mTLS 已启用", zap.Strings("packages", assertionPkgs))
+		}
+	}
+
 	// ── 请求链装配（healthz/readyz 先于包路由，见 internal/app）。
 	handler := app.BuildHandler(app.Deps{
 		State:         state,
@@ -359,6 +420,8 @@ func runWithObservability(lc fx.Lifecycle, log *zap.Logger, setup observabilityS
 		SessionHeader: envOr("SESSION_HEADER", "X-CT-Session"),
 		Refresher:     refresher,
 		GuestCookie:   guestCookie,
+		Assertion:     assertionIssuer,
+		UpstreamTLS:   upstreamTLS,
 	})
 
 	srv := &http.Server{
@@ -418,6 +481,40 @@ func runWithObservability(lc fx.Lifecycle, log *zap.Logger, setup observabilityS
 	})
 	otelOwnedByLifecycle = true
 	return nil
+}
+
+// buildShopUpstreamTLS 构造网关 → shop 的 mTLS 配置（契约 §三：客户端证书 SAN =
+// spiffe://palcommerce/gateway，平台证书管理负责签发与轮换）。
+// 严格校验 shop CA：RootCAs 取自 SHOP_UPSTREAM_TLS_ROOT_CA_FILE（pal-shop-mtls-ca 挂载）；
+// SHOP_UPSTREAM_TLS_SERVER_NAME 供证书 SAN 与连接地址不一致时覆盖；
+// MinVersion 固定 TLS 1.2。
+func buildShopUpstreamTLS() (*tls.Config, error) {
+	certFile := os.Getenv("SHOP_UPSTREAM_TLS_CLIENT_CERT_FILE")
+	keyFile := os.Getenv("SHOP_UPSTREAM_TLS_CLIENT_KEY_FILE")
+	if certFile == "" || keyFile == "" {
+		return nil, errors.New("SHOP_UPSTREAM_TLS_CLIENT_CERT_FILE 与 SHOP_UPSTREAM_TLS_CLIENT_KEY_FILE 必须设置")
+	}
+	cert, err := tls.LoadX509KeyPair(certFile, keyFile)
+	if err != nil {
+		return nil, fmt.Errorf("加载客户端证书对: %w", err)
+	}
+	cfg := &tls.Config{
+		Certificates: []tls.Certificate{cert},
+		ServerName:   os.Getenv("SHOP_UPSTREAM_TLS_SERVER_NAME"),
+		MinVersion:   tls.VersionTLS12,
+	}
+	if caFile := os.Getenv("SHOP_UPSTREAM_TLS_ROOT_CA_FILE"); caFile != "" {
+		pemBytes, err := os.ReadFile(caFile)
+		if err != nil {
+			return nil, fmt.Errorf("读取上游 CA 文件 %s: %w", caFile, err)
+		}
+		pool := x509.NewCertPool()
+		if !pool.AppendCertsFromPEM(pemBytes) {
+			return nil, fmt.Errorf("上游 CA 文件 %s 不是有效 PEM", caFile)
+		}
+		cfg.RootCAs = pool
+	}
+	return cfg, nil
 }
 
 // discoveryServices 从启动路由表提取 discovery 目标的注册名集合。

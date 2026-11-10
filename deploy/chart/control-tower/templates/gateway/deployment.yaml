@@ -201,6 +201,40 @@ spec:
                   optional: true
             - name: LOG_LEVEL
               value: {{ $g.logLevel }}
+{{- if $g.assertion.enabled }}
+            # ── T1 可信身份边界（WP-2）：shop 上游内部断言签发（T1-implementation-plan.md §1.7）。
+            # 与下方 shopUpstreamTLS 必须同开同关（契约 §三：不提供单边降级）。
+            - name: ASSERTION_ENABLED_PACKAGES
+              value: {{ join "," $g.assertion.packages | quote }}
+            - name: ASSERTION_ISSUER
+              value: {{ $g.assertion.issuer }}
+            - name: ASSERTION_AUDIENCE
+              value: {{ $g.assertion.audience }}
+            - name: ASSERTION_TTL
+              value: {{ $g.assertion.ttl }}
+            - name: ASSERTION_SIGNING_KEY_FILE
+              value: {{ $g.assertion.keyFile }}
+            # kid 必须与 JWKS 发布（WP-3）一致，shop 未知 kid 时只刷新一次就拒绝。
+            - name: ASSERTION_KEY_ID
+              value: {{ $g.assertion.keyId }}
+            # 角色 → 动作映射（§1.4；「+」= 在前一角色集合上追加）。
+            - name: ASSERTION_ROLE_PERMISSIONS
+              value: {{ $g.assertion.rolePermissions | quote }}
+{{- end }}
+{{- if $g.shopUpstreamTLS.enabled }}
+            # 网关 → shop 的 mTLS 拨号（契约 §三：与断言同时强制）。
+            - name: SHOP_UPSTREAM_TLS_ENABLED
+              value: "true"
+            - name: SHOP_UPSTREAM_TLS_CLIENT_CERT_FILE
+              value: {{ $g.shopUpstreamTLS.mountDir }}/tls.crt
+            - name: SHOP_UPSTREAM_TLS_CLIENT_KEY_FILE
+              value: {{ $g.shopUpstreamTLS.mountDir }}/tls.key
+            - name: SHOP_UPSTREAM_TLS_ROOT_CA_FILE
+              value: {{ $g.shopUpstreamTLS.mountDir }}-ca/ca.crt
+            # shop 证书 SAN 与连接地址（k8s Service DNS）不一致时用它覆盖。
+            - name: SHOP_UPSTREAM_TLS_SERVER_NAME
+              value: {{ $g.shopUpstreamTLS.serverName }}
+{{- end }}
           volumeMounts:
             - name: config-source
               mountPath: /etc/control-tower/config-source
@@ -208,6 +242,20 @@ spec:
             - name: session-tls
               mountPath: /etc/control-tower/session-tls
               readOnly: true
+{{- if $g.assertion.enabled }}
+            - name: assertion-key
+              mountPath: /etc/control-tower/assertion-key
+              readOnly: true
+{{- end }}
+{{- if $g.shopUpstreamTLS.enabled }}
+            # 客户端证书对（tls.crt/tls.key）与 shop CA 分开挂：来源是两个 Secret。
+            - name: shop-mtls-client
+              mountPath: {{ $g.shopUpstreamTLS.mountDir }}
+              readOnly: true
+            - name: shop-mtls-ca
+              mountPath: {{ $g.shopUpstreamTLS.mountDir }}-ca
+              readOnly: true
+{{- end }}
           startupProbe:
             httpGet:
               path: /healthz
@@ -246,6 +294,39 @@ spec:
           secret:
             secretName: {{ $g.configSourceSecret }}
             defaultMode: 0400
+{{- if $g.assertion.enabled }}
+        # 断言签名私钥（Ed25519 PKCS8 PEM）。Secret 由 WP-3 创建，与网关同 namespace；
+        # 真相源不在本仓（硬约束：凭据不进仓库）。
+        - name: assertion-key
+          secret:
+            secretName: {{ $g.assertion.keySecret }}
+            items:
+              - key: {{ $g.assertion.keySecretKey }}
+                path: signing-key.pem
+            defaultMode: 0400
+{{- end }}
+{{- if $g.shopUpstreamTLS.enabled }}
+        # 客户端证书对（SAN=spiffe://palcommerce/gateway，cert-manager 内部 CA 签发）。
+        # palcommerce ns 的原件由 WP-3 管理；跨 namespace 引用 Secret 无效，
+        # 因此 ecommerce ns 由人同步一份拷贝，chart 只挂载。
+        - name: shop-mtls-client
+          secret:
+            secretName: {{ $g.shopUpstreamTLS.clientCertSecret }}
+            items:
+              - key: tls.crt
+                path: tls.crt
+              - key: tls.key
+                path: tls.key
+            defaultMode: 0400
+        # shop 服务端 CA（校验 pal-shop-service 证书链）。
+        - name: shop-mtls-ca
+          secret:
+            secretName: {{ $g.shopUpstreamTLS.caSecret }}
+            items:
+              - key: ca.crt
+                path: ca.crt
+            defaultMode: 0444
+{{- end }}
 ---
 apiVersion: policy/v1
 kind: PodDisruptionBudget

@@ -15,7 +15,7 @@ configWeb:
   apiUrl: https://config-api.apikv.com
 gateway:
   image:
-    tag: 0.3.0
+    tag: 0.4.0
   hosts: [gateway.dev.test, gateway.apikv.com]
   palcommerceHost: pal.apikv.com
   configSourceSecret: control-tower-config-source-pre
@@ -23,6 +23,15 @@ gateway:
     publicBaseUrl: https://gateway.apikv.com
     allowedRedirects: "https://shop.apikv.com,https://pal.apikv.com"
     cookieInsecure: false
+  # ── T1 可信身份边界（PalCommerce shop 上游）。2026-11-10 启用：kid 与
+  # Config Center gateway/pre/assertion/jwks.json 逐字一致；三个 Secret
+  # （control-tower-assertion-key / control-tower-gateway-mtls-client /
+  # pal-shop-mtls-ca 拷贝）已由 WP-3 备齐。
+  assertion:
+    enabled: true
+    keyId: palcommerce-gateway-20261110
+  shopUpstreamTLS:
+    enabled: true
 # PalCommerce 商城登录：Casdoor 应用 Pal（org lens）签发的 token aud 为其 client id，
 # 网关验签要求 aud 在白名单内，这里追加（clientId 见 values.yaml，非机密）。
 casdoor:

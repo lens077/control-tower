@@ -13,6 +13,8 @@ type routeKey struct{}
 type claimsKey struct{}
 type guestKey struct{}
 type upstreamKey struct{}
+type assertionKey struct{}
+type requestIDKey struct{}
 
 // Upstream 是 transport 回填的转发落点信息（ctx 值向下传递、内容可变的持有器）。
 type Upstream struct {
@@ -63,4 +65,27 @@ func WithUpstream(ctx context.Context) (context.Context, *Upstream) {
 func UpstreamOf(ctx context.Context) *Upstream {
 	u, _ := ctx.Value(upstreamKey{}).(*Upstream)
 	return u
+}
+
+// WithAssertionToken 挂载已签发的内部断言（T1 可信身份边界，proxy 在 Rewrite 落头）。
+func WithAssertionToken(ctx context.Context, token string) context.Context {
+	return context.WithValue(ctx, assertionKey{}, token)
+}
+
+// AssertionToken 取出断言；未启用断言的请求返回空串。
+func AssertionToken(ctx context.Context) string {
+	tok, _ := ctx.Value(assertionKey{}).(string)
+	return tok
+}
+
+// WithRequestID 挂载链路 request id（X-Md-Request-Id）。与断言 jti 分离（契约 I3）：
+// 同一次业务请求（含响应链路）保持不变，jti 每次上游调用重新生成。
+func WithRequestID(ctx context.Context, id string) context.Context {
+	return context.WithValue(ctx, requestIDKey{}, id)
+}
+
+// RequestID 取出链路 request id；未挂载返回空串。
+func RequestID(ctx context.Context) string {
+	id, _ := ctx.Value(requestIDKey{}).(string)
+	return id
 }

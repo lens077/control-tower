@@ -4,6 +4,7 @@ package app
 import (
 	"net/http"
 
+	"github.com/lens077/control-tower/services/gateway/internal/assertion"
 	"github.com/lens077/control-tower/services/gateway/internal/authn"
 	"github.com/lens077/control-tower/services/gateway/internal/bff"
 	"github.com/lens077/control-tower/services/gateway/internal/guest"
@@ -43,6 +44,13 @@ type Deps struct {
 	// GuestCookie 开启匿名购物访客轨（B 级 RPC）。nil=整轨关闭，
 	// guest 清单里的路径退化为需要登录（与上线前行为一致）。
 	GuestCookie *guest.CookieConfig
+
+	// ── T1 可信身份边界（WP-2）。两者都为零值时行为与 T1 之前完全一致。
+	// Assertion 非 nil 时对启用包签发内部断言（X-Internal-Assertion）。
+	Assertion *assertion.Issuer
+	// UpstreamTLS 把「包名 → TLS 出站 transport」挂给 proxy：命中包的
+	// direct:// 拨号改走 mTLS（shop 上游），其余 upstream 不受影响。
+	UpstreamTLS map[string]http.RoundTripper
 }
 
 // BuildHandler 构造业务端口的完整处理器：
@@ -53,7 +61,8 @@ func BuildHandler(d Deps) http.Handler {
 	if transport == nil {
 		transport = otelhttp.NewTransport(proxy.NewH2CTransport())
 	}
-	p := proxy.New(d.Resolver, d.Errors, d.Log, transport)
+	p := proxy.New(d.Resolver, d.Errors, d.Log, transport,
+		proxy.WithAssertion(d.Assertion), proxy.WithUpstreamTLS(d.UpstreamTLS))
 	auth := httpmw.AuthDeps{
 		Table: d.State.Table, Verifier: d.State.Verifier(), Enforcer: d.State.Enforcer(),
 		Introspect: d.Introspect, Roles: d.Roles, Errors: d.Errors,

@@ -113,7 +113,7 @@ func TestGatewayDeploymentSpreadsAcrossNodes(t *testing.T) {
 			}
 			for _, spread := range manifest.Spec.Template.Spec.TopologySpreadConstraints {
 				if spread.MaxSkew == 1 && spread.TopologyKey == "kubernetes.io/hostname" &&
-					spread.WhenUnsatisfiable == "DoNotSchedule" &&
+					spread.WhenUnsatisfiable == "ScheduleAnyway" &&
 					spread.NodeAffinityPolicy == "Honor" && spread.NodeTaintsPolicy == "Honor" &&
 					spread.LabelSelector.MatchLabels[partOf] == "ecommerce" {
 					suiteWide = true

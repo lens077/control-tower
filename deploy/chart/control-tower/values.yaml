@@ -109,6 +109,36 @@ gateway:
   session:
     redisAddr: dragonfly.dragonfly.svc:6379
     secret: dragonfly-session
+  # ── T1 可信身份边界（WP-2）：对 PalCommerce shop 上游签发内部断言 + mTLS。
+  # 需求权威：palcommerce/docs/shop/trusted-identity-contract.md（冻结件）；
+  # 共享契约：同目录 T1-implementation-plan.md §1.4/§1.7。契约 §三：mTLS、JWT 断言
+  # 与 NetworkPolicy 三项同时强制，不提供单边降级——下面两个开关要同开同关。
+  # 默认关：三个 Secret（断言私钥 / 客户端证书对 / shop CA）由 WP-3 在 ecommerce
+  # ns 备齐后才允许翻 true，否则 secretKeyRef(optional=false) 会让 Pod 起不来。
+  assertion:
+    enabled: false
+    # 断言生效的 proto 一级包名（routes 里 package: shop）。
+    packages: [shop]
+    issuer: palcommerce-gateway
+    audience: shop
+    ttl: 300s
+    # kid 必须与 WP-3 发布的 JWKS 一致；翻 true 前确认。
+    keyId: ""
+    # 断言私钥 Secret（key 见 keySecretKey），与网关同 namespace，WP-3 创建。
+    keySecret: control-tower-assertion-key
+    keySecretKey: signing-key.pem
+    keyFile: /etc/control-tower/assertion-key/signing-key.pem
+    # 角色 → 动作映射（§1.4；「+」= 在前一角色集合上追加）。
+    rolePermissions: "customer:catalog.read,wallet.read,order.read,order.create,topup.create,topup.read;admin:+topup.manual,+topup.refund;anonymous:catalog.read"
+  shopUpstreamTLS:
+    enabled: false
+    serverName: pal-shop-service.palcommerce.svc
+    # 客户端证书对 Secret（tls.crt/tls.key）与 shop CA Secret（ca.crt）：
+    # 原件在 palcommerce ns 由 WP-3 管理，跨 ns 引用 Secret 无效，
+    # 所以 ecommerce ns 各有一份拷贝（由人同步），chart 只挂载。
+    clientCertSecret: control-tower-gateway-mtls-client
+    caSecret: pal-shop-mtls-ca
+    mountDir: /etc/control-tower/shop-mtls
   consul:
     addr: consul-server.consul.svc.cluster.local:8500
     # 网关不经 Consul 找任何后端（routes 全是 direct://），token 只是 hashicorp client 的兜底。
