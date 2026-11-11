@@ -222,7 +222,7 @@ spec:
               value: palcommerce-gateway-20261110
             # 角色 → 动作映射（§1.4；「+」= 在前一角色集合上追加）。
             - name: ASSERTION_ROLE_PERMISSIONS
-              value: "customer:catalog.read,wallet.read,order.read,order.create,topup.create,topup.read;admin:+topup.manual,+topup.refund,+order.read.admin,+wallet.read.admin,+audit.read,+order.refund,+order.cancel,+order.reconcile;anonymous:catalog.read"
+              value: "customer:catalog.read,wallet.read,order.read,order.create,order.cancel.self,topup.create,topup.read;admin:+topup.manual,+topup.refund,+order.read.admin,+wallet.read.admin,+audit.read,+order.refund,+order.cancel,+order.reconcile;anonymous:catalog.read"
             # 网关 → shop 的 mTLS 拨号（契约 §三：与断言同时强制）。
             - name: SHOP_UPSTREAM_TLS_ENABLED
               value: "true"
