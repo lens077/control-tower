@@ -28,7 +28,7 @@ spec:
 ---
 # PalCommerce 站点上的商城主机只借道本网关的 RPC 前缀，
 # 其余路径（/、/alipay/*）仍由 palcommerce 自己的 HTTPRoute 负责：
-# 这里只声明 /shop.v1.shopService/，更具体的路径优先，不会与 landing 的 / 冲突。
+# 这里只声明商城与 QQ 绑定两个 RPC 前缀，更具体的路径优先，不会与 landing 的 / 冲突。
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
 metadata:
@@ -46,6 +46,10 @@ spec:
         - path:
             type: PathPrefix
             value: /shop.v1.shopService/
+        # QQ 机器人绑定（qqbot.v1.qqbotService），同样经网关注入身份后 direct 到 pal-qqbot。
+        - path:
+            type: PathPrefix
+            value: /qqbot.v1.qqbotService/
       backendRefs:
         - name: ecommerce-gateway-service
           port: 8080

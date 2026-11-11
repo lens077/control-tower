@@ -58,6 +58,11 @@ routes:
   - package: shop
     target: direct://pal-shop-service.palcommerce.svc:30011
     timeout: 8s
+  # QQ 机器人账号绑定（仓外服务，namespace palcommerce）。
+  # 只有 CompleteBinding/GetBinding 两个登录态 RPC，没有匿名 RPC。
+  - package: qqbot
+    target: direct://pal-qqbot-service.palcommerce.svc:30012
+    timeout: 8s
 
 # 匿名清单（authn 跳过 + authz 跳过共用；进入后端前仍会剥离并不注入身份头）。
 anonymous:
