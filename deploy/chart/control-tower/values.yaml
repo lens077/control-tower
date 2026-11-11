@@ -129,7 +129,7 @@ gateway:
     keySecretKey: signing-key.pem
     keyFile: /etc/control-tower/assertion-key/signing-key.pem
     # 角色 → 动作映射（§1.4；「+」= 在前一角色集合上追加）。
-    rolePermissions: "customer:catalog.read,wallet.read,order.read,order.create,topup.create,topup.read;admin:+topup.manual,+topup.refund,+order.read.admin,+wallet.read.admin,+audit.read,+order.refund,+order.cancel,+order.reconcile;anonymous:catalog.read"
+    rolePermissions: "customer:catalog.read,wallet.read,order.read,order.create,order.cancel.self,topup.create,topup.read;admin:+topup.manual,+topup.refund,+order.read.admin,+wallet.read.admin,+audit.read,+order.refund,+order.cancel,+order.reconcile;anonymous:catalog.read"
   shopUpstreamTLS:
     enabled: false
     serverName: pal-shop-service.palcommerce.svc
