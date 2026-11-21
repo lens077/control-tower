@@ -83,6 +83,8 @@ anonymous:
   - /shop.v1.shopService/GetPalOptions
   - /shop.v1.shopService/ListPalPassives
   - /shop.v1.shopService/ListTopUpPackages
+  # 冻结件 Phase 3：目录水位（outbox seq），公开只读，页面据此轮询刷新目录。
+  - /shop.v1.shopService/GetShopRevision
   # 活动位（可用券 + 首充礼内容）是公开营销信息；次数限制约束滥用。
   - /shop.v1.shopService/GetActivePromotions
 
@@ -123,6 +125,8 @@ cors:
     - https://shop.apikv.com
     # PalCommerce 站点；商城前端与 /shop.v1.* 同源，列出来是为跨源调试留口子。
     - https://pal.apikv.com
+    # α 演练站点（EdgeOne Pages 静态站 + RPC 直连 gateway）；站点创建前预先放行。
+    - https://shop-test.apikv.com
   allow_headers:
     - Authorization
     - Content-Type
