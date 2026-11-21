@@ -83,6 +83,8 @@ anonymous:
   - /shop.v1.shopService/GetPalOptions
   - /shop.v1.shopService/ListPalPassives
   - /shop.v1.shopService/ListTopUpPackages
+  # 活动位（可用券 + 首充礼内容）是公开营销信息；次数限制约束滥用。
+  - /shop.v1.shopService/GetActivePromotions
 
 # 访客清单（匿名购物 B 级）：不验 JWT，但网关签发/识别访客 cookie 并注入
 # x-md-global-user-id + x-md-global-anonymous=true。与 anonymous 的区别是
